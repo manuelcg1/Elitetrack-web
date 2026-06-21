@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.1.xsd">
+
+  <changeSet author="elitetrack" id="changelog-6.13-gps-inventory-create-table">
+    <createTable tableName="tc_gps_inventory">
+      <column autoIncrement="true" name="id" type="INT">
+        <constraints primaryKey="true" />
+      </column>
+      <column name="imei" type="VARCHAR(20)">
+        <constraints nullable="false" unique="true" />
+      </column>
+      <column name="brand" type="VARCHAR(64)">
+        <constraints nullable="false" />
+      </column>
+      <column name="model" type="VARCHAR(128)" />
+      <column name="serialnumber" type="VARCHAR(128)" />
+      <column name="status" type="VARCHAR(32)" defaultValue="en_almacen">
+        <constraints nullable="false" />
+      </column>
+      <column name="notes" type="VARCHAR(4000)" />
+      <column name="deviceid" type="INT" />
+      <column name="groupid" type="INT" />
+      <column name="attributes" type="VARCHAR(4000)" />
+    </createTable>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="changelog-6.13-gps-inventory-fk-device">
+    <addForeignKeyConstraint
+        baseTableName="tc_gps_inventory"
+        baseColumnNames="deviceid"
+        constraintName="fk_gps_inventory_deviceid"
+        onDelete="SET NULL"
+        referencedColumnNames="id"
+        referencedTableName="tc_devices" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="changelog-6.13-gps-inventory-fk-group">
+    <addForeignKeyConstraint
+        baseTableName="tc_gps_inventory"
+        baseColumnNames="groupid"
+        constraintName="fk_gps_inventory_groupid"
+        onDelete="SET NULL"
+        referencedColumnNames="id"
+        referencedTableName="tc_groups" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="changelog-6.13-gps-inventory-index-imei">
+    <createIndex tableName="tc_gps_inventory" indexName="idx_gps_inventory_imei">
+      <column name="imei" />
+    </createIndex>
+  </changeSet>
+
+  <!--
+    Tabla de PERMISOS (obligatoria para SimpleObjectResource).
+    No es una tabla intermedia many-to-many de datos — es el mecanismo
+    estándar de Traccar para controlar qué usuario puede ver/editar
+    qué registros. Sigue exactamente el patrón de tc_user_group.
+  -->
+  <changeSet author="elitetrack" id="changelog-6.13-gps-inventory-permissions-table">
+    <createTable tableName="tc_user_gpsinventory">
+      <column name="userid" type="INT">
+        <constraints nullable="false" />
+      </column>
+      <column name="gpsinventoryid" type="INT">
+        <constraints nullable="false" />
+      </column>
+    </createTable>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="changelog-6.13-gps-inventory-permissions-fk-user">
+    <addForeignKeyConstraint
+        baseTableName="tc_user_gpsinventory"
+        baseColumnNames="userid"
+        constraintName="fk_user_gpsinventory_userid"
+        onDelete="CASCADE"
+        referencedColumnNames="id"
+        referencedTableName="tc_users" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="changelog-6.13-gps-inventory-permissions-fk-gps">
+    <addForeignKeyConstraint
+        baseTableName="tc_user_gpsinventory"
+        baseColumnNames="gpsinventoryid"
+        constraintName="fk_user_gpsinventory_gpsinventoryid"
+        onDelete="CASCADE"
+        referencedColumnNames="id"
+        referencedTableName="tc_gps_inventory" />
+  </changeSet>
+
+</databaseChangeLog>
