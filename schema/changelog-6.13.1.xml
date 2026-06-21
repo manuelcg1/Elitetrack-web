@@ -91,4 +91,42 @@
         referencedTableName="tc_gps_inventory" />
   </changeSet>
 
+  <!--
+    Segunda tabla de permisos requerida porque GpsInventory extends GroupedModel.
+    Traccar usa esta tabla para resolver permisos heredados vía grupos
+    (ej: un usuario con acceso al grupo "Flota Norte" también ve los GPS
+    de ese grupo, sin necesidad de asignación individual).
+    Sigue el mismo patrón que tc_group_device.
+  -->
+  <changeSet author="elitetrack" id="changelog-6.13-gps-inventory-group-permissions-table">
+    <createTable tableName="tc_group_gpsinventory">
+      <column name="groupid" type="INT">
+        <constraints nullable="false" />
+      </column>
+      <column name="gpsinventoryid" type="INT">
+        <constraints nullable="false" />
+      </column>
+    </createTable>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="changelog-6.13-gps-inventory-group-permissions-fk-group">
+    <addForeignKeyConstraint
+        baseTableName="tc_group_gpsinventory"
+        baseColumnNames="groupid"
+        constraintName="fk_group_gpsinventory_groupid"
+        onDelete="CASCADE"
+        referencedColumnNames="id"
+        referencedTableName="tc_groups" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="changelog-6.13-gps-inventory-group-permissions-fk-gps">
+    <addForeignKeyConstraint
+        baseTableName="tc_group_gpsinventory"
+        baseColumnNames="gpsinventoryid"
+        constraintName="fk_group_gpsinventory_gpsinventoryid"
+        onDelete="CASCADE"
+        referencedColumnNames="id"
+        referencedTableName="tc_gps_inventory" />
+  </changeSet>
+
 </databaseChangeLog>
