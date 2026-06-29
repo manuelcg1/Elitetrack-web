@@ -162,12 +162,16 @@ const EditAttributesAccordion = ({
   const handleAddResult = (definition) => {
     setAddDialogShown(false);
     if (definition) {
+      const subtype = definitions[definition.key]?.subtype;
       switch (definition.type) {
         case 'number':
           updateAttribute(definition.key, 0);
           break;
         case 'boolean':
           updateAttribute(definition.key, false);
+          break;
+        case 'string':
+          updateAttribute(definition.key, subtype === 'color' ? '#00E65B' : '');
           break;
         default:
           updateAttribute(definition.key, '');
@@ -212,8 +216,8 @@ const EditAttributesAccordion = ({
               <InputLabel>{getAttributeName(key, subtype)}</InputLabel>
               <OutlinedInput
                 label={getAttributeName(key, subtype)}
-                type={type === 'number' ? 'number' : 'text'}
-                value={getDisplayValue(value, subtype)}
+                type={subtype === 'color' ? 'color' : type === 'number' ? 'number' : 'text'}
+                value={subtype === 'color' ? value || '#00E65B' : getDisplayValue(value, subtype)}
                 onChange={(e) => updateAttribute(key, e.target.value, type, subtype)}
                 autoFocus={focusAttribute === key}
                 endAdornment={

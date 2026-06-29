@@ -71,6 +71,17 @@ export const reverseCoordinates = (it) => {
   };
 };
 
+const validateColor = (color, fallback) =>
+  /^#([0-9A-Fa-f]{3}){1,2}$/.test(color || '') ? color : fallback;
+
+const clamp = (value, min, max, fallback) => {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return fallback;
+  }
+  return Math.min(Math.max(number, min), max);
+};
+
 export const geofenceToFeature = (theme, item) => {
   let geometry;
   if (item.area.indexOf('CIRCLE') > -1) {
@@ -94,9 +105,10 @@ export const geofenceToFeature = (theme, item) => {
     geometry,
     properties: {
       name: item.name,
-      color: item.attributes.color || theme.palette.geometry.main,
-      width: item.attributes.mapLineWidth || 2,
-      opacity: item.attributes.mapLineOpacity || 1,
+      color: validateColor(item.attributes?.color, theme.palette.geometry.main),
+      fillOpacity: clamp(item.attributes?.mapFillOpacity, 0, 1, 0.22),
+      width: clamp(item.attributes?.mapLineWidth, 1, 12, 2.5),
+      opacity: clamp(item.attributes?.mapLineOpacity, 0, 1, 0.95),
     },
   };
 };

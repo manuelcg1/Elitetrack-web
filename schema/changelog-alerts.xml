@@ -1,0 +1,361 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.1.xsd">
+
+  <changeSet author="elitetrack" id="alerts-create-geofence-folders-if-missing">
+    <preConditions onFail="MARK_RAN">
+      <not>
+        <tableExists tableName="tc_geofence_folders" />
+      </not>
+    </preConditions>
+    <createTable tableName="tc_geofence_folders">
+      <column autoIncrement="true" name="id" type="INT">
+        <constraints primaryKey="true" />
+      </column>
+      <column name="name" type="VARCHAR(128)">
+        <constraints nullable="false" />
+      </column>
+      <column name="description" type="VARCHAR(4000)" />
+      <column name="parentid" type="INT" defaultValueNumeric="0" />
+      <column name="attributes" type="VARCHAR(4000)" />
+    </createTable>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-geofence-folders-add-description-if-missing">
+    <preConditions onFail="MARK_RAN">
+      <and>
+        <tableExists tableName="tc_geofence_folders" />
+        <not>
+          <columnExists tableName="tc_geofence_folders" columnName="description" />
+        </not>
+      </and>
+    </preConditions>
+    <addColumn tableName="tc_geofence_folders">
+      <column name="description" type="VARCHAR(4000)" />
+    </addColumn>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-geofence-folders-add-parentid-if-missing">
+    <preConditions onFail="MARK_RAN">
+      <and>
+        <tableExists tableName="tc_geofence_folders" />
+        <not>
+          <columnExists tableName="tc_geofence_folders" columnName="parentid" />
+        </not>
+      </and>
+    </preConditions>
+    <addColumn tableName="tc_geofence_folders">
+      <column name="parentid" type="INT" defaultValueNumeric="0" />
+    </addColumn>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-geofence-folders-add-attributes-if-missing">
+    <preConditions onFail="MARK_RAN">
+      <and>
+        <tableExists tableName="tc_geofence_folders" />
+        <not>
+          <columnExists tableName="tc_geofence_folders" columnName="attributes" />
+        </not>
+      </and>
+    </preConditions>
+    <addColumn tableName="tc_geofence_folders">
+      <column name="attributes" type="VARCHAR(4000)" />
+    </addColumn>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-create-alerts">
+    <createTable tableName="alerts">
+      <column autoIncrement="true" name="id" type="INT">
+        <constraints primaryKey="true" />
+      </column>
+      <column name="type" type="VARCHAR(32)" defaultValue="Velocidad">
+        <constraints nullable="false" />
+      </column>
+      <column name="name" type="VARCHAR(128)">
+        <constraints nullable="false" />
+      </column>
+      <column name="speedLimit" type="DOUBLE">
+        <constraints nullable="false" />
+      </column>
+      <column name="active" type="BOOLEAN" defaultValueBoolean="true">
+        <constraints nullable="false" />
+      </column>
+    </createTable>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-create-alert-devices">
+    <createTable tableName="alert_devices">
+      <column autoIncrement="true" name="id" type="INT">
+        <constraints primaryKey="true" />
+      </column>
+      <column name="alertId" type="INT">
+        <constraints nullable="false" />
+      </column>
+      <column name="deviceId" type="INT">
+        <constraints nullable="false" />
+      </column>
+    </createTable>
+    <addForeignKeyConstraint baseTableName="alert_devices" baseColumnNames="alertId"
+        constraintName="fk_alert_devices_alert" onDelete="CASCADE"
+        referencedTableName="alerts" referencedColumnNames="id" />
+    <addForeignKeyConstraint baseTableName="alert_devices" baseColumnNames="deviceId"
+        constraintName="fk_alert_devices_device" onDelete="CASCADE"
+        referencedTableName="tc_devices" referencedColumnNames="id" />
+    <createIndex tableName="alert_devices" indexName="idx_alert_devices_alert">
+      <column name="alertId" />
+    </createIndex>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-create-alert-vehicle-groups">
+    <createTable tableName="alert_vehicle_groups">
+      <column autoIncrement="true" name="id" type="INT">
+        <constraints primaryKey="true" />
+      </column>
+      <column name="alertId" type="INT">
+        <constraints nullable="false" />
+      </column>
+      <column name="groupId" type="INT">
+        <constraints nullable="false" />
+      </column>
+    </createTable>
+    <addForeignKeyConstraint baseTableName="alert_vehicle_groups" baseColumnNames="alertId"
+        constraintName="fk_alert_vehicle_groups_alert" onDelete="CASCADE"
+        referencedTableName="alerts" referencedColumnNames="id" />
+    <addForeignKeyConstraint baseTableName="alert_vehicle_groups" baseColumnNames="groupId"
+        constraintName="fk_alert_vehicle_groups_group" onDelete="CASCADE"
+        referencedTableName="tc_groups" referencedColumnNames="id" />
+    <createIndex tableName="alert_vehicle_groups" indexName="idx_alert_vehicle_groups_alert">
+      <column name="alertId" />
+    </createIndex>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-create-alert-geofences">
+    <createTable tableName="alert_geofences">
+      <column autoIncrement="true" name="id" type="INT">
+        <constraints primaryKey="true" />
+      </column>
+      <column name="alertId" type="INT">
+        <constraints nullable="false" />
+      </column>
+      <column name="geofenceId" type="INT">
+        <constraints nullable="false" />
+      </column>
+    </createTable>
+    <addForeignKeyConstraint baseTableName="alert_geofences" baseColumnNames="alertId"
+        constraintName="fk_alert_geofences_alert" onDelete="CASCADE"
+        referencedTableName="alerts" referencedColumnNames="id" />
+    <addForeignKeyConstraint baseTableName="alert_geofences" baseColumnNames="geofenceId"
+        constraintName="fk_alert_geofences_geofence" onDelete="CASCADE"
+        referencedTableName="tc_geofences" referencedColumnNames="id" />
+    <createIndex tableName="alert_geofences" indexName="idx_alert_geofences_alert">
+      <column name="alertId" />
+    </createIndex>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-create-alert-geofence-groups">
+    <createTable tableName="alert_geofence_groups">
+      <column autoIncrement="true" name="id" type="INT">
+        <constraints primaryKey="true" />
+      </column>
+      <column name="alertId" type="INT">
+        <constraints nullable="false" />
+      </column>
+      <column name="geofenceGroupId" type="INT">
+        <constraints nullable="false" />
+      </column>
+    </createTable>
+    <addForeignKeyConstraint baseTableName="alert_geofence_groups" baseColumnNames="alertId"
+        constraintName="fk_alert_geofence_groups_alert" onDelete="CASCADE"
+        referencedTableName="alerts" referencedColumnNames="id" />
+    <addForeignKeyConstraint baseTableName="alert_geofence_groups" baseColumnNames="geofenceGroupId"
+        constraintName="fk_alert_geofence_groups_folder" onDelete="CASCADE"
+        referencedTableName="tc_geofence_folders" referencedColumnNames="id" />
+    <createIndex tableName="alert_geofence_groups" indexName="idx_alert_geofence_groups_alert">
+      <column name="alertId" />
+    </createIndex>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-create-alert-logs">
+    <createTable tableName="alert_logs">
+      <column autoIncrement="true" name="id" type="INT">
+        <constraints primaryKey="true" />
+      </column>
+      <column name="alertId" type="INT" />
+      <column name="plate" type="VARCHAR(128)" />
+      <column name="latitude" type="DOUBLE" />
+      <column name="longitude" type="DOUBLE" />
+      <column name="driver" type="VARCHAR(128)" />
+      <column name="vehicleGroup" type="VARCHAR(128)" />
+      <column name="geofenceName" type="VARCHAR(128)" />
+      <column name="alertName" type="VARCHAR(128)" />
+      <column name="recordedSpeed" type="DOUBLE" />
+      <column name="eventTime" type="TIMESTAMP">
+        <constraints nullable="false" />
+      </column>
+    </createTable>
+    <createIndex tableName="alert_logs" indexName="idx_alert_logs_event_time">
+      <column name="eventTime" />
+    </createIndex>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-lowercase-alerts-speedlimit">
+    <preConditions onFail="MARK_RAN">
+      <and>
+        <columnExists tableName="alerts" columnName="speedLimit" />
+        <not>
+          <columnExists tableName="alerts" columnName="speedlimit" />
+        </not>
+      </and>
+    </preConditions>
+    <renameColumn tableName="alerts" oldColumnName="speedLimit" newColumnName="speedlimit" columnDataType="DOUBLE" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-lowercase-alert-devices-columns">
+    <preConditions onFail="MARK_RAN">
+      <and>
+        <columnExists tableName="alert_devices" columnName="alertId" />
+        <not>
+          <columnExists tableName="alert_devices" columnName="alertid" />
+        </not>
+      </and>
+    </preConditions>
+    <renameColumn tableName="alert_devices" oldColumnName="alertId" newColumnName="alertid" columnDataType="INT" />
+    <renameColumn tableName="alert_devices" oldColumnName="deviceId" newColumnName="deviceid" columnDataType="INT" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-lowercase-alert-vehicle-groups-columns">
+    <preConditions onFail="MARK_RAN">
+      <and>
+        <columnExists tableName="alert_vehicle_groups" columnName="alertId" />
+        <not>
+          <columnExists tableName="alert_vehicle_groups" columnName="alertid" />
+        </not>
+      </and>
+    </preConditions>
+    <renameColumn tableName="alert_vehicle_groups" oldColumnName="alertId" newColumnName="alertid" columnDataType="INT" />
+    <renameColumn tableName="alert_vehicle_groups" oldColumnName="groupId" newColumnName="groupid" columnDataType="INT" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-lowercase-alert-geofences-columns">
+    <preConditions onFail="MARK_RAN">
+      <and>
+        <columnExists tableName="alert_geofences" columnName="alertId" />
+        <not>
+          <columnExists tableName="alert_geofences" columnName="alertid" />
+        </not>
+      </and>
+    </preConditions>
+    <renameColumn tableName="alert_geofences" oldColumnName="alertId" newColumnName="alertid" columnDataType="INT" />
+    <renameColumn tableName="alert_geofences" oldColumnName="geofenceId" newColumnName="geofenceid" columnDataType="INT" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-lowercase-alert-geofence-groups-columns">
+    <preConditions onFail="MARK_RAN">
+      <and>
+        <columnExists tableName="alert_geofence_groups" columnName="alertId" />
+        <not>
+          <columnExists tableName="alert_geofence_groups" columnName="alertid" />
+        </not>
+      </and>
+    </preConditions>
+    <renameColumn tableName="alert_geofence_groups" oldColumnName="alertId" newColumnName="alertid" columnDataType="INT" />
+    <renameColumn tableName="alert_geofence_groups" oldColumnName="geofenceGroupId" newColumnName="geofencegroupid" columnDataType="INT" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-lowercase-alert-logs-columns">
+    <preConditions onFail="MARK_RAN">
+      <and>
+        <columnExists tableName="alert_logs" columnName="alertId" />
+        <not>
+          <columnExists tableName="alert_logs" columnName="alertid" />
+        </not>
+      </and>
+    </preConditions>
+    <renameColumn tableName="alert_logs" oldColumnName="alertId" newColumnName="alertid" columnDataType="INT" />
+    <renameColumn tableName="alert_logs" oldColumnName="vehicleGroup" newColumnName="vehiclegroup" columnDataType="VARCHAR(128)" />
+    <renameColumn tableName="alert_logs" oldColumnName="geofenceName" newColumnName="geofencename" columnDataType="VARCHAR(128)" />
+    <renameColumn tableName="alert_logs" oldColumnName="alertName" newColumnName="alertname" columnDataType="VARCHAR(128)" />
+    <renameColumn tableName="alert_logs" oldColumnName="recordedSpeed" newColumnName="recordedspeed" columnDataType="DOUBLE" />
+    <renameColumn tableName="alert_logs" oldColumnName="eventTime" newColumnName="eventtime" columnDataType="TIMESTAMP" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-postgresql-force-lowercase-columns">
+    <preConditions onFail="MARK_RAN">
+      <dbms type="postgresql" />
+    </preConditions>
+    <sql splitStatements="false" stripComments="false"><![CDATA[
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alerts' AND column_name = 'speedLimit')
+      AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alerts' AND column_name = 'speedlimit') THEN
+    ALTER TABLE alerts RENAME COLUMN "speedLimit" TO speedlimit;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_devices' AND column_name = 'alertId')
+      AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_devices' AND column_name = 'alertid') THEN
+    ALTER TABLE alert_devices RENAME COLUMN "alertId" TO alertid;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_devices' AND column_name = 'deviceId')
+      AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_devices' AND column_name = 'deviceid') THEN
+    ALTER TABLE alert_devices RENAME COLUMN "deviceId" TO deviceid;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_vehicle_groups' AND column_name = 'alertId')
+      AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_vehicle_groups' AND column_name = 'alertid') THEN
+    ALTER TABLE alert_vehicle_groups RENAME COLUMN "alertId" TO alertid;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_vehicle_groups' AND column_name = 'groupId')
+      AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_vehicle_groups' AND column_name = 'groupid') THEN
+    ALTER TABLE alert_vehicle_groups RENAME COLUMN "groupId" TO groupid;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_geofences' AND column_name = 'alertId')
+      AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_geofences' AND column_name = 'alertid') THEN
+    ALTER TABLE alert_geofences RENAME COLUMN "alertId" TO alertid;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_geofences' AND column_name = 'geofenceId')
+      AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_geofences' AND column_name = 'geofenceid') THEN
+    ALTER TABLE alert_geofences RENAME COLUMN "geofenceId" TO geofenceid;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_geofence_groups' AND column_name = 'alertId')
+      AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_geofence_groups' AND column_name = 'alertid') THEN
+    ALTER TABLE alert_geofence_groups RENAME COLUMN "alertId" TO alertid;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_geofence_groups' AND column_name = 'geofenceGroupId')
+      AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_geofence_groups' AND column_name = 'geofencegroupid') THEN
+    ALTER TABLE alert_geofence_groups RENAME COLUMN "geofenceGroupId" TO geofencegroupid;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_logs' AND column_name = 'alertId')
+      AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_logs' AND column_name = 'alertid') THEN
+    ALTER TABLE alert_logs RENAME COLUMN "alertId" TO alertid;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_logs' AND column_name = 'vehicleGroup')
+      AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_logs' AND column_name = 'vehiclegroup') THEN
+    ALTER TABLE alert_logs RENAME COLUMN "vehicleGroup" TO vehiclegroup;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_logs' AND column_name = 'geofenceName')
+      AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_logs' AND column_name = 'geofencename') THEN
+    ALTER TABLE alert_logs RENAME COLUMN "geofenceName" TO geofencename;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_logs' AND column_name = 'alertName')
+      AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_logs' AND column_name = 'alertname') THEN
+    ALTER TABLE alert_logs RENAME COLUMN "alertName" TO alertname;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_logs' AND column_name = 'recordedSpeed')
+      AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_logs' AND column_name = 'recordedspeed') THEN
+    ALTER TABLE alert_logs RENAME COLUMN "recordedSpeed" TO recordedspeed;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_logs' AND column_name = 'eventTime')
+      AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'alert_logs' AND column_name = 'eventtime') THEN
+    ALTER TABLE alert_logs RENAME COLUMN "eventTime" TO eventtime;
+  END IF;
+END $$;
+    ]]></sql>
+  </changeSet>
+
+</databaseChangeLog>

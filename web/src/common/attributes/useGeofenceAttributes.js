@@ -6,6 +6,11 @@ export default (t) =>
       color: {
         name: t('attributeColor'),
         type: 'string',
+        subtype: 'color',
+      },
+      mapFillOpacity: {
+        name: 'Opacidad de relleno en mapa',
+        type: 'number',
       },
       mapLineWidth: {
         name: t('attributeMapLineWidth'),

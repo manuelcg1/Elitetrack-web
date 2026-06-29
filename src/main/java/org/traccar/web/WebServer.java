@@ -18,6 +18,7 @@ package org.traccar.web;
 import com.google.inject.Injector;
 import org.traccar.api.resource.HealthResource;
 import org.traccar.api.resource.GeofenceFolderResource;
+import org.traccar.api.resource.SpeedAlertResource;
 import com.google.inject.servlet.GuiceFilter;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.SessionCookieConfig;
@@ -197,9 +198,7 @@ public class WebServer implements LifecycleObject {
 
         resourceConfig.registerClasses(GeofenceFolderResource.class);
         resourceConfig.registerClasses(HealthResource.class);
-        System.out.println("=== REGISTERING HealthResource ===");
-        System.out.println("=== REGISTERING GeofenceFolderResource ===");
-        LOGGER.warn("CUSTOM API LOADED: GeofenceFolderResource registered");
+        resourceConfig.registerClasses(SpeedAlertResource.class);
 
         if (resourceConfig.getClasses().stream().filter(ServerResource.class::equals).findAny().isEmpty()) {
             LOGGER.warn("Failed to load API resources");

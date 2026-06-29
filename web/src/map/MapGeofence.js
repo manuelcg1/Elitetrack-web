@@ -35,7 +35,7 @@ const MapGeofence = () => {
       paint: {
         'fill-color': ['get', 'color'],
         'fill-outline-color': ['get', 'color'],
-        'fill-opacity': 0.1,
+        'fill-opacity': ['get', 'fillOpacity'],
       },
     });
 
@@ -57,11 +57,15 @@ const MapGeofence = () => {
       layout: {
         'text-field': '{name}',
         'text-font': findFonts(map),
-        'text-size': 12,
+        'text-size': 13,
+        'text-anchor': 'center',
+        'text-allow-overlap': false,
       },
       paint: {
+        'text-color': '#20252b',
         'text-halo-color': 'white',
-        'text-halo-width': 1,
+        'text-halo-width': 2,
+        'text-halo-blur': 0.5,
       },
     });
 
@@ -71,7 +75,7 @@ const MapGeofence = () => {
       if (map.getLayer(`${id}-title`)) map.removeLayer(`${id}-title`);
       if (map.getSource(id)) map.removeSource(id);
     };
-  }, [mapGeofences]);
+  }, [mapGeofences, id]);
 
   // ── Actualizar features visibles ─────────────────────────────────────────
   useEffect(() => {

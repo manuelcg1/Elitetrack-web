@@ -79,6 +79,7 @@ const MonitoringHealthPage = lazy(
 const MonitoringMantenimientoPage = lazy(
   () => import('./monitoring/MonitoringMantenimientoPage'),
 );
+const MonitoringAlertsPage = lazy(() => import('./monitoring/MonitoringAlertsPage'));
 const GpsInventoryPage = lazy(() => import('./monitoring/gps-inventory/GpsInventoryPage'));
 
 // ── Fallback de carga ─────────────────────────────────────────────────────────
@@ -166,6 +167,10 @@ const Navigation = () => {
           <Route
             path="monitoring/gps-inventory"
             element={<GpsInventoryPage />}
+          />
+          <Route
+            path="monitoring/alerts"
+            element={<MonitoringAlertsPage />}
           />
 
           <Route path="emulator"            element={<EmulatorPage />} />

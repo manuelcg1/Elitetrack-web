@@ -34,3 +34,11 @@ Thumbs.db
 # ── Logs ─────────────────────────────────────────────────────
 *.log
 logs/
+
+# Local development artifacts
+schema/changelog-local-alerts.xml
+web/src/*-orig.jsx
+web/src/common/components/*-original.jsx
+web/public/*-orig.svg
+web/public/logo1.png
+web/public/108ec333.ico

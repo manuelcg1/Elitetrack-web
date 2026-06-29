@@ -12,9 +12,9 @@ export default [
       ['!=', 'mode', 'static'],
     ],
     paint: {
-      'fill-color': '#3bb2d0',
-      'fill-outline-color': '#3bb2d0',
-      'fill-opacity': 0.1,
+      'fill-color': ['coalesce', ['get', 'user_color'], '#3bb2d0'],
+      'fill-outline-color': ['coalesce', ['get', 'user_color'], '#3bb2d0'],
+      'fill-opacity': ['coalesce', ['get', 'user_fillOpacity'], 0.22],
     },
   },
   {
@@ -50,8 +50,9 @@ export default [
       'line-join': 'round',
     },
     paint: {
-      'line-color': '#3bb2d0',
-      'line-width': 2,
+      'line-color': ['coalesce', ['get', 'user_color'], '#3bb2d0'],
+      'line-width': ['coalesce', ['get', 'user_width'], 2.5],
+      'line-opacity': ['coalesce', ['get', 'user_opacity'], 0.95],
     },
   },
   {
@@ -82,8 +83,9 @@ export default [
       'line-join': 'round',
     },
     paint: {
-      'line-color': '#3bb2d0',
-      'line-width': 2,
+      'line-color': ['coalesce', ['get', 'user_color'], '#3bb2d0'],
+      'line-width': ['coalesce', ['get', 'user_width'], 2.5],
+      'line-opacity': ['coalesce', ['get', 'user_opacity'], 0.95],
     },
   },
   {

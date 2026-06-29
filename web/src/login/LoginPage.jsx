@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  useMediaQuery,
   Select,
   MenuItem,
   FormControl,
@@ -22,7 +21,6 @@ import VpnLockIcon from '@mui/icons-material/VpnLock';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
-import { useTheme } from '@mui/material/styles';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { sessionActions } from '../store';
@@ -68,14 +66,9 @@ const useStyles = makeStyles()((theme) => ({
     marginBottom: theme.spacing(3.5),
   },
   logoBox: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
-    background: `linear-gradient(135deg, ${ET.green} 0%, ${ET.greenDark} 100%)`,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: `0 6px 24px rgba(0,230,91,0.30)`,
   },
   brandName: {
     fontSize: '1.5rem',
@@ -161,7 +154,6 @@ const LoginPage = () => {
   const { classes } = useStyles();
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const theme = useTheme();
   const t = useTranslation();
 
   const { languages, language, setLocalLanguage } = useLocalization();
@@ -293,16 +285,9 @@ const LoginPage = () => {
         <Box className={classes.logoBox}>
           <Box
             component="img"
-            src="/logo.png"
+            src="/logo.svg"
             alt="EliteTrack"
-            sx={{ width: 40, height: 40, objectFit: 'contain', filter: 'brightness(0) invert(1)' }}
-            onError={(e) => {
-              e.target.style.display = 'none';
-              e.target.parentElement.innerHTML = `
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
-                  <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
-                </svg>`;
-            }}
+            sx={{ width: 80, height: 80, objectFit: 'contain' }}
           />
         </Box>
         <Box sx={{ textAlign: 'center' }}>

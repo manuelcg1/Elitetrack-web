@@ -46,8 +46,10 @@ const MapGeofenceEdit = ({ selectedGeofenceId, folderId = 0, geofenceType }) => 
               'text-size': 12,
             },
             paint: {
+              'text-color': '#20252b',
               'text-halo-color': 'white',
-              'text-halo-width': 1,
+              'text-halo-width': 2,
+              'text-halo-blur': 0.5,
             },
           },
         ],
@@ -56,6 +58,7 @@ const MapGeofenceEdit = ({ selectedGeofenceId, folderId = 0, geofenceType }) => 
   );
 
   const geofences = useSelector((state) => state.geofences.items);
+  const visibleIds = useSelector((state) => state.geofences.visibleIds);
 
   const refreshGeofences = useCatchCallback(async () => {
     const response = await fetchOrThrow('/api/geofences');
@@ -160,9 +163,11 @@ const MapGeofenceEdit = ({ selectedGeofenceId, folderId = 0, geofenceType }) => 
   useEffect(() => {
     draw.deleteAll();
     Object.values(geofences).forEach((geofence) => {
-      draw.add(geofenceToFeature(theme, geofence));
+      if (visibleIds.includes(geofence.id)) {
+        draw.add(geofenceToFeature(theme, geofence));
+      }
     });
-  }, [geofences, draw, theme]);
+  }, [geofences, visibleIds, draw, theme]);
 
   useEffect(() => {
     if (selectedGeofenceId) {
