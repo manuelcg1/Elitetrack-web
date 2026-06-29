@@ -1,28 +1,36 @@
-# Gradle
-.gradle/
+# ── Compilación Java ─────────────────────────────────────────
 build/
-
-# Runtime
-target/
-logs/
 bin/
+target/
+.gradle/
+*.class
+*.jar
 
-# Node
-node_modules/
+# ── Configuración de producción (NUNCA subir al repo) ────────
+traccar.xml
+debug.xml
 
-# IDE
+# ── Variables de entorno frontend ────────────────────────────
+web/.env
+web/.env.local
+web/.env.production
+web/.env.*.local
+
+# ── Build del frontend ───────────────────────────────────────
+web/dist/
+web/node_modules/
+
+# ── IDEs ─────────────────────────────────────────────────────
 .idea/
-.vscode/
 *.iml
+.vscode/
+*.suo
+*.user
 
-# Databases
-*.mv.db
-
-# Backups
-*-orig.*
-*-original.*
-* copia.*
-
-# OS
-Thumbs.db
+# ── Sistema operativo ────────────────────────────────────────
 .DS_Store
+Thumbs.db
+
+# ── Logs ─────────────────────────────────────────────────────
+*.log
+logs/
