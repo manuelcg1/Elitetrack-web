@@ -94,7 +94,7 @@ deploy_frontend() {
 
     info "Copiando build a Nginx..."
     sudo rm -rf "$DIST_DIR"/*
-    sudo cp -r dist/* "$DIST_DIR/"
+    sudo cp -r build/* "$DIST_DIR/"
     sudo chown -R www-data:www-data "$DIST_DIR"
     log "Frontend desplegado correctamente"
 }
