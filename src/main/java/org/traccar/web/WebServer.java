@@ -16,6 +16,7 @@
 package org.traccar.web;
 
 import com.google.inject.Injector;
+import org.traccar.api.resource.ForwardServerResource;
 import org.traccar.api.resource.HealthResource;
 import org.traccar.api.resource.GeofenceFolderResource;
 import org.traccar.api.resource.SpeedAlertResource;
@@ -197,6 +198,7 @@ public class WebServer implements LifecycleObject {
         resourceConfig.packages(ServerResource.class.getPackage().getName());
 
         resourceConfig.registerClasses(GeofenceFolderResource.class);
+        resourceConfig.registerClasses(ForwardServerResource.class);
         resourceConfig.registerClasses(HealthResource.class);
         resourceConfig.registerClasses(SpeedAlertResource.class);
 

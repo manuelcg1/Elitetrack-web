@@ -25,8 +25,6 @@ const NetworkPage        = lazy(() => import('./other/NetworkPage'));
 const EventPage          = lazy(() => import('./other/EventPage'));
 const ReplayPage         = lazy(() => import('./other/ReplayPage'));
 const GeofencesPage      = lazy(() => import('./other/GeofencesPage'));
-const EmulatorPage       = lazy(() => import('./other/EmulatorPage'));
-const StreamPage         = lazy(() => import('./other/StreamPage'));
 
 // Reportes
 const CombinedReportPage   = lazy(() => import('./reports/CombinedReportPage'));
@@ -63,6 +61,7 @@ const CommandsPage            = lazy(() => import('./settings/CommandsPage'));
 const CommandPage             = lazy(() => import('./settings/CommandPage'));
 const DevicesPage             = lazy(() => import('./settings/DevicesPage'));
 const DeviceConnectionsPage   = lazy(() => import('./settings/DeviceConnectionsPage'));
+const DeviceForwardServersPage = lazy(() => import('./settings/DeviceForwardServersPage'));
 const GroupConnectionsPage    = lazy(() => import('./settings/GroupConnectionsPage'));
 const UserConnectionsPage     = lazy(() => import('./settings/UserConnectionsPage'));
 const GeofencePage            = lazy(() => import('./settings/GeofencePage'));
@@ -81,6 +80,7 @@ const MonitoringMantenimientoPage = lazy(
 );
 const MonitoringAlertsPage = lazy(() => import('./monitoring/MonitoringAlertsPage'));
 const GpsInventoryPage = lazy(() => import('./monitoring/gps-inventory/GpsInventoryPage'));
+const ForwarderPage = lazy(() => import('./monitoring/forwarder/ForwarderPage'));
 
 // ── Fallback de carga ─────────────────────────────────────────────────────────
 const PageLoader = () => (
@@ -172,9 +172,10 @@ const Navigation = () => {
             path="monitoring/alerts"
             element={<MonitoringAlertsPage />}
           />
-
-          <Route path="emulator"            element={<EmulatorPage />} />
-          <Route path="stream"              element={<StreamPage />} />
+          <Route
+            path="monitoring/forwarder"
+            element={<ForwarderPage />}
+          />
 
           <Route path="settings">
             <Route path=":type/:id/share"         element={<SharePage />} />
@@ -191,6 +192,7 @@ const Navigation = () => {
             <Route path="attribute"               element={<ComputedAttributePage />} />
             <Route path="devices"                 element={<DevicesPage />} />
             <Route path="device/:id/connections"  element={<DeviceConnectionsPage />} />
+            <Route path="device/:id/servers"      element={<DeviceForwardServersPage />} />
             <Route path="device/:id/command"      element={<CommandDevicePage />} />
             <Route path="device/:id"              element={<DevicePage />} />
             <Route path="device"                  element={<DevicePage />} />

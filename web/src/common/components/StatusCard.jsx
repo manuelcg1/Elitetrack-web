@@ -291,12 +291,6 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
       </div>
       {position && (
         <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
-          <MenuItem
-            onClick={() => navigate(`/stream?deviceId=${deviceId}`)}
-            disabled={position.protocol !== 'jt808'}
-          >
-            {t('linkLiveVideo')}
-          </MenuItem>
           {!readonly && <MenuItem onClick={handleGeofence}>{t('sharedCreateGeofence')}</MenuItem>}
           <MenuItem
             component="a"

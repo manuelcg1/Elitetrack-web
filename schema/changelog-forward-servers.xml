@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+  xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+
+  <changeSet author="traccar" id="forward-servers-1">
+    <createTable tableName="tc_forward_servers">
+      <column name="id" type="BIGINT" autoIncrement="true">
+        <constraints primaryKey="true" nullable="false" />
+      </column>
+      <column name="name" type="VARCHAR(128)">
+        <constraints nullable="false" />
+      </column>
+      <column name="ipdominio" type="VARCHAR(512)">
+        <constraints nullable="false" />
+      </column>
+      <column name="username" type="VARCHAR(128)" />
+      <column name="password" type="VARCHAR(256)" />
+      <column name="active" type="BOOLEAN" defaultValueBoolean="true">
+        <constraints nullable="false" />
+      </column>
+    </createTable>
+
+    <createTable tableName="tc_device_forward_server">
+      <column name="id" type="BIGINT" autoIncrement="true">
+        <constraints primaryKey="true" nullable="false" />
+      </column>
+      <column name="deviceid" type="BIGINT">
+        <constraints nullable="false" />
+      </column>
+      <column name="serverid" type="BIGINT">
+        <constraints nullable="false" />
+      </column>
+    </createTable>
+
+    <addUniqueConstraint
+      tableName="tc_device_forward_server"
+      columnNames="deviceid, serverid"
+      constraintName="uk_device_forward_server" />
+
+    <addForeignKeyConstraint
+      baseTableName="tc_device_forward_server"
+      baseColumnNames="deviceid"
+      constraintName="fk_device_forward_server_deviceid"
+      referencedTableName="tc_devices"
+      referencedColumnNames="id"
+      onDelete="CASCADE" />
+
+    <addForeignKeyConstraint
+      baseTableName="tc_device_forward_server"
+      baseColumnNames="serverid"
+      constraintName="fk_device_forward_server_serverid"
+      referencedTableName="tc_forward_servers"
+      referencedColumnNames="id"
+      onDelete="CASCADE" />
+
+    <createIndex tableName="tc_device_forward_server" indexName="idx_device_forward_server_deviceid">
+      <column name="deviceid" />
+    </createIndex>
+    <createIndex tableName="tc_device_forward_server" indexName="idx_device_forward_server_serverid">
+      <column name="serverid" />
+    </createIndex>
+  </changeSet>
+
+</databaseChangeLog>

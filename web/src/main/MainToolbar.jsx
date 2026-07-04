@@ -22,6 +22,7 @@ import {
 } from '@mui/material';
 import { makeStyles } from 'tss-react/mui';
 import { useTheme } from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
 import MapIcon from '@mui/icons-material/Map';
 import DnsIcon from '@mui/icons-material/Dns';
 import AddIcon from '@mui/icons-material/Add';
@@ -39,6 +40,12 @@ const useStyles = makeStyles()((theme) => ({
     display: 'flex',
     gap: theme.spacing(1),
     position: 'relative',
+    minHeight: 52,
+    padding: theme.spacing(1, 1.25),
+    backgroundColor: theme.palette.background.paper,
+    [theme.breakpoints.up('md')]: {
+      gap: theme.spacing(0.75),
+    },
   },
   filterPanel: {
     display: 'flex',
@@ -66,6 +73,7 @@ const MainToolbar = ({
 }) => {
   const { classes } = useStyles();
   const theme = useTheme();
+  const desktop = useMediaQuery(theme.breakpoints.up('md'));
   const navigate = useNavigate();
   const t = useTranslation();
   const { darkMode, toggleDarkMode } = useColorMode();
@@ -88,9 +96,11 @@ const MainToolbar = ({
 
   return (
     <Toolbar ref={toolbarRef} className={classes.toolbar}>
-      <IconButton edge="start" onClick={() => setDevicesOpen(!devicesOpen)}>
-        {devicesOpen ? <MapIcon /> : <DnsIcon />}
-      </IconButton>
+      {!desktop && (
+        <IconButton edge="start" onClick={() => setDevicesOpen(!devicesOpen)}>
+          {devicesOpen ? <MapIcon /> : <DnsIcon />}
+        </IconButton>
+      )}
 
       {/* Buscador */}
       <OutlinedInput
@@ -115,6 +125,13 @@ const MainToolbar = ({
         }
         size="small"
         fullWidth
+        sx={{
+          borderRadius: 2,
+          backgroundColor: 'action.hover',
+          '& .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' },
+          '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' },
+          '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'success.main' },
+        }}
       />
 
       {/* Popover preview dispositivos */}
@@ -227,7 +244,7 @@ const MainToolbar = ({
       </Popover>
 
       {/* Filtro por árbol de grupos */}
-      <Box sx={{ position: 'relative' }}>
+      <Box sx={{ position: 'relative', display: desktop ? 'none' : 'block' }}>
         <GroupFilter
           selectedGroupId={selectedGroupId}
           onGroupSelect={onGroupSelect}
@@ -235,11 +252,13 @@ const MainToolbar = ({
       </Box>
 
       {/* Toggle dark mode */}
-      <Tooltip title={darkMode ? 'Modo claro' : 'Modo oscuro'}>
-        <IconButton onClick={toggleDarkMode}>
-          {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
-        </IconButton>
-      </Tooltip>
+      {!desktop && (
+        <Tooltip title={darkMode ? 'Modo claro' : 'Modo oscuro'}>
+          <IconButton onClick={toggleDarkMode}>
+            {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
+          </IconButton>
+        </Tooltip>
+      )}
 
       {/* Agregar dispositivo */}
       <IconButton

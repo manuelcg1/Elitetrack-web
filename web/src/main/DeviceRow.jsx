@@ -61,7 +61,24 @@ const useStyles = makeStyles()((theme) => ({
     color: theme.palette.neutral.main,
   },
   selected: {
-    backgroundColor: theme.palette.action.selected,
+    backgroundColor: theme.palette.success.main + '12',
+  },
+  row: {
+    height: '100%',
+    padding: theme.spacing(0.5, 1.25),
+    gap: theme.spacing(1),
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    '&:hover': {
+      backgroundColor: theme.palette.action.hover,
+    },
+  },
+  avatar: {
+    width: 34,
+    height: 34,
+    backgroundColor: theme.palette.action.disabledBackground,
+  },
+  selectedAvatar: {
+    backgroundColor: theme.palette.success.main,
   },
 }));
 
@@ -124,10 +141,10 @@ const DeviceRow = ({ devices, index, style }) => {
         onClick={() => dispatch(devicesActions.selectId(item.id))}
         disabled={!admin && item.disabled}
         selected={selectedDeviceId === item.id}
-        className={selectedDeviceId === item.id ? classes.selected : null}
+        className={`${classes.row} ${selectedDeviceId === item.id ? classes.selected : ''}`}
       >
         <ListItemAvatar>
-          <Avatar>
+          <Avatar className={`${classes.avatar} ${selectedDeviceId === item.id ? classes.selectedAvatar : ''}`}>
             <img className={classes.icon} src={mapIcons[mapIconKey(item.category)]} alt="" />
           </Avatar>
         </ListItemAvatar>
@@ -139,8 +156,8 @@ const DeviceRow = ({ devices, index, style }) => {
             secondary: Typography,
           }}
           slotProps={{
-            primary: { noWrap: true },
-            secondary: { noWrap: true },
+            primary: { noWrap: true, fontWeight: 700, fontSize: '0.9rem' },
+            secondary: { noWrap: true, fontSize: '0.78rem' },
           }}
         />
         {position && (

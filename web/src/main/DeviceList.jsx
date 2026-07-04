@@ -11,6 +11,7 @@ const useStyles = makeStyles()((theme) => ({
   list: {
     height: '100%',
     direction: theme.direction,
+    backgroundColor: theme.palette.background.paper,
   },
   listInner: {
     position: 'relative',
@@ -58,7 +59,7 @@ const DeviceList = ({ devices }) => {
       className={classes.list}
       rowComponent={MemoDeviceRow}
       rowCount={devices.length}
-      rowHeight={72}
+      rowHeight={64}
       rowProps={{ devices }}
       overscanCount={5}
     />

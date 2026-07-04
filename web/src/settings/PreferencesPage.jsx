@@ -425,9 +425,6 @@ const PreferencesPage = () => {
                   label={t('settingsConnection')}
                   disabled
                 />
-                <Button variant="outlined" color="primary" onClick={() => navigate('/emulator')}>
-                  {t('sharedEmulator')}
-                </Button>
                 {admin && (
                   <Button variant="outlined" color="error" onClick={handleReboot}>
                     {t('serverReboot')}

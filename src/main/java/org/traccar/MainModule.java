@@ -42,6 +42,7 @@ import org.traccar.forward.EventForwarderJson;
 import org.traccar.forward.EventForwarderAmqp;
 import org.traccar.forward.EventForwarderKafka;
 import org.traccar.forward.EventForwarderMqtt;
+import org.traccar.forward.CatalogPositionForwarder;
 import org.traccar.forward.PositionForwarder;
 import org.traccar.forward.PositionForwarderJson;
 import org.traccar.forward.PositionForwarderAmqp;
@@ -387,9 +388,9 @@ public class MainModule extends AbstractModule {
     @Provides
     public static PositionForwarder providePositionForwarder(
             Config config, Client client, ExecutorService executorService,
-            ObjectMapper objectMapper, CacheManager cacheManager) {
+            ObjectMapper objectMapper, CacheManager cacheManager, CatalogPositionForwarder catalogPositionForwarder) {
         if (config.hasKey(Keys.FORWARD_URL)) {
-            return switch (config.getString(Keys.FORWARD_TYPE)) {
+            PositionForwarder legacyForwarder = switch (config.getString(Keys.FORWARD_TYPE)) {
                 case "json" -> new PositionForwarderJson(config, client, objectMapper, cacheManager);
                 case "amqp" -> new PositionForwarderAmqp(config, objectMapper);
                 case "kafka" -> new PositionForwarderKafka(config, objectMapper);
@@ -403,8 +404,9 @@ public class MainModule extends AbstractModule {
                 case "wialon" -> new PositionForwarderWialon(config, executorService, "1.0", false);
                 default -> new PositionForwarderUrl(config, client, objectMapper);
             };
+            catalogPositionForwarder.setDelegate(legacyForwarder);
         }
-        return null;
+        return catalogPositionForwarder;
     }
 
     @Singleton

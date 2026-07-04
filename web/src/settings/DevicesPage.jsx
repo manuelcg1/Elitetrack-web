@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
+  Alert,
   Table,
   TableRow,
   TableCell,
@@ -10,9 +11,11 @@ import {
   Button,
   TableFooter,
   FormControlLabel,
+  Snackbar,
   Switch,
 } from '@mui/material';
 import LinkIcon from '@mui/icons-material/Link';
+import StorageIcon from '@mui/icons-material/Storage';
 import { useTheme } from '@mui/material/styles';
 import { useEffectAsync, useScrollToLoad, pageSize } from '../reactHelper';
 import { useTranslation } from '../common/components/LocalizationProvider';
@@ -36,6 +39,7 @@ const DevicesPage = () => {
   const { classes } = useSettingsStyles();
   const theme = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
   const t = useTranslation();
 
   const groups = useSelector((state) => state.groups.items);
@@ -51,6 +55,7 @@ const DevicesPage = () => {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [showAll, setShowAll] = usePersistedState('showAllDevices', false);
   const [loading, setLoading] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState(location.state?.snackbarMessage || '');
 
   const loadItems = async (offset) => {
     setLoading(true);
@@ -102,6 +107,13 @@ const DevicesPage = () => {
     handler: (deviceId) => navigate(`/settings/device/${deviceId}/connections`),
   };
 
+  const actionForwardServers = {
+    key: 'servers',
+    title: 'Servidor',
+    icon: <StorageIcon fontSize="small" />,
+    handler: (deviceId) => navigate(`/settings/device/${deviceId}/servers`),
+  };
+
   return (
     <PageLayout menu={<SettingsMenu />} breadcrumbs={['settingsTitle', 'deviceTitle']}>
       <SearchHeader keyword={searchKeyword} setKeyword={setSearchKeyword} />
@@ -150,7 +162,7 @@ const DevicesPage = () => {
                   editPath="/settings/device"
                   endpoint="devices"
                   setTimestamp={setTimestamp}
-                  customActions={[actionConnections]}
+                  customActions={[actionConnections, actionForwardServers]}
                   readonly={deviceReadonly}
                 />
               </TableCell>
@@ -184,6 +196,16 @@ const DevicesPage = () => {
       </Table>
       {hasMore && !loading && <div ref={sentinelRef} />}
       <CollectionFab editPath="/settings/device" />
+      <Snackbar
+        open={Boolean(snackbarMessage)}
+        autoHideDuration={4000}
+        onClose={() => setSnackbarMessage('')}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert severity="success" variant="filled" onClose={() => setSnackbarMessage('')}>
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </PageLayout>
   );
 };
