@@ -1,5 +1,6 @@
 package org.traccar.model;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import org.traccar.storage.StorageName;
 
 @StorageName("tc_forward_servers")
@@ -43,6 +44,17 @@ public class ForwardServer extends BaseModel {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    private String apiKey;
+
+    public String getApiKey() {
+        return apiKey;
+    }
+
+    @JsonAlias("apikey")
+    public void setApiKey(String apiKey) {
+        this.apiKey = apiKey;
     }
 
     private boolean active;

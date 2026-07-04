@@ -49,10 +49,12 @@ const ForwarderPage = () => {
     const serversResponse = await fetchOrThrow('/api/forward/servers');
     const nextServers = await serversResponse.json();
     const nextAssignments = {};
-    await Promise.all(nextServers.map(async (server) => {
-      const response = await fetchOrThrow(`/api/forward/servers/${server.id}/devices`);
-      nextAssignments[server.id] = await response.json();
-    }));
+    await Promise.all(
+      nextServers.map(async (server) => {
+        const response = await fetchOrThrow(`/api/forward/servers/${server.id}/devices`);
+        nextAssignments[server.id] = await response.json();
+      }),
+    );
     setServers(nextServers);
     setAssignments(nextAssignments);
   };
@@ -61,9 +63,11 @@ const ForwarderPage = () => {
     loadData();
   }, []);
 
-  const counts = useMemo(() => Object.fromEntries(
-    servers.map((server) => [server.id, assignments[server.id]?.length || 0]),
-  ), [servers, assignments]);
+  const counts = useMemo(
+    () =>
+      Object.fromEntries(servers.map((server) => [server.id, assignments[server.id]?.length || 0])),
+    [servers, assignments],
+  );
 
   const handleNew = () => {
     setEditingItem(null);
@@ -102,11 +106,11 @@ const ForwarderPage = () => {
     });
     const savedServer = await response.json();
     setDialogOpen(false);
-    setServers((previous) => (
+    setServers((previous) =>
       server.id
         ? previous.map((item) => (item.id === savedServer.id ? savedServer : item))
-        : [...previous, savedServer]
-    ));
+        : [...previous, savedServer],
+    );
     await loadData();
     setSnackbarMessage(
       isUpdate
@@ -115,10 +119,11 @@ const ForwarderPage = () => {
     );
   };
 
-  const getServerDevices = (serverId) => (assignments[serverId] || [])
-    .map((assignment) => devices[assignment.deviceId])
-    .filter(Boolean)
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const getServerDevices = (serverId) =>
+    (assignments[serverId] || [])
+      .map((assignment) => devices[assignment.deviceId])
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <PageLayout menu={<MonitoringMenu />} breadcrumbs={['monitoringTitle', 'Retransmision']}>
@@ -156,7 +161,7 @@ const ForwarderPage = () => {
               return (
                 <Box key={server.id}>
                   <ListItem
-                    secondaryAction={(
+                    secondaryAction={
                       <Stack direction="row" spacing={1} alignItems="center">
                         <Chip
                           label={`${counts[server.id]} dispositivos`}
@@ -175,12 +180,15 @@ const ForwarderPage = () => {
                           </IconButton>
                         </Tooltip>
                         <Tooltip title={open ? 'Ocultar GPS' : 'Ver GPS'}>
-                          <IconButton edge="end" onClick={() => setExpandedId(open ? null : server.id)}>
+                          <IconButton
+                            edge="end"
+                            onClick={() => setExpandedId(open ? null : server.id)}
+                          >
                             {open ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                           </IconButton>
                         </Tooltip>
                       </Stack>
-                    )}
+                    }
                     sx={{ py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}
                   >
                     <Box
@@ -194,7 +202,11 @@ const ForwarderPage = () => {
                     />
                     <ListItemText
                       primary={<Typography fontWeight={700}>{server.name}</Typography>}
-                      secondary={`${server.ipDominio} - usuario ${server.username || 'sin usuario'}`}
+                      secondary={[
+                        server.ipDominio,
+                        `usuario ${server.username || 'sin usuario'}`,
+                        server.apiKey ? 'API key configurada' : 'sin API key',
+                      ].join(' - ')}
                     />
                   </ListItem>
                   <Collapse in={open} timeout="auto" unmountOnExit>
@@ -208,9 +220,16 @@ const ForwarderPage = () => {
                           {serverDevices.map((device) => {
                             const position = positions[device.id];
                             return (
-                              <Paper key={device.id} variant="outlined" sx={{ p: 1.25, borderRadius: 1 }}>
+                              <Paper
+                                key={device.id}
+                                variant="outlined"
+                                sx={{ p: 1.25, borderRadius: 1 }}
+                              >
                                 <Stack direction="row" spacing={1.5} alignItems="center">
-                                  <SensorsIcon color={position ? 'success' : 'disabled'} fontSize="small" />
+                                  <SensorsIcon
+                                    color={position ? 'success' : 'disabled'}
+                                    fontSize="small"
+                                  />
                                   <Box sx={{ flex: 1, minWidth: 0 }}>
                                     <Typography variant="body2" fontWeight={700} noWrap>
                                       {device.name}
@@ -244,12 +263,17 @@ const ForwarderPage = () => {
         onClose={() => setDialogOpen(false)}
         onSave={handleSave}
       />
-      <Dialog open={Boolean(deleteItem)} onClose={() => !deleting && setDeleteItem(null)} maxWidth="xs" fullWidth>
+      <Dialog
+        open={Boolean(deleteItem)}
+        onClose={() => !deleting && setDeleteItem(null)}
+        maxWidth="xs"
+        fullWidth
+      >
         <DialogTitle>Eliminar destino</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary">
-            Se eliminara "{deleteItem?.name}" del catalogo de retransmision. Los dispositivos asignados dejaran de
-            reenviar posiciones a este destino.
+            Se eliminara "{deleteItem?.name}" del catalogo de retransmision. Los dispositivos
+            asignados dejaran de reenviar posiciones a este destino.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>

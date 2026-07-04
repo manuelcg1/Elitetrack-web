@@ -18,6 +18,7 @@
       </column>
       <column name="username" type="VARCHAR(128)" />
       <column name="password" type="VARCHAR(256)" />
+      <column name="apikey" type="VARCHAR(256)" />
       <column name="active" type="BOOLEAN" defaultValueBoolean="true">
         <constraints nullable="false" />
       </column>
@@ -62,6 +63,17 @@
     <createIndex tableName="tc_device_forward_server" indexName="idx_device_forward_server_serverid">
       <column name="serverid" />
     </createIndex>
+  </changeSet>
+
+  <changeSet author="traccar" id="forward-servers-2">
+    <preConditions onFail="MARK_RAN">
+      <not>
+        <columnExists tableName="tc_forward_servers" columnName="apikey" />
+      </not>
+    </preConditions>
+    <addColumn tableName="tc_forward_servers">
+      <column name="apikey" type="VARCHAR(256)" />
+    </addColumn>
   </changeSet>
 
 </databaseChangeLog>

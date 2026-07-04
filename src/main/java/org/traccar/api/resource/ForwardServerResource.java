@@ -38,8 +38,19 @@ public class ForwardServerResource extends BaseResource {
         if (server.getIpDominio() == null || server.getIpDominio().isBlank()) {
             throw new BadRequestException("Server URL is required");
         }
+        if (server.getUsername() == null || server.getUsername().isBlank()) {
+            throw new BadRequestException("Server username is required");
+        }
+        if (server.getPassword() == null || server.getPassword().isBlank()) {
+            throw new BadRequestException("Server password is required");
+        }
+        if (server.getApiKey() == null || server.getApiKey().isBlank()) {
+            throw new BadRequestException("Server API key is required");
+        }
         server.setName(server.getName().trim());
         server.setIpDominio(server.getIpDominio().trim());
+        server.setUsername(server.getUsername().trim());
+        server.setApiKey(server.getApiKey().trim());
     }
 
     @Path("servers")

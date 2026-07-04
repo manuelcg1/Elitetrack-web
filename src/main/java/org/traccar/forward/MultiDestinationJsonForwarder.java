@@ -9,7 +9,10 @@ import jakarta.ws.rs.client.InvocationCallback;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.traccar.forward.centralperu.CentralPeruPositionRequest;
+import org.traccar.model.Device;
 import org.traccar.model.ForwardServer;
+import org.traccar.model.Position;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -36,7 +39,7 @@ public class MultiDestinationJsonForwarder {
 
         String payload;
         try {
-            payload = objectMapper.writeValueAsString(positionData);
+            payload = objectMapper.writeValueAsString(createRequest(positionData));
         } catch (JsonProcessingException e) {
             resultHandler.onResult(false, e);
             return;
@@ -55,6 +58,9 @@ public class MultiDestinationJsonForwarder {
                     requestBuilder.header(
                             HttpHeaders.AUTHORIZATION,
                             "Basic " + token);
+                }
+                if (server.getApiKey() != null && !server.getApiKey().isBlank()) {
+                    requestBuilder.header("x-api-key", server.getApiKey());
                 }
                 var entity = Entity.entity(payload, MediaType.APPLICATION_JSON_TYPE);
                 requestBuilder.async().post(entity, new InvocationCallback<Response>() {
@@ -92,6 +98,21 @@ public class MultiDestinationJsonForwarder {
                 }
             }
         }
+    }
+
+    private CentralPeruPositionRequest createRequest(PositionData positionData) {
+        Position position = positionData.getPosition();
+        Device device = positionData.getDevice();
+
+        CentralPeruPositionRequest request = new CentralPeruPositionRequest();
+        request.setImei(device.getUniqueId());
+        request.setLatitud(position.getLatitude());
+        request.setLongitud(position.getLongitude());
+        request.setDate(position.getFixTime().getTime() / 1000);
+        request.setCourse(position.getCourse());
+        request.setAltitud(position.getAltitude());
+        request.setSpeed(position.getSpeed());
+        return request;
     }
 
 }

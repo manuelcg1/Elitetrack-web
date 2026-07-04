@@ -17,6 +17,7 @@ const emptyItem = {
   ipDominio: '',
   username: '',
   password: '',
+  apiKey: '',
   active: true,
 };
 
@@ -44,6 +45,8 @@ const ForwardServerDialog = ({ open, item, onClose, onSave }) => {
         name: form.name.trim(),
         ipDominio: form.ipDominio.trim(),
         username: form.username?.trim() || '',
+        password: form.password || '',
+        apiKey: form.apiKey?.trim() || '',
       });
     } catch (e) {
       setError(e.message || 'No se pudo guardar el destino');
@@ -78,6 +81,7 @@ const ForwardServerDialog = ({ open, item, onClose, onSave }) => {
             value={form.username || ''}
             onChange={(event) => handleChange('username', event.target.value)}
             fullWidth
+            required
           />
           <TextField
             label="Contrasena"
@@ -85,14 +89,24 @@ const ForwardServerDialog = ({ open, item, onClose, onSave }) => {
             onChange={(event) => handleChange('password', event.target.value)}
             type="password"
             fullWidth
+            required
+          />
+          <TextField
+            label="API key"
+            value={form.apiKey || ''}
+            onChange={(event) => handleChange('apiKey', event.target.value)}
+            type="password"
+            helperText="Se enviara en el encabezado x-api-key."
+            fullWidth
+            required
           />
           <FormControlLabel
-            control={(
+            control={
               <Switch
                 checked={Boolean(form.active)}
                 onChange={(event) => handleChange('active', event.target.checked)}
               />
-            )}
+            }
             label={form.active ? 'Activo' : 'Inactivo'}
           />
         </Stack>
@@ -102,7 +116,14 @@ const ForwardServerDialog = ({ open, item, onClose, onSave }) => {
         <Button
           variant="contained"
           onClick={handleSave}
-          disabled={saving || !form.name.trim() || !form.ipDominio.trim()}
+          disabled={
+            saving ||
+            !form.name.trim() ||
+            !form.ipDominio.trim() ||
+            !form.username?.trim() ||
+            !form.password ||
+            !form.apiKey?.trim()
+          }
         >
           {saving ? 'Guardando...' : 'Guardar'}
         </Button>
