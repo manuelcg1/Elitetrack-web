@@ -1,5 +1,7 @@
-import { useEffect, useState, memo } from 'react';
+import { useEffect, useReducer, memo } from 'react';
 import { useDispatch } from 'react-redux';
+import { useTheme } from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
 import { makeStyles } from 'tss-react/mui';
 import { List } from 'react-window';
 import { devicesActions } from '../store';
@@ -11,7 +13,10 @@ const useStyles = makeStyles()((theme) => ({
   list: {
     height: '100%',
     direction: theme.direction,
-    backgroundColor: theme.palette.background.paper,
+    backgroundColor: theme.palette.background.default,
+    [theme.breakpoints.up('md')]: {
+      backgroundColor: theme.palette.background.paper,
+    },
   },
   listInner: {
     position: 'relative',
@@ -40,12 +45,14 @@ MemoDeviceRow.displayName = 'MemoDeviceRow';
 const DeviceList = ({ devices }) => {
   const { classes } = useStyles();
   const dispatch = useDispatch();
+  const theme = useTheme();
+  const desktop = useMediaQuery(theme.breakpoints.up('md'));
 
   // Refresca el tiempo relativo ("hace 2 min") cada 60 segundos
-  const [, setTime] = useState(Date.now());
+  const [, refreshTime] = useReducer((value) => value + 1, 0);
 
   useEffect(() => {
-    const interval = setInterval(() => setTime(Date.now()), 60000);
+    const interval = setInterval(refreshTime, 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -59,7 +66,7 @@ const DeviceList = ({ devices }) => {
       className={classes.list}
       rowComponent={MemoDeviceRow}
       rowCount={devices.length}
-      rowHeight={64}
+      rowHeight={desktop ? 64 : 72}
       rowProps={{ devices }}
       overscanCount={5}
     />

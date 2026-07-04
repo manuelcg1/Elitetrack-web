@@ -22,6 +22,10 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class MultiDestinationJsonForwarder {
 
+    public interface DestinationSuccessHandler {
+        void onSuccess(ForwardServer server);
+    }
+
     private final Client client;
     private final ObjectMapper objectMapper;
 
@@ -32,6 +36,12 @@ public class MultiDestinationJsonForwarder {
     }
 
     public void forward(List<ForwardServer> servers, PositionData positionData, ResultHandler resultHandler) {
+        forward(servers, positionData, resultHandler, null);
+    }
+
+    public void forward(
+            List<ForwardServer> servers, PositionData positionData,
+            ResultHandler resultHandler, DestinationSuccessHandler destinationSuccessHandler) {
         if (servers.isEmpty()) {
             resultHandler.onResult(true, null);
             return;
@@ -70,6 +80,8 @@ public class MultiDestinationJsonForwarder {
                             if (response.getStatusInfo().getFamily() != Response.Status.Family.SUCCESSFUL) {
                                 failure.compareAndSet(null, new RuntimeException(
                                         server.getName() + " HTTP " + response.getStatusInfo().getStatusCode()));
+                            } else if (destinationSuccessHandler != null) {
+                                destinationSuccessHandler.onSuccess(server);
                             }
                         } finally {
                             response.close();

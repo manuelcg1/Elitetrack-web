@@ -34,6 +34,7 @@ const App = () => {
   const { pathname, search } = useLocation();
 
   const desktop = useMediaQuery(theme.breakpoints.up('md'));
+  const mainPage = pathname === '/';
 
   const newServer = useSelector((state) => state.session.server.newServer);
   const termsUrl = useSelector((state) => state.session.server.attributes.termsUrl);
@@ -76,7 +77,7 @@ const App = () => {
       <div className={classes.page}>
         <Outlet />
       </div>
-      {!desktop && (
+      {!desktop && !mainPage && (
         <div className={classes.menu}>
           <BottomMenu />
         </div>

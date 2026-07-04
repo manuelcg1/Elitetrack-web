@@ -1,11 +1,12 @@
 import { useState, useCallback, useEffect } from 'react';
-import { IconButton, Paper, Tooltip } from '@mui/material';
+import { Drawer, IconButton, Paper, Tooltip } from '@mui/material';
 import { makeStyles } from 'tss-react/mui';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useDispatch, useSelector } from 'react-redux';
 import KeyboardDoubleArrowLeftIcon from '@mui/icons-material/KeyboardDoubleArrowLeft';
 import KeyboardDoubleArrowRightIcon from '@mui/icons-material/KeyboardDoubleArrowRight';
+import MenuIcon from '@mui/icons-material/Menu';
 import DeviceList from './DeviceList';
 import MainNavigation from './MainNavigation';
 import StatusCard from '../common/components/StatusCard';
@@ -16,12 +17,12 @@ import useFilter from './useFilter';
 import MainToolbar from './MainToolbar';
 import MainMap from './MainMap';
 import { useAttributePreference } from '../common/util/preferences';
-import useGroupDescendants from '../groups/useGroupDescendants';
 
 const useStyles = makeStyles()((theme, { navigationWidth, sidebarLeft, sidebarOpen }) => ({
   root: {
     height: '100%',
     backgroundColor: theme.palette.mode === 'dark' ? theme.palette.background.default : '#6bd2df',
+    overflow: 'hidden',
   },
   navigation: {
     position: 'fixed',
@@ -52,6 +53,24 @@ const useStyles = makeStyles()((theme, { navigationWidth, sidebarLeft, sidebarOp
       display: 'none',
     },
   },
+  mobileMenuButton: {
+    position: 'fixed',
+    left: 12,
+    top: 12,
+    zIndex: 6,
+    width: 42,
+    height: 42,
+    color: theme.palette.text.primary,
+    backgroundColor: theme.palette.background.paper,
+    border: `1px solid ${theme.palette.divider}`,
+    boxShadow: '0 12px 28px rgba(15, 23, 42, 0.18)',
+    '&:hover': {
+      backgroundColor: theme.palette.background.paper,
+    },
+    [theme.breakpoints.up('md')]: {
+      display: 'none',
+    },
+  },
   sidebar: {
     pointerEvents: 'none',
     display: 'flex',
@@ -67,19 +86,28 @@ const useStyles = makeStyles()((theme, { navigationWidth, sidebarLeft, sidebarOp
       display: sidebarOpen ? 'flex' : 'none',
     },
     [theme.breakpoints.down('md')]: {
-      height: '100%',
-      width: '100%',
+      position: 'fixed',
+      left: 12,
+      top: 66,
+      width: 'min(336px, calc(100% - 24px))',
+      height: 'min(620px, calc(100% - 84px - env(safe-area-inset-bottom)))',
+      zIndex: 5,
+      display: sidebarOpen ? 'flex' : 'none',
     },
   },
-  header:  {
+  header: {
     pointerEvents: 'auto',
     zIndex: 6,
     borderRadius: '8px 8px 0 0',
     boxShadow: 'none',
     borderBottom: `1px solid ${theme.palette.divider}`,
+    [theme.breakpoints.down('md')]: {
+      borderRadius: '12px 12px 0 0',
+      boxShadow: 'none',
+    },
   },
-  middle:  { flex: 1, display: 'grid', minHeight: 0 },
-  contentMap:  { pointerEvents: 'auto', gridArea: '1 / 1' },
+  middle: { flex: 1, display: 'grid', minHeight: 0 },
+  contentMap: { pointerEvents: 'auto', gridArea: '1 / 1' },
   contentList: {
     pointerEvents: 'auto',
     gridArea: '1 / 1',
@@ -89,14 +117,34 @@ const useStyles = makeStyles()((theme, { navigationWidth, sidebarLeft, sidebarOp
     borderRadius: '0 0 8px 8px',
     overflow: 'hidden',
     boxShadow: 'none',
+    [theme.breakpoints.down('md')]: {
+      borderRadius: '0 0 12px 12px',
+      backgroundColor: theme.palette.background.paper,
+    },
   },
   panel: {
+    height: '100%',
+    minHeight: 0,
+    display: 'flex',
+    flexDirection: 'column',
     [theme.breakpoints.up('md')]: {
       borderRadius: 8,
       overflow: 'hidden',
       boxShadow: '0 18px 50px rgba(15, 23, 42, 0.18)',
       backgroundColor: theme.palette.background.paper,
     },
+    [theme.breakpoints.down('md')]: {
+      flex: 1,
+      borderRadius: 12,
+      overflow: 'hidden',
+      boxShadow: '0 18px 46px rgba(15, 23, 42, 0.22)',
+      backgroundColor: theme.palette.background.paper,
+    },
+  },
+  drawerPaper: {
+    width: 224,
+    maxWidth: '86vw',
+    overflow: 'hidden',
   },
 }));
 
@@ -124,16 +172,9 @@ const MainPage = () => {
     'mainNavigationCollapsed',
     false,
   );
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [devicesOpen, setDevicesOpen] = useState(!desktop);
   const [eventsOpen, setEventsOpen] = useState(false);
-
-  // ── Filtro por árbol de grupos ─────────────────────────────────────────────
-  const [selectedGroupId, setSelectedGroupId] = useState(null);
-  const groupDescendants = useGroupDescendants(selectedGroupId);
-
-  const handleGroupSelect = useCallback((groupId) => {
-    setSelectedGroupId(groupId);
-  }, []);
 
   const onEventsClick = useCallback(() => setEventsOpen(true), []);
   const navigationWidth = desktop ? (navigationCollapsed ? 72 : 224) : 0;
@@ -163,28 +204,14 @@ const MainPage = () => {
     setFilteredPositions,
   );
 
-  // ── Aplicar filtro de grupo sobre los dispositivos ya filtrados ────────────
-  const groupFilteredDevices = selectedGroupId
-    ? filteredDevices.filter((device) => groupDescendants.has(device.groupId))
-    : filteredDevices;
-
-  const groupFilteredPositions = selectedGroupId
-    ? filteredPositions.filter((pos) => {
-        const device = groupFilteredDevices.find((d) => d.id === pos.deviceId);
-        return Boolean(device);
-      })
-    : filteredPositions;
-
   return (
     <div className={classes.root}>
-      {desktop && (
-        <MainMap
-          filteredPositions={groupFilteredPositions}
-          selectedPosition={selectedPosition}
-          onEventsClick={onEventsClick}
-          desktopPadding={desktopPadding}
-        />
-      )}
+      <MainMap
+        filteredPositions={filteredPositions}
+        selectedPosition={selectedPosition}
+        onEventsClick={onEventsClick}
+        desktopPadding={desktopPadding}
+      />
       {desktop && (
         <div className={classes.navigation}>
           <MainNavigation
@@ -209,43 +236,55 @@ const MainPage = () => {
           </IconButton>
         </Tooltip>
       )}
+      {!desktop && (
+        <>
+          <IconButton
+            className={classes.mobileMenuButton}
+            onClick={() => setMobileNavigationOpen(true)}
+          >
+            <MenuIcon />
+          </IconButton>
+          <Drawer
+            open={mobileNavigationOpen}
+            onClose={() => setMobileNavigationOpen(false)}
+            slotProps={{ paper: { className: classes.drawerPaper } }}
+          >
+            <MainNavigation
+              collapsed={false}
+              vehiclesPanelOpen={devicesOpen}
+              onVehiclesClick={() => setDevicesOpen(true)}
+              onMapClick={() => setDevicesOpen(false)}
+              onClose={() => setMobileNavigationOpen(false)}
+            />
+          </Drawer>
+        </>
+      )}
       <div className={classes.sidebar}>
         <div className={classes.panel}>
-        <Paper square elevation={3} className={classes.header}>
-          <MainToolbar
-            filteredDevices={groupFilteredDevices}
-            devicesOpen={devicesOpen}
-            setDevicesOpen={setDevicesOpen}
-            keyword={keyword}
-            setKeyword={setKeyword}
-            filter={filter}
-            setFilter={setFilter}
-            filterSort={filterSort}
-            setFilterSort={setFilterSort}
-            filterMap={filterMap}
-            setFilterMap={setFilterMap}
-            selectedGroupId={selectedGroupId}
-            onGroupSelect={handleGroupSelect}
-          />
-        </Paper>
-        <div className={classes.middle}>
-          {!desktop && (
-            <div className={classes.contentMap}>
-              <MainMap
-                filteredPositions={groupFilteredPositions}
-                selectedPosition={selectedPosition}
-                onEventsClick={onEventsClick}
-              />
-            </div>
-          )}
-          <Paper
-            square
-            className={classes.contentList}
-            style={devicesOpen ? {} : { visibility: 'hidden' }}
-          >
-            <DeviceList devices={groupFilteredDevices} />
+          <Paper square elevation={3} className={classes.header}>
+            <MainToolbar
+              filteredDevices={filteredDevices}
+              devicesOpen={devicesOpen}
+              setDevicesOpen={setDevicesOpen}
+              keyword={keyword}
+              setKeyword={setKeyword}
+              filter={filter}
+              setFilter={setFilter}
+              filterSort={filterSort}
+              setFilterSort={setFilterSort}
+              filterMap={filterMap}
+              setFilterMap={setFilterMap}
+            />
           </Paper>
-        </div>
+          <div className={classes.middle}>
+            <Paper
+              square
+              className={classes.contentList}
+              style={devicesOpen ? {} : { visibility: 'hidden' }}
+            >
+              <DeviceList devices={filteredDevices} />
+            </Paper>
+          </div>
         </div>
       </div>
       <EventsDrawer open={eventsOpen} onClose={() => setEventsOpen(false)} />

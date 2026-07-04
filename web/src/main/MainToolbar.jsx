@@ -18,33 +18,43 @@ import {
   ListItemButton,
   ListItemText,
   Tooltip,
-  Box,
 } from '@mui/material';
 import { makeStyles } from 'tss-react/mui';
 import { useTheme } from '@mui/material/styles';
-import useMediaQuery from '@mui/material/useMediaQuery';
-import MapIcon from '@mui/icons-material/Map';
-import DnsIcon from '@mui/icons-material/Dns';
 import AddIcon from '@mui/icons-material/Add';
 import TuneIcon from '@mui/icons-material/Tune';
-import DarkModeIcon from '@mui/icons-material/DarkMode';
-import LightModeIcon from '@mui/icons-material/LightMode';
 import { useTranslation } from '../common/components/LocalizationProvider';
 import { useDeviceReadonly } from '../common/util/permissions';
 import DeviceRow from './DeviceRow';
-import { useColorMode } from '../AppThemeProvider';
-import GroupFilter from '../groups/GroupFilter';
 
 const useStyles = makeStyles()((theme) => ({
   toolbar: {
     display: 'flex',
+    alignItems: 'center',
     gap: theme.spacing(1),
     position: 'relative',
     minHeight: 52,
     padding: theme.spacing(1, 1.25),
+    overflow: 'hidden',
     backgroundColor: theme.palette.background.paper,
-    [theme.breakpoints.up('md')]: {
-      gap: theme.spacing(0.75),
+    [theme.breakpoints.down('md')]: {
+      minHeight: 54,
+      padding: theme.spacing(0.75, 1),
+      borderBottom: `1px solid ${theme.palette.divider}`,
+    },
+  },
+  search: {
+    minWidth: 0,
+    flex: '1 1 auto',
+  },
+  iconButton: {
+    flex: '0 0 auto',
+    width: 38,
+    height: 38,
+    [theme.breakpoints.down('sm')]: {
+      width: 34,
+      height: 34,
+      padding: 6,
     },
   },
   filterPanel: {
@@ -53,6 +63,7 @@ const useStyles = makeStyles()((theme) => ({
     padding: theme.spacing(2),
     gap: theme.spacing(2),
     width: theme.dimensions.drawerWidthTablet,
+    maxWidth: 'calc(100vw - 32px)',
   },
 }));
 
@@ -68,15 +79,11 @@ const MainToolbar = ({
   setFilterSort,
   filterMap,
   setFilterMap,
-  selectedGroupId,
-  onGroupSelect,
 }) => {
   const { classes } = useStyles();
   const theme = useTheme();
-  const desktop = useMediaQuery(theme.breakpoints.up('md'));
   const navigate = useNavigate();
   const t = useTranslation();
-  const { darkMode, toggleDarkMode } = useColorMode();
 
   const deviceReadonly = useDeviceReadonly();
   const groups = useSelector((state) => state.groups.items);
@@ -88,35 +95,23 @@ const MainToolbar = ({
   const [devicesAnchorEl, setDevicesAnchorEl] = useState(null);
 
   const deviceStatusCount = (status) =>
-    Object.values(devices).filter((d) => d.status === status).length;
+    Object.values(devices).filter((device) => device.status === status).length;
 
-  const hasActiveFilter = filter.statuses.length > 0
-    || filter.groups.length > 0
-    || Boolean(selectedGroupId);
+  const hasActiveFilter = filter.statuses.length > 0 || filter.groups.length > 0 || filterMap;
 
   return (
     <Toolbar ref={toolbarRef} className={classes.toolbar}>
-      {!desktop && (
-        <IconButton edge="start" onClick={() => setDevicesOpen(!devicesOpen)}>
-          {devicesOpen ? <MapIcon /> : <DnsIcon />}
-        </IconButton>
-      )}
-
-      {/* Buscador */}
       <OutlinedInput
         ref={inputRef}
+        className={classes.search}
         placeholder={t('sharedSearchDevices')}
         value={keyword}
-        onChange={(e) => setKeyword(e.target.value)}
+        onChange={(event) => setKeyword(event.target.value)}
         onFocus={() => setDevicesAnchorEl(toolbarRef.current)}
         onBlur={() => setDevicesAnchorEl(null)}
         endAdornment={
           <InputAdornment position="end">
-            <IconButton
-              size="small"
-              edge="end"
-              onClick={() => setFilterAnchorEl(inputRef.current)}
-            >
+            <IconButton size="small" edge="end" onClick={() => setFilterAnchorEl(inputRef.current)}>
               <Badge color="info" variant="dot" invisible={!hasActiveFilter}>
                 <TuneIcon fontSize="small" />
               </Badge>
@@ -128,13 +123,14 @@ const MainToolbar = ({
         sx={{
           borderRadius: 2,
           backgroundColor: 'action.hover',
+          height: { xs: 38, md: 40 },
+          fontSize: { xs: '0.85rem', sm: '0.9rem' },
           '& .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' },
           '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' },
           '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'success.main' },
         }}
       />
 
-      {/* Popover preview dispositivos */}
       <Popover
         open={!!devicesAnchorEl && !devicesOpen}
         anchorEl={devicesAnchorEl}
@@ -156,23 +152,15 @@ const MainToolbar = ({
         disableEnforceFocus
       >
         {filteredDevices.slice(0, 3).map((_, index) => (
-          <DeviceRow
-            key={filteredDevices[index].id}
-            devices={filteredDevices}
-            index={index}
-          />
+          <DeviceRow key={filteredDevices[index].id} devices={filteredDevices} index={index} />
         ))}
         {filteredDevices.length > 3 && (
           <ListItemButton alignItems="center" onClick={() => setDevicesOpen(true)}>
-            <ListItemText
-              primary={t('notificationAlways')}
-              style={{ textAlign: 'center' }}
-            />
+            <ListItemText primary={t('notificationAlways')} style={{ textAlign: 'center' }} />
           </ListItemButton>
         )}
       </Popover>
 
-      {/* Popover filtros avanzados */}
       <Popover
         open={!!filterAnchorEl}
         anchorEl={filterAnchorEl}
@@ -185,7 +173,7 @@ const MainToolbar = ({
             <Select
               label={t('deviceStatus')}
               value={filter.statuses}
-              onChange={(e) => setFilter({ ...filter, statuses: e.target.value })}
+              onChange={(event) => setFilter({ ...filter, statuses: event.target.value })}
               multiple
             >
               <MenuItem value="online">
@@ -204,11 +192,11 @@ const MainToolbar = ({
             <Select
               label={t('settingsGroups')}
               value={filter.groups}
-              onChange={(e) => setFilter({ ...filter, groups: e.target.value })}
+              onChange={(event) => setFilter({ ...filter, groups: event.target.value })}
               multiple
             >
               {Object.values(groups)
-                .sort((a, b) => a.name.localeCompare(b.name))
+                .sort((first, second) => first.name.localeCompare(second.name))
                 .map((group) => (
                   <MenuItem key={group.id} value={group.id}>
                     {group.name}
@@ -221,7 +209,7 @@ const MainToolbar = ({
             <Select
               label={t('sharedSortBy')}
               value={filterSort}
-              onChange={(e) => setFilterSort(e.target.value)}
+              onChange={(event) => setFilterSort(event.target.value)}
               displayEmpty
             >
               <MenuItem value="">{'\u00a0'}</MenuItem>
@@ -234,7 +222,7 @@ const MainToolbar = ({
               control={
                 <Checkbox
                   checked={filterMap}
-                  onChange={(e) => setFilterMap(e.target.checked)}
+                  onChange={(event) => setFilterMap(event.target.checked)}
                 />
               }
               label={t('sharedFilterMap')}
@@ -243,28 +231,11 @@ const MainToolbar = ({
         </div>
       </Popover>
 
-      {/* Filtro por árbol de grupos */}
-      <Box sx={{ position: 'relative', display: desktop ? 'none' : 'block' }}>
-        <GroupFilter
-          selectedGroupId={selectedGroupId}
-          onGroupSelect={onGroupSelect}
-        />
-      </Box>
-
-      {/* Toggle dark mode */}
-      {!desktop && (
-        <Tooltip title={darkMode ? 'Modo claro' : 'Modo oscuro'}>
-          <IconButton onClick={toggleDarkMode}>
-            {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
-          </IconButton>
-        </Tooltip>
-      )}
-
-      {/* Agregar dispositivo */}
       <IconButton
         edge="end"
         onClick={() => navigate('/settings/device')}
         disabled={deviceReadonly}
+        className={classes.iconButton}
       >
         <Tooltip
           open={!deviceReadonly && Object.keys(devices).length === 0}

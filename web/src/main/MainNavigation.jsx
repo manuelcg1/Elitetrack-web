@@ -141,12 +141,7 @@ const useStyles = makeStyles()((theme, { collapsed }) => ({
   },
 }));
 
-const MainNavigation = ({
-  collapsed,
-  vehiclesPanelOpen,
-  onVehiclesClick,
-  onMapClick,
-}) => {
+const MainNavigation = ({ collapsed, vehiclesPanelOpen, onVehiclesClick, onMapClick, onClose }) => {
   const { classes, cx } = useStyles({ collapsed });
   const navigate = useNavigate();
   const location = useLocation();
@@ -161,9 +156,13 @@ const MainNavigation = ({
     navigate('/login');
   };
 
-  const selected = (path) => (
-    path === '/' ? location.pathname === '/' : location.pathname.startsWith(path)
-  );
+  const selected = (path) =>
+    path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
+
+  const handleItemClick = (callback) => {
+    callback();
+    onClose?.();
+  };
 
   const item = ({ label, icon, path, selectedPath, active, onClick }) => {
     const button = (
@@ -172,7 +171,7 @@ const MainNavigation = ({
           classes.item,
           (active ?? selected(selectedPath || path)) && classes.itemSelected,
         )}
-        onClick={onClick || (() => navigate(path))}
+        onClick={() => handleItemClick(onClick || (() => navigate(path)))}
       >
         <Stack
           direction="row"
@@ -182,13 +181,21 @@ const MainNavigation = ({
         >
           {icon}
           <Box className={classes.itemText}>
-            <Typography variant="body2" fontWeight="inherit" noWrap>{label}</Typography>
+            <Typography variant="body2" fontWeight="inherit" noWrap>
+              {label}
+            </Typography>
           </Box>
         </Stack>
       </ButtonBase>
     );
 
-    return collapsed ? <Tooltip title={label} placement="right">{button}</Tooltip> : button;
+    return collapsed ? (
+      <Tooltip title={label} placement="right">
+        {button}
+      </Tooltip>
+    ) : (
+      button
+    );
   };
 
   return (
@@ -196,17 +203,17 @@ const MainNavigation = ({
       <Box className={classes.brand}>
         <Box className={classes.brandLogo}>
           <Box className={classes.logoMark}>
-            <img
-              src={logoMenuLateral}
-              alt="EliteTrack"
-              className={classes.logoImage}
-            />
+            <img src={logoMenuLateral} alt="EliteTrack" className={classes.logoImage} />
           </Box>
           {!collapsed && (
             <Box className={classes.brandText}>
               <Typography component="div" className={classes.brandTitle}>
-                <Box component="span" className={classes.brandAccent}>ELITE</Box>
-                <Box component="span" className={classes.brandName}>TRACK</Box>
+                <Box component="span" className={classes.brandAccent}>
+                  ELITE
+                </Box>
+                <Box component="span" className={classes.brandName}>
+                  TRACK
+                </Box>
               </Typography>
               <Typography component="span" className={classes.brandSubtitle}>
                 SISTEMA DE RASTREO GPS
@@ -250,7 +257,11 @@ const MainNavigation = ({
           path: '/settings/preferences',
           selectedPath: '/settings',
         })}
-        {item({ label: 'Alertas', icon: <WarningIcon fontSize="small" />, path: '/monitoring/alerts' })}
+        {item({
+          label: 'Alertas',
+          icon: <WarningIcon fontSize="small" />,
+          path: '/monitoring/alerts',
+        })}
         {item({
           label: 'Monitoreo',
           icon: <NotificationsActiveIcon fontSize="small" />,
@@ -281,8 +292,12 @@ const MainNavigation = ({
           {!collapsed && (
             <>
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography variant="body2" fontWeight={700} noWrap>{user?.name || 'Usuario'}</Typography>
-                <Typography variant="caption" color="text.secondary" noWrap>{user?.email}</Typography>
+                <Typography variant="body2" fontWeight={700} noWrap>
+                  {user?.name || 'Usuario'}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" noWrap>
+                  {user?.email}
+                </Typography>
               </Box>
               <Tooltip title="Salir">
                 <IconButton size="small" onClick={logout}>

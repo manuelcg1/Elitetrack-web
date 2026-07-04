@@ -64,18 +64,34 @@ const useStyles = makeStyles()((theme) => ({
     backgroundColor: theme.palette.success.main + '12',
   },
   row: {
-    height: '100%',
+    height: 'calc(100% - 6px)',
+    margin: theme.spacing(0.375, 1),
     padding: theme.spacing(0.5, 1.25),
     gap: theme.spacing(1),
-    borderBottom: `1px solid ${theme.palette.divider}`,
+    borderRadius: 10,
+    border: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
+    boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
     '&:hover': {
       backgroundColor: theme.palette.action.hover,
     },
+    [theme.breakpoints.up('md')]: {
+      height: '100%',
+      margin: 0,
+      borderRadius: 0,
+      border: 0,
+      borderBottom: `1px solid ${theme.palette.divider}`,
+      boxShadow: 'none',
+    },
   },
   avatar: {
-    width: 34,
-    height: 34,
+    width: 38,
+    height: 38,
     backgroundColor: theme.palette.action.disabledBackground,
+    [theme.breakpoints.up('md')]: {
+      width: 34,
+      height: 34,
+    },
   },
   selectedAvatar: {
     backgroundColor: theme.palette.success.main,
@@ -143,8 +159,10 @@ const DeviceRow = ({ devices, index, style }) => {
         selected={selectedDeviceId === item.id}
         className={`${classes.row} ${selectedDeviceId === item.id ? classes.selected : ''}`}
       >
-        <ListItemAvatar>
-          <Avatar className={`${classes.avatar} ${selectedDeviceId === item.id ? classes.selectedAvatar : ''}`}>
+        <ListItemAvatar sx={{ minWidth: { xs: 48, md: 48 } }}>
+          <Avatar
+            className={`${classes.avatar} ${selectedDeviceId === item.id ? classes.selectedAvatar : ''}`}
+          >
             <img className={classes.icon} src={mapIcons[mapIconKey(item.category)]} alt="" />
           </Avatar>
         </ListItemAvatar>
@@ -156,9 +174,19 @@ const DeviceRow = ({ devices, index, style }) => {
             secondary: Typography,
           }}
           slotProps={{
-            primary: { noWrap: true, fontWeight: 700, fontSize: '0.9rem' },
-            secondary: { noWrap: true, fontSize: '0.78rem' },
+            primary: {
+              noWrap: true,
+              fontWeight: 700,
+              fontSize: '0.92rem',
+              lineHeight: 1.2,
+            },
+            secondary: {
+              noWrap: true,
+              fontSize: '0.78rem',
+              lineHeight: 1.35,
+            },
           }}
+          sx={{ minWidth: 0, mr: 0.5 }}
         />
         {position && (
           <>

@@ -76,4 +76,15 @@
     </addColumn>
   </changeSet>
 
+  <changeSet author="traccar" id="forward-servers-3">
+    <preConditions onFail="MARK_RAN">
+      <not>
+        <columnExists tableName="tc_device_forward_server" columnName="lastsent" />
+      </not>
+    </preConditions>
+    <addColumn tableName="tc_device_forward_server">
+      <column name="lastsent" type="TIMESTAMP" />
+    </addColumn>
+  </changeSet>
+
 </databaseChangeLog>

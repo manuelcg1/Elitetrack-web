@@ -12,7 +12,6 @@ import {
   DialogTitle,
   IconButton,
   List,
-  ListItem,
   ListItemText,
   Paper,
   Snackbar,
@@ -30,6 +29,7 @@ import SensorsIcon from '@mui/icons-material/Sensors';
 import PageLayout from '../../common/components/PageLayout';
 import MonitoringMenu from '../MonitoringMenu';
 import fetchOrThrow from '../../common/util/fetchOrThrow';
+import { formatTime } from '../../common/util/formatter';
 import ForwardServerDialog from './ForwardServerDialog';
 
 const ForwarderPage = () => {
@@ -45,7 +45,7 @@ const ForwarderPage = () => {
   const [deleting, setDeleting] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
 
-  const loadData = async () => {
+  const loadData = async (isActive = () => true) => {
     const serversResponse = await fetchOrThrow('/api/forward/servers');
     const nextServers = await serversResponse.json();
     const nextAssignments = {};
@@ -55,12 +55,27 @@ const ForwarderPage = () => {
         nextAssignments[server.id] = await response.json();
       }),
     );
-    setServers(nextServers);
-    setAssignments(nextAssignments);
+    if (isActive()) {
+      setServers(nextServers);
+      setAssignments(nextAssignments);
+    }
   };
 
   useEffect(() => {
-    loadData();
+    let active = true;
+    const refresh = () => {
+      loadData(() => active).catch((error) => {
+        if (active) {
+          setSnackbarMessage(error.message || 'No se pudieron cargar los destinos');
+        }
+      });
+    };
+    refresh();
+    const interval = setInterval(refresh, 30000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, []);
 
   const counts = useMemo(
@@ -121,35 +136,72 @@ const ForwarderPage = () => {
 
   const getServerDevices = (serverId) =>
     (assignments[serverId] || [])
-      .map((assignment) => devices[assignment.deviceId])
-      .filter(Boolean)
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .map((assignment) => ({
+        assignment,
+        device: devices[assignment.deviceId],
+      }))
+      .filter(({ device }) => device)
+      .sort((a, b) => a.device.name.localeCompare(b.device.name));
 
   return (
-    <PageLayout menu={<MonitoringMenu />} breadcrumbs={['monitoringTitle', 'Retransmision']}>
-      <Box sx={{ p: 2, maxWidth: 980, mx: 'auto', width: '100%' }}>
-        <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
+    <PageLayout menu={<MonitoringMenu />} breadcrumbs={['Retransmision']}>
+      <Box
+        sx={{
+          p: { xs: 1.5, sm: 2 },
+          maxWidth: 980,
+          mx: 'auto',
+          width: '100%',
+        }}
+      >
+        <Paper
+          variant="outlined"
+          sx={{
+            borderRadius: { xs: 3, sm: 2 },
+            overflow: 'hidden',
+            boxShadow: { xs: '0 14px 34px rgba(15, 23, 42, 0.08)', sm: 'none' },
+          }}
+        >
           <Box
             sx={{
-              p: 2,
+              p: { xs: 1.5, sm: 2 },
               display: 'flex',
+              flexDirection: { xs: 'column', sm: 'row' },
               alignItems: 'center',
               justifyContent: 'space-between',
-              gap: 2,
+              gap: { xs: 1.5, sm: 2 },
               borderBottom: '1px solid',
               borderColor: 'divider',
             }}
           >
-            <Stack direction="row" spacing={1.5} alignItems="center">
+            <Stack
+              direction="row"
+              spacing={1.25}
+              alignItems="flex-start"
+              sx={{ width: '100%', minWidth: 0 }}
+            >
               <DnsIcon color="primary" />
-              <Box>
-                <Typography variant="h6">Destinos de reenvio JSON</Typography>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography
+                  variant="h6"
+                  sx={{ fontSize: { xs: '1rem', sm: '1.25rem' }, lineHeight: 1.25 }}
+                >
+                  Destinos de reenvio JSON
+                </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Configura cada servidor una sola vez y asignalo a tus dispositivos.
                 </Typography>
               </Box>
             </Stack>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={handleNew}>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleNew}
+              sx={{
+                alignSelf: { xs: 'stretch', sm: 'center' },
+                minWidth: { sm: 154 },
+                whiteSpace: 'nowrap',
+              }}
+            >
               Nuevo destino
             </Button>
           </Box>
@@ -160,89 +212,163 @@ const ForwarderPage = () => {
               const serverDevices = getServerDevices(server.id);
               return (
                 <Box key={server.id}>
-                  <ListItem
-                    secondaryAction={
-                      <Stack direction="row" spacing={1} alignItems="center">
+                  <Box
+                    sx={{
+                      px: { xs: 1.5, sm: 2 },
+                      py: { xs: 1.25, sm: 1.5 },
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                    }}
+                  >
+                    <Stack
+                      direction={{ xs: 'column', sm: 'row' }}
+                      spacing={{ xs: 1, sm: 2 }}
+                      alignItems={{ xs: 'stretch', sm: 'center' }}
+                    >
+                      <Stack
+                        direction="row"
+                        spacing={1.5}
+                        alignItems="flex-start"
+                        sx={{ minWidth: 0, flex: 1 }}
+                      >
+                        <Box
+                          sx={{
+                            width: 10,
+                            height: 10,
+                            borderRadius: '50%',
+                            bgcolor: server.active ? 'success.main' : 'error.main',
+                            mt: 0.75,
+                            flex: '0 0 auto',
+                          }}
+                        />
+                        <ListItemText
+                          sx={{ m: 0, minWidth: 0 }}
+                          primary={
+                            <Typography fontWeight={700} noWrap>
+                              {server.name}
+                            </Typography>
+                          }
+                          secondary={
+                            <Typography
+                              component="span"
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{
+                                display: 'block',
+                                lineHeight: 1.35,
+                                overflowWrap: 'anywhere',
+                              }}
+                            >
+                              {[
+                                server.ipDominio,
+                                `usuario ${server.username || 'sin usuario'}`,
+                                server.apiKey ? 'API key configurada' : 'sin API key',
+                              ].join(' - ')}
+                            </Typography>
+                          }
+                        />
+                      </Stack>
+                      <Stack
+                        direction="row"
+                        spacing={0.75}
+                        alignItems="center"
+                        justifyContent={{ xs: 'space-between', sm: 'flex-end' }}
+                        sx={{ flexWrap: 'wrap', rowGap: 0.75 }}
+                      >
                         <Chip
                           label={`${counts[server.id]} dispositivos`}
                           color="primary"
                           variant="outlined"
                           size="small"
+                          sx={{ mr: { xs: 'auto', sm: 0 } }}
                         />
                         <Tooltip title="Editar">
-                          <IconButton edge="end" onClick={() => handleEdit(server)}>
+                          <IconButton size="small" onClick={() => handleEdit(server)}>
                             <EditIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Eliminar">
-                          <IconButton edge="end" onClick={() => handleDelete(server)}>
+                          <IconButton size="small" onClick={() => handleDelete(server)}>
                             <DeleteIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title={open ? 'Ocultar GPS' : 'Ver GPS'}>
                           <IconButton
-                            edge="end"
+                            size="small"
                             onClick={() => setExpandedId(open ? null : server.id)}
                           >
                             {open ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                           </IconButton>
                         </Tooltip>
                       </Stack>
-                    }
-                    sx={{ py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}
-                  >
+                    </Stack>
+                  </Box>
+                  <Collapse in={open} timeout="auto" unmountOnExit>
                     <Box
                       sx={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: '50%',
-                        bgcolor: server.active ? 'success.main' : 'error.main',
-                        mr: 2,
+                        bgcolor: 'action.hover',
+                        px: { xs: 1.5, sm: 3 },
+                        py: { xs: 1.5, sm: 2 },
                       }}
-                    />
-                    <ListItemText
-                      primary={<Typography fontWeight={700}>{server.name}</Typography>}
-                      secondary={[
-                        server.ipDominio,
-                        `usuario ${server.username || 'sin usuario'}`,
-                        server.apiKey ? 'API key configurada' : 'sin API key',
-                      ].join(' - ')}
-                    />
-                  </ListItem>
-                  <Collapse in={open} timeout="auto" unmountOnExit>
-                    <Box sx={{ bgcolor: 'action.hover', px: 3, py: 2 }}>
+                    >
                       {serverDevices.length === 0 ? (
                         <Typography variant="body2" color="text.secondary">
                           Sin GPS asignados a este destino.
                         </Typography>
                       ) : (
                         <Stack spacing={1}>
-                          {serverDevices.map((device) => {
+                          {serverDevices.map(({ assignment, device }) => {
                             const position = positions[device.id];
+                            const lastSentLabel = assignment.lastSent
+                              ? formatTime(assignment.lastSent, 'seconds')
+                              : null;
                             return (
                               <Paper
                                 key={device.id}
                                 variant="outlined"
-                                sx={{ p: 1.25, borderRadius: 1 }}
+                                sx={{ p: { xs: 1, sm: 1.25 }, borderRadius: 1.5 }}
                               >
-                                <Stack direction="row" spacing={1.5} alignItems="center">
-                                  <SensorsIcon
-                                    color={position ? 'success' : 'disabled'}
-                                    fontSize="small"
-                                  />
-                                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                                    <Typography variant="body2" fontWeight={700} noWrap>
-                                      {device.name}
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary" noWrap>
-                                      IMEI {device.uniqueId}
-                                    </Typography>
-                                  </Box>
-                                  <Chip
-                                    size="small"
-                                    color={position ? 'success' : 'default'}
-                                    label={position ? 'Recibiendo' : 'Sin posicion'}
-                                  />
+                                <Stack
+                                  direction={{ xs: 'column', sm: 'row' }}
+                                  spacing={{ xs: 1, sm: 1.5 }}
+                                  alignItems={{ xs: 'stretch', sm: 'center' }}
+                                >
+                                  <Stack direction="row" spacing={1.25} alignItems="flex-start">
+                                    <SensorsIcon
+                                      color={position ? 'success' : 'disabled'}
+                                      fontSize="small"
+                                    />
+                                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                                      <Typography variant="body2" fontWeight={700} noWrap>
+                                        {device.name}
+                                      </Typography>
+                                      <Typography variant="caption" color="text.secondary" noWrap>
+                                        IMEI {device.uniqueId}
+                                      </Typography>
+                                      <Typography variant="caption" color="text.secondary" noWrap>
+                                        Ultimo envio {lastSentLabel || 'sin registros'}
+                                      </Typography>
+                                    </Box>
+                                  </Stack>
+                                  <Stack
+                                    direction="row"
+                                    spacing={1}
+                                    alignItems="center"
+                                    justifyContent={{ xs: 'flex-end', sm: 'center' }}
+                                    sx={{ flexWrap: 'wrap', rowGap: 0.75 }}
+                                  >
+                                    <Chip
+                                      size="small"
+                                      color={position ? 'success' : 'default'}
+                                      label={position ? 'Recibiendo' : 'Sin posicion'}
+                                    />
+                                    <Chip
+                                      size="small"
+                                      variant="outlined"
+                                      color={lastSentLabel ? 'primary' : 'default'}
+                                      label={lastSentLabel || 'Sin envios'}
+                                    />
+                                  </Stack>
                                 </Stack>
                               </Paper>
                             );

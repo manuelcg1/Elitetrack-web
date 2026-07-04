@@ -132,9 +132,37 @@ const BottomMenu = () => {
     }
   };
 
+  const actionSx = {
+    flex: '1 1 0',
+    minWidth: 0,
+    maxWidth: 'none',
+    px: 0.5,
+    '& .MuiBottomNavigationAction-label': {
+      fontSize: '0.68rem',
+      maxWidth: '100%',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
+    },
+  };
+
   return (
-    <Paper square elevation={3}>
-      <BottomNavigation value={currentSelection()} onChange={handleSelection} showLabels>
+    <Paper
+      square
+      elevation={3}
+      sx={{
+        flexShrink: 0,
+        borderTop: '1px solid',
+        borderColor: 'divider',
+        pb: 'env(safe-area-inset-bottom)',
+      }}
+    >
+      <BottomNavigation
+        value={currentSelection()}
+        onChange={handleSelection}
+        showLabels
+        sx={{ height: 56 }}
+      >
         <BottomNavigationAction
           label={t('mapTitle')}
           icon={
@@ -143,33 +171,43 @@ const BottomMenu = () => {
             </Badge>
           }
           value="map"
+          sx={actionSx}
         />
 
         <BottomNavigationAction
           label="Monitoreo"
           icon={<MonitorHeartIcon />}
           value="monitoring"
+          sx={actionSx}
         />
         {!disableReports && (
           <BottomNavigationAction
             label={t('reportTitle')}
             icon={<DescriptionIcon />}
             value="reports"
+            sx={actionSx}
           />
         )}
         <BottomNavigationAction
           label={t('settingsTitle')}
           icon={<SettingsIcon />}
           value="settings"
+          sx={actionSx}
         />
         {readonly ? (
           <BottomNavigationAction
             label={t('loginLogout')}
             icon={<ExitToAppIcon />}
             value="logout"
+            sx={actionSx}
           />
         ) : (
-          <BottomNavigationAction label={t('settingsUser')} icon={<PersonIcon />} value="account" />
+          <BottomNavigationAction
+            label={t('settingsUser')}
+            icon={<PersonIcon />}
+            value="account"
+            sx={actionSx}
+          />
         )}
       </BottomNavigation>
       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
