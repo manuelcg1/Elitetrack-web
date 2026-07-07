@@ -15,7 +15,6 @@ const MonitoringMenu = () => {
 
   return (
     <List>
-
       <MenuItem
         title="Salud GPS"
         link="/monitoring/health"
@@ -57,7 +56,6 @@ const MonitoringMenu = () => {
         icon={<StorageIcon />}
         selected={location.pathname === '/monitoring/server'}
       />
-
     </List>
   );
 };

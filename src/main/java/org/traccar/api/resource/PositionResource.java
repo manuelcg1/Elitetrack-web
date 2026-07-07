@@ -33,6 +33,7 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
@@ -80,7 +81,7 @@ public class PositionResource extends BaseResource {
         } else if (deviceId > 0) {
             permissionsService.checkPermission(Device.class, getUserId(), deviceId);
             if (from != null && to != null) {
-                permissionsService.checkRestriction(getUserId(), UserRestrictions::getDisableReports);
+                checkReportsAllowed();
 
                 Geofence geofence = geofenceId == 0 ? null : storage.getObject(Geofence.class, new Request(
                         new Columns.All(), new Condition.Equals("id", geofenceId)));
@@ -135,6 +136,7 @@ public class PositionResource extends BaseResource {
             @QueryParam("deviceId") long deviceId,
             @QueryParam("from") Date from, @QueryParam("to") Date to) throws StorageException {
         permissionsService.checkPermission(Device.class, getUserId(), deviceId);
+        checkReportsAllowed();
         StreamingOutput stream = output -> {
             try {
                 kmlExportProvider.generate(output, deviceId, from, to);
@@ -153,6 +155,7 @@ public class PositionResource extends BaseResource {
             @QueryParam("deviceId") long deviceId, @QueryParam("geofenceId") long geofenceId,
             @QueryParam("from") Date from, @QueryParam("to") Date to) throws StorageException {
         permissionsService.checkPermission(Device.class, getUserId(), deviceId);
+        checkReportsAllowed();
         StreamingOutput stream = output -> {
             try {
                 csvExportProvider.generate(output, getUserId(), deviceId, geofenceId, from, to);
@@ -171,6 +174,7 @@ public class PositionResource extends BaseResource {
             @QueryParam("deviceId") long deviceId,
             @QueryParam("from") Date from, @QueryParam("to") Date to) throws StorageException {
         permissionsService.checkPermission(Device.class, getUserId(), deviceId);
+        checkReportsAllowed();
         StreamingOutput stream = output -> {
             try {
                 gpxExportProvider.generate(output, deviceId, from, to);
@@ -180,6 +184,14 @@ public class PositionResource extends BaseResource {
         };
         return Response.ok(stream)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=positions.gpx").build();
+    }
+
+    private void checkReportsAllowed() throws StorageException {
+        try {
+            permissionsService.checkRestriction(getUserId(), UserRestrictions::getDisableReports);
+        } catch (SecurityException e) {
+            throw new ForbiddenException();
+        }
     }
 
 }

@@ -19,6 +19,7 @@ import com.google.inject.Injector;
 import org.traccar.api.resource.ForwardServerResource;
 import org.traccar.api.resource.HealthResource;
 import org.traccar.api.resource.GeofenceFolderResource;
+import org.traccar.api.resource.RoleResource;
 import org.traccar.api.resource.SpeedAlertResource;
 import com.google.inject.servlet.GuiceFilter;
 import jakarta.servlet.DispatcherType;
@@ -201,6 +202,7 @@ public class WebServer implements LifecycleObject {
         resourceConfig.registerClasses(ForwardServerResource.class);
         resourceConfig.registerClasses(HealthResource.class);
         resourceConfig.registerClasses(SpeedAlertResource.class);
+        resourceConfig.registerClasses(RoleResource.class);
 
         if (resourceConfig.getClasses().stream().filter(ServerResource.class::equals).findAny().isEmpty()) {
             LOGGER.warn("Failed to load API resources");

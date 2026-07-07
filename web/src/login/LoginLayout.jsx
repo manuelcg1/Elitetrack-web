@@ -4,10 +4,10 @@ import { useTheme } from '@mui/material/styles';
 
 // ── Tokens de marca EliteTrack ────────────────────────────────────────────────
 const ET = {
-  green:     '#00E65B',
+  green: '#00E65B',
   greenDark: '#00B848',
-  dark:      '#212529',
-  silver:    '#4A5056',
+  dark: '#212529',
+  silver: '#4A5056',
 };
 
 // ── Feature item del panel izquierdo ─────────────────────────────────────────
@@ -66,9 +66,10 @@ const useStyles = makeStyles()((theme) => ({
     alignItems: 'center',
     flex: 1,
     borderRadius: 0,
-    boxShadow: theme.palette.mode === 'dark'
-      ? '-2px 0px 24px rgba(0,0,0,0.5)'
-      : '-2px 0px 24px rgba(0,0,0,0.08)',
+    boxShadow:
+      theme.palette.mode === 'dark'
+        ? '-2px 0px 24px rgba(0,0,0,0.5)'
+        : '-2px 0px 24px rgba(0,0,0,0.08)',
     backgroundColor: theme.palette.background.paper,
   },
 
@@ -89,10 +90,8 @@ const LoginLayout = ({ children }) => {
 
   return (
     <main className={classes.root}>
-
       {/* ── Panel izquierdo con identidad EliteTrack ── */}
       <div className={classes.sidebar}>
-
         {/* Badge */}
         <Box
           sx={{
@@ -113,7 +112,15 @@ const LoginLayout = ({ children }) => {
               animation: 'pulse 2s infinite',
             }}
           />
-          <Typography sx={{ fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.07em', color: ET.green, textTransform: 'uppercase' }}>
+          <Typography
+            sx={{
+              fontSize: '0.7rem',
+              fontWeight: 600,
+              letterSpacing: '0.07em',
+              color: ET.green,
+              textTransform: 'uppercase',
+            }}
+          >
             Sistema activo
           </Typography>
         </Box>
@@ -132,8 +139,8 @@ const LoginLayout = ({ children }) => {
             Rastreo{' '}
             <Box component="span" sx={{ color: ET.green }}>
               inteligente
-            </Box>
-            {' '}para tu flota
+            </Box>{' '}
+            para tu flota
           </Typography>
           <Typography
             sx={{
@@ -151,17 +158,19 @@ const LoginLayout = ({ children }) => {
         {/* Features */}
         {isLargeScreen && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1 }}>
-            <FeatureItem icon="ti-map-pin"      label="Rastreo GPS en tiempo real" />
-            <FeatureItem icon="ti-bell-rng"     label="Alertas y notificaciones automáticas" />
-            <FeatureItem icon="ti-chart-bar"    label="Reportes y estadísticas detalladas" />
+            <FeatureItem icon="ti-map-pin" label="Rastreo GPS en tiempo real" />
+            <FeatureItem icon="ti-bell-rng" label="Alertas y notificaciones automáticas" />
+            <FeatureItem icon="ti-chart-bar" label="Reportes y estadísticas detalladas" />
             <FeatureItem icon="ti-shield-check" label="Geocercas y zonas de seguridad" />
-            <FeatureItem icon="ti-route"        label="Historial de rutas y recorridos" />
+            <FeatureItem icon="ti-route" label="Historial de rutas y recorridos" />
           </Box>
         )}
 
         {/* Footer del panel */}
         <Box sx={{ mt: 'auto', pt: 2 }}>
-          <Typography sx={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.25)', fontWeight: 400 }}>
+          <Typography
+            sx={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.25)', fontWeight: 400 }}
+          >
             © {new Date().getFullYear()} EliteTrack. Todos los derechos reservados.
           </Typography>
         </Box>

@@ -24,6 +24,8 @@ import org.traccar.storage.StorageName;
 
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @StorageName("tc_users")
 public class User extends ExtendedModel implements UserRestrictions, Disableable {
@@ -187,6 +189,28 @@ public class User extends ExtendedModel implements UserRestrictions, Disableable
 
     public void setUserLimit(int userLimit) {
         this.userLimit = userLimit;
+    }
+
+    private long roleId;
+
+    public long getRoleId() {
+        return roleId;
+    }
+
+    public void setRoleId(long roleId) {
+        this.roleId = roleId;
+    }
+
+    private Set<String> menuKeys = new LinkedHashSet<>();
+
+    @QueryIgnore
+    public Set<String> getMenuKeys() {
+        return menuKeys;
+    }
+
+    @QueryIgnore
+    public void setMenuKeys(Set<String> menuKeys) {
+        this.menuKeys = menuKeys != null ? new LinkedHashSet<>(menuKeys) : new LinkedHashSet<>();
     }
 
     private boolean deviceReadonly;

@@ -1,15 +1,7 @@
-import React from 'react';
-import {
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Divider,
-  Tooltip,
-} from '@mui/material';
+import { List, ListItemButton, ListItemIcon, ListItemText, Divider, Tooltip } from '@mui/material';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LightModeIcon from '@mui/icons-material/LightMode';
-import { useColorMode } from '../AppThemeProvider';
+import { useColorMode } from '../../AppThemeProvider';
 
 // ─── Agrega este bloque al final de tu SideNav existente ──────────────────────
 // Si ya tienes un componente SideNav, simplemente copia el import de useColorMode
@@ -22,11 +14,12 @@ const DarkModeToggle = () => {
     <>
       <Divider />
       <List disablePadding>
-        <Tooltip title={darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'} placement="right">
+        <Tooltip
+          title={darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+          placement="right"
+        >
           <ListItemButton onClick={toggleDarkMode}>
-            <ListItemIcon>
-              {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
-            </ListItemIcon>
+            <ListItemIcon>{darkMode ? <LightModeIcon /> : <DarkModeIcon />}</ListItemIcon>
             <ListItemText primary={darkMode ? 'Modo claro' : 'Modo oscuro'} />
           </ListItemButton>
         </Tooltip>

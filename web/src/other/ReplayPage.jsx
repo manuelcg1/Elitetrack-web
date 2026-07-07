@@ -24,6 +24,7 @@ import MapScale from '../map/MapScale';
 import BackIcon from '../common/components/BackIcon';
 import fetchOrThrow from '../common/util/fetchOrThrow';
 import MapOverlay from '../map/overlay/MapOverlay';
+import { useRestriction } from '../common/util/permissions';
 
 const useStyles = makeStyles()((theme) => ({
   root: {
@@ -79,6 +80,7 @@ const ReplayPage = () => {
   const { classes } = useStyles();
   const navigate = useNavigate();
   const timerRef = useRef();
+  const disableReports = useRestriction('disableReports');
 
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -94,6 +96,12 @@ const ReplayPage = () => {
   const [loading, setLoading] = useState(false);
 
   const loaded = Boolean(from && to && !loading && positions.length);
+
+  useEffect(() => {
+    if (disableReports) {
+      navigate('/', { replace: true });
+    }
+  }, [disableReports, navigate]);
 
   const deviceName = useSelector((state) => {
     if (selectedDeviceId) {
@@ -145,6 +153,9 @@ const ReplayPage = () => {
   );
 
   const onShow = useCatch(async ({ deviceIds, from, to }) => {
+    if (disableReports) {
+      return;
+    }
     const deviceId = deviceIds.find(() => true);
     setLoading(true);
     setSelectedDeviceId(deviceId);

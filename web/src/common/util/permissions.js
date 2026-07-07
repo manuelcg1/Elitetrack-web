@@ -30,3 +30,9 @@ export const useRestriction = (key) =>
     const userValue = state.session.user[key];
     return !admin && (serverValue || userValue);
   });
+
+export const useMenuAccess = (key) =>
+  useSelector((state) => {
+    const user = state.session.user;
+    return user ? (user.menuKeys?.includes(key) ?? user.administrator) : false;
+  });

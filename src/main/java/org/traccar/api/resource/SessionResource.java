@@ -82,6 +82,7 @@ public class SessionResource extends BaseResource {
             LoginResult loginResult = loginService.login(token);
             if (loginResult != null) {
                 User user = loginResult.getUser();
+                permissionsService.enrichUserMenus(user);
                 SessionHelper.userLogin(actionLogger, request, user, loginResult.getExpiration());
                 return user;
             }
@@ -92,6 +93,7 @@ public class SessionResource extends BaseResource {
         if (userId != null && SessionHelper.isSessionOriginValid(request)) {
             User user = permissionsService.getUser(userId);
             if (user != null) {
+                permissionsService.enrichUserMenus(user);
                 return user;
             }
         }
@@ -105,6 +107,7 @@ public class SessionResource extends BaseResource {
         permissionsService.checkUser(getUserId(), userId);
         User user = storage.getObject(User.class, new Request(
                 new Columns.All(), new Condition.Equals("id", userId)));
+        permissionsService.enrichUserMenus(user);
         SessionHelper.userLogin(actionLogger, request, user, null);
         return user;
     }
@@ -127,6 +130,7 @@ public class SessionResource extends BaseResource {
         }
         if (loginResult != null) {
             User user = loginResult.getUser();
+            permissionsService.enrichUserMenus(user);
             SessionHelper.userLogin(actionLogger, request, user, null);
             return user;
         } else {

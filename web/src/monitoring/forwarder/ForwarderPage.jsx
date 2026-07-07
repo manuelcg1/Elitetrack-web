@@ -31,8 +31,10 @@ import MonitoringMenu from '../MonitoringMenu';
 import fetchOrThrow from '../../common/util/fetchOrThrow';
 import { formatTime } from '../../common/util/formatter';
 import ForwardServerDialog from './ForwardServerDialog';
+import { useManager } from '../../common/util/permissions';
 
 const ForwarderPage = () => {
+  const manager = useManager();
   const devices = useSelector((state) => state.devices.items);
   const positions = useSelector((state) => state.session.positions);
 
@@ -192,18 +194,20 @@ const ForwarderPage = () => {
                 </Typography>
               </Box>
             </Stack>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={handleNew}
-              sx={{
-                alignSelf: { xs: 'stretch', sm: 'center' },
-                minWidth: { sm: 154 },
-                whiteSpace: 'nowrap',
-              }}
-            >
-              Nuevo destino
-            </Button>
+            {manager && (
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleNew}
+                sx={{
+                  alignSelf: { xs: 'stretch', sm: 'center' },
+                  minWidth: { sm: 154 },
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Nuevo destino
+              </Button>
+            )}
           </Box>
 
           <List disablePadding>
@@ -282,16 +286,20 @@ const ForwarderPage = () => {
                           size="small"
                           sx={{ mr: { xs: 'auto', sm: 0 } }}
                         />
-                        <Tooltip title="Editar">
-                          <IconButton size="small" onClick={() => handleEdit(server)}>
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Eliminar">
-                          <IconButton size="small" onClick={() => handleDelete(server)}>
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                        {manager && (
+                          <>
+                            <Tooltip title="Editar">
+                              <IconButton size="small" onClick={() => handleEdit(server)}>
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Eliminar">
+                              <IconButton size="small" onClick={() => handleDelete(server)}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </>
+                        )}
                         <Tooltip title={open ? 'Ocultar GPS' : 'Ver GPS'}>
                           <IconButton
                             size="small"

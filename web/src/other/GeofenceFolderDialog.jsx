@@ -29,9 +29,7 @@ const GeofenceFolderDialog = ({ open, folder, onClose, onSave }) => {
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle>
-        {folder?.id ? 'Editar carpeta' : 'Crear carpeta'}
-      </DialogTitle>
+      <DialogTitle>{folder?.id ? 'Editar carpeta' : 'Crear carpeta'}</DialogTitle>
 
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
         <TextField
@@ -54,9 +52,7 @@ const GeofenceFolderDialog = ({ open, folder, onClose, onSave }) => {
       </DialogContent>
 
       <DialogActions>
-        <Button onClick={onClose}>
-          Cancelar
-        </Button>
+        <Button onClick={onClose}>Cancelar</Button>
         <Button variant="contained" onClick={handleSave} disabled={!name.trim()}>
           Guardar
         </Button>

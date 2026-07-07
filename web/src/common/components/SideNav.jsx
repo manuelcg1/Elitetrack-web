@@ -38,4 +38,3 @@ const SideNav = ({ routes }) => {
 };
 
 export default SideNav;
-

@@ -9,7 +9,19 @@ import {
   Switch,
   TableFooter,
   FormControlLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Button,
+  Snackbar,
+  Alert,
 } from '@mui/material';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import LoginIcon from '@mui/icons-material/Login';
 import LinkIcon from '@mui/icons-material/Link';
 import { useCatch, useEffectAsync, useScrollToLoad, pageSize } from '../reactHelper';
@@ -20,7 +32,7 @@ import SettingsMenu from './components/SettingsMenu';
 import CollectionFab from './components/CollectionFab';
 import CollectionActions from './components/CollectionActions';
 import TableShimmer from '../common/components/TableShimmer';
-import { useManager } from '../common/util/permissions';
+import { useManager, useMenuAccess } from '../common/util/permissions';
 import SearchHeader from './components/SearchHeader';
 import useSettingsStyles from './common/useSettingsStyles';
 import fetchOrThrow from '../common/util/fetchOrThrow';
@@ -31,9 +43,14 @@ const UsersPage = () => {
   const t = useTranslation();
 
   const manager = useManager();
+  const rolesAccess = useMenuAccess('roles');
 
-  const [timestamp, setTimestamp] = useState(Date.now());
+  const [timestamp, setTimestamp] = useState(() => Date.now());
   const [items, setItems] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [roleDialogUser, setRoleDialogUser] = useState(null);
+  const [selectedRoleId, setSelectedRoleId] = useState('');
+  const [message, setMessage] = useState(null);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [loading, setLoading] = useState(false);
   const [temporary, setTemporary] = useState(false);
@@ -55,6 +72,34 @@ const UsersPage = () => {
     title: t('sharedConnections'),
     icon: <LinkIcon fontSize="small" />,
     handler: (userId) => navigate(`/settings/user/${userId}/connections`),
+  };
+
+  const handleRole = useCatch(async (userId) => {
+    if (!roles.length) {
+      const response = await fetchOrThrow('/api/roles');
+      setRoles(await response.json());
+    }
+    const user = items.find((it) => it.id === userId);
+    setRoleDialogUser(user);
+    setSelectedRoleId(user.roleId || '');
+  });
+
+  const handleRoleSave = useCatch(async () => {
+    await fetchOrThrow('/api/roles/assign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: roleDialogUser.id, roleId: Number(selectedRoleId) }),
+    });
+    setRoleDialogUser(null);
+    setMessage('Rol asignado correctamente');
+    setTimestamp(Date.now());
+  });
+
+  const actionRole = {
+    key: 'role',
+    title: 'Rol',
+    icon: <AdminPanelSettingsIcon fontSize="small" />,
+    handler: handleRole,
   };
 
   const loadItems = async (offset) => {
@@ -110,7 +155,10 @@ const UsersPage = () => {
                     editPath="/settings/user"
                     endpoint="users"
                     setTimestamp={setTimestamp}
-                    customActions={manager ? [actionLogin, actionConnections] : [actionConnections]}
+                    customActions={[
+                      ...(rolesAccess ? [actionRole] : []),
+                      ...(manager ? [actionLogin, actionConnections] : [actionConnections]),
+                    ]}
                   />
                 </TableCell>
               </TableRow>
@@ -137,6 +185,46 @@ const UsersPage = () => {
       </Table>
       {hasMore && !loading && <div ref={sentinelRef} />}
       <CollectionFab editPath="/settings/user" />
+      <Dialog
+        open={!!roleDialogUser}
+        onClose={() => setRoleDialogUser(null)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Asignar rol</DialogTitle>
+        <DialogContent>
+          <FormControl fullWidth sx={{ mt: 1 }}>
+            <InputLabel>Rol</InputLabel>
+            <Select
+              label="Rol"
+              value={selectedRoleId}
+              onChange={(event) => setSelectedRoleId(event.target.value)}
+            >
+              {roles.map((role) => (
+                <MenuItem key={role.id} value={role.id}>
+                  {role.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRoleDialogUser(null)}>Cancelar</Button>
+          <Button variant="contained" onClick={handleRoleSave} disabled={!selectedRoleId}>
+            Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Snackbar
+        open={!!message}
+        autoHideDuration={4000}
+        onClose={() => setMessage(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity="success" variant="filled" onClose={() => setMessage(null)}>
+          {message}
+        </Alert>
+      </Snackbar>
     </PageLayout>
   );
 };

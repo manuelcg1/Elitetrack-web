@@ -73,13 +73,7 @@ const GeofencePage = () => {
                 label={t('sharedName')}
               />
 
-              {folderPath && (
-                <TextField
-                  value={folderPath}
-                  label="Carpeta"
-                  disabled
-                />
-              )}
+              {folderPath && <TextField value={folderPath} label="Carpeta" disabled />}
             </AccordionDetails>
           </Accordion>
 
@@ -100,18 +94,20 @@ const GeofencePage = () => {
                 label={t('sharedCalendar')}
               />
               <FormControlLabel
-                control={(
+                control={
                   <Checkbox
                     checked={item.attributes?.hide || false}
-                    onChange={(e) => setItem({
-                      ...item,
-                      attributes: {
-                        ...item.attributes,
-                        hide: e.target.checked,
-                      },
-                    })}
+                    onChange={(e) =>
+                      setItem({
+                        ...item,
+                        attributes: {
+                          ...item.attributes,
+                          hide: e.target.checked,
+                        },
+                      })
+                    }
                   />
-                )}
+                }
                 label={t('sharedFilterMap')}
               />
             </AccordionDetails>

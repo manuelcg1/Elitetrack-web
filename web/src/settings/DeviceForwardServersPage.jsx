@@ -19,10 +19,12 @@ import DataObjectIcon from '@mui/icons-material/DataObject';
 import PageLayout from '../common/components/PageLayout';
 import SettingsMenu from './components/SettingsMenu';
 import fetchOrThrow from '../common/util/fetchOrThrow';
+import { useManager } from '../common/util/permissions';
 
 const DeviceForwardServersPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const manager = useManager();
   const storeDevice = useSelector((state) => state.devices.items[id]);
   const [device, setDevice] = useState(null);
   const [servers, setServers] = useState([]);
@@ -48,11 +50,11 @@ const DeviceForwardServersPage = () => {
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
   const toggleServer = (serverId) => {
-    setSelectedIds((previous) => (
+    setSelectedIds((previous) =>
       previous.includes(serverId)
         ? previous.filter((item) => item !== serverId)
-        : [...previous, serverId]
-    ));
+        : [...previous, serverId],
+    );
   };
 
   const handleSave = async () => {
@@ -81,7 +83,9 @@ const DeviceForwardServersPage = () => {
             <Stack direction="row" spacing={1.5} alignItems="center">
               <SmartphoneIcon color="primary" />
               <Box>
-                <Typography variant="h6">{displayDevice?.name || 'Cargando dispositivo'}</Typography>
+                <Typography variant="h6">
+                  {displayDevice?.name || 'Cargando dispositivo'}
+                </Typography>
                 <Typography variant="body2" color="text.secondary">
                   IMEI {displayDevice?.uniqueId || id}
                 </Typography>
@@ -102,6 +106,7 @@ const DeviceForwardServersPage = () => {
                 <ListItem key={server.id} disablePadding sx={{ mb: 1 }}>
                   <ListItemButton
                     onClick={() => toggleServer(server.id)}
+                    disabled={!manager}
                     sx={{
                       border: '1px solid',
                       borderColor: 'divider',
@@ -124,12 +129,12 @@ const DeviceForwardServersPage = () => {
               ))}
             </List>
             <Typography variant="caption" color="text.secondary">
-              Este GPS reenviara sus posiciones a los destinos marcados. Edita URL y credenciales desde Retransmision.
+              Este GPS reenviara sus posiciones a los destinos marcados.
             </Typography>
           </Box>
           <Divider />
           <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button variant="contained" onClick={handleSave} disabled={saving}>
+            <Button variant="contained" onClick={handleSave} disabled={saving || !manager}>
               {saving ? 'Guardando...' : 'Guardar'}
             </Button>
           </Box>

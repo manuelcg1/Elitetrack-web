@@ -58,9 +58,10 @@ const GpsInventoryPage = () => {
     const lowerSearch = search.toLowerCase();
     return Object.values(items)
       .filter((gps) => {
-        const matchesSearch = !search
-          || gps.imei?.includes(search)
-          || gps.serialNumber?.toLowerCase().includes(lowerSearch);
+        const matchesSearch =
+          !search ||
+          gps.imei?.includes(search) ||
+          gps.serialNumber?.toLowerCase().includes(lowerSearch);
         const matchesStatus = !statusFilter || gps.status === statusFilter;
         const matchesBrand = !brandFilter || gps.brand === brandFilter;
         return matchesSearch && matchesStatus && matchesBrand;
@@ -98,18 +99,22 @@ const GpsInventoryPage = () => {
     navigate(`/monitoring/gps-inventory/${gpsId}/history`);
   };
 
-  const getBrandLabel = (value) =>
-    GPS_BRANDS.find((b) => b.value === value)?.label || value;
+  const getBrandLabel = (value) => GPS_BRANDS.find((b) => b.value === value)?.label || value;
 
   return (
-    <PageLayout
-      menu={<MonitoringMenu />}
-      breadcrumbs={['monitoringTitle', 'gpsInventoryTitle']}
-    >
+    <PageLayout menu={<MonitoringMenu />} breadcrumbs={['monitoringTitle', 'gpsInventoryTitle']}>
       <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-
         {/* ── Barra de filtros ── */}
-        <Box sx={{ display: 'flex', gap: 1.5, p: 2, borderBottom: '1px solid', borderColor: 'divider', flexWrap: 'wrap' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 1.5,
+            p: 2,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            flexWrap: 'wrap',
+          }}
+        >
           <TextField
             size="small"
             placeholder="Buscar por IMEI o serie"
@@ -136,7 +141,9 @@ const GpsInventoryPage = () => {
             >
               <MenuItem value="">Todos</MenuItem>
               {Object.entries(GPS_STATUS_META).map(([value, meta]) => (
-                <MenuItem key={value} value={value}>{meta.label}</MenuItem>
+                <MenuItem key={value} value={value}>
+                  {meta.label}
+                </MenuItem>
               ))}
             </Select>
           </FormControl>
@@ -150,7 +157,9 @@ const GpsInventoryPage = () => {
             >
               <MenuItem value="">Todas</MenuItem>
               {GPS_BRANDS.map((brand) => (
-                <MenuItem key={brand.value} value={brand.value}>{brand.label}</MenuItem>
+                <MenuItem key={brand.value} value={brand.value}>
+                  {brand.label}
+                </MenuItem>
               ))}
             </Select>
           </FormControl>
@@ -171,16 +180,23 @@ const GpsInventoryPage = () => {
           )}
 
           {!loading && !error && filteredItems.length === 0 && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 6, gap: 1, color: 'text.secondary' }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                pt: 6,
+                gap: 1,
+                color: 'text.secondary',
+              }}
+            >
               <Typography variant="body2">
                 {search || statusFilter || brandFilter
                   ? 'No se encontraron resultados'
                   : 'No hay dispositivos GPS registrados'}
               </Typography>
               {!search && !statusFilter && !brandFilter && (
-                <Typography variant="caption">
-                  Agrega tu primer GPS con el botón +
-                </Typography>
+                <Typography variant="caption">Agrega tu primer GPS con el botón +</Typography>
               )}
             </Box>
           )}

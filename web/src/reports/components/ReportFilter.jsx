@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   FormControl,
   InputLabel,
@@ -30,10 +30,12 @@ export const updateReportParams = (searchParams, setSearchParams, key, values) =
 const ReportFilter = ({ children, onShow, onExport, onSchedule, deviceType, loading }) => {
   const { classes } = useReportStyles();
   const t = useTranslation();
+  const navigate = useNavigate();
 
   const [searchParams, setSearchParams] = useSearchParams();
 
   const readonly = useRestriction('readonly');
+  const disableReports = useRestriction('disableReports');
 
   const devices = useSelector((state) => state.devices.items, deviceEquality(['id', 'name']));
   const groups = useSelector((state) => state.groups.items);
@@ -59,6 +61,7 @@ const ReportFilter = ({ children, onShow, onExport, onSchedule, deviceType, load
 
   const [description, setDescription] = useState();
   const [calendarId, setCalendarId] = useState();
+  const onShowRef = useRef(onShow);
 
   const evaluateDisabled = () => {
     if (deviceType === 'single' && !deviceIds.length) {
@@ -88,10 +91,20 @@ const ReportFilter = ({ children, onShow, onExport, onSchedule, deviceType, load
   const options = evaluateOptions();
 
   useEffect(() => {
-    if (from && to) {
-      onShow({ deviceIds, groupIds, from, to });
+    onShowRef.current = onShow;
+  }, [onShow]);
+
+  useEffect(() => {
+    if (disableReports) {
+      navigate('/', { replace: true });
+    } else if (from && to) {
+      onShowRef.current({ deviceIds, groupIds, from, to });
     }
-  }, [deviceIds, groupIds, from, to]);
+  }, [deviceIds, disableReports, groupIds, from, navigate, to]);
+
+  if (disableReports) {
+    return null;
+  }
 
   const showReport = () => {
     let selectedFrom;

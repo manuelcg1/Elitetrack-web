@@ -39,10 +39,10 @@ import fetchOrThrow from '../common/util/fetchOrThrow';
 
 // ── Tokens de marca ───────────────────────────────────────────────────────────
 const ET = {
-  green:     '#00E65B',
+  green: '#00E65B',
   greenDark: '#00B848',
-  dark:      '#212529',
-  silver:    '#4A5056',
+  dark: '#212529',
+  silver: '#4A5056',
 };
 
 const useStyles = makeStyles()((theme) => ({
@@ -109,12 +109,8 @@ const useStyles = makeStyles()((theme) => ({
       boxShadow: `0 4px 20px rgba(0,230,91,0.35)`,
     },
     '&:disabled': {
-      background: theme.palette.mode === 'dark'
-        ? 'rgba(0,230,91,0.12)'
-        : 'rgba(0,230,91,0.20)',
-      color: theme.palette.mode === 'dark'
-        ? 'rgba(255,255,255,0.25)'
-        : 'rgba(33,37,41,0.35)',
+      background: theme.palette.mode === 'dark' ? 'rgba(0,230,91,0.12)' : 'rgba(0,230,91,0.20)',
+      color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.25)' : 'rgba(33,37,41,0.35)',
     },
   },
 
@@ -245,7 +241,6 @@ const LoginPage = () => {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <LoginLayout>
-
       {/* Controles flotantes: idioma, QR, servidor */}
       <div className={classes.options}>
         {nativeEnvironment && changeEnabled && (
@@ -295,9 +290,7 @@ const LoginPage = () => {
             <span className={classes.brandElite}>ELITE</span>
             <span className={classes.brandTrack}>TRACK</span>
           </Typography>
-          <Typography className={classes.brandTagline}>
-            Sistema de rastreo GPS
-          </Typography>
+          <Typography className={classes.brandTagline}>Sistema de rastreo GPS</Typography>
         </Box>
       </div>
 
@@ -394,11 +387,7 @@ const LoginPage = () => {
       {!openIdForced && (registrationEnabled || emailEnabled) && (
         <div className={classes.linksRow}>
           {registrationEnabled && (
-            <Link
-              onClick={() => navigate('/register')}
-              className={classes.link}
-              underline="none"
-            >
+            <Link onClick={() => navigate('/register')} className={classes.link} underline="none">
               {t('loginRegister')}
             </Link>
           )}

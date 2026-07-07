@@ -18,14 +18,8 @@ import {
   TableRow,
   TextField,
   Typography,
-} from '@mui/material';
-
-import {
   Avatar,
-  
   LinearProgress,
-  
-  
 } from '@mui/material';
 
 import GpsFixedIcon from '@mui/icons-material/GpsFixed';
@@ -36,7 +30,6 @@ import WrongLocationIcon from '@mui/icons-material/WrongLocation';
 import BatteryAlertIcon from '@mui/icons-material/BatteryAlert';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 
-import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 
@@ -46,13 +39,7 @@ import fetchOrThrow from '../common/util/fetchOrThrow';
 
 const REFRESH_INTERVAL = 30000;
 
-const HealthCard = ({
-  title,
-  value,
-  icon,
-  color = 'primary',
-  total,
-}) => {
+const HealthCard = ({ title, value, icon, color = 'primary', total }) => {
   const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
 
   return (
@@ -64,7 +51,8 @@ const HealthCard = ({
         height: '100%',
         border: '1px solid',
         borderColor: 'divider',
-        background: (theme) => `linear-gradient(135deg, ${theme.palette.background.paper}, ${theme.palette.action.hover})`,
+        background: (theme) =>
+          `linear-gradient(135deg, ${theme.palette.background.paper}, ${theme.palette.action.hover})`,
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -172,19 +160,25 @@ const MonitoringHealthPage = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const filteredDevices = useMemo(() => devices.filter((device) => {
-    const text = `${device.name || ''} ${device.uniqueId || ''} ${device.issue || ''}`.toLowerCase();
-    const matchesSearch = text.includes(search.toLowerCase());
+  const filteredDevices = useMemo(
+    () =>
+      devices.filter((device) => {
+        const text =
+          `${device.name || ''} ${device.uniqueId || ''} ${device.issue || ''}`.toLowerCase();
+        const matchesSearch = text.includes(search.toLowerCase());
 
-    const matchesFilter = filter === 'all'
-      || (filter === 'online' && device.online)
-      || (filter === 'offline' && !device.online)
-      || (filter === 'noReport' && device.noReport)
-      || (filter === 'invalidPosition' && device.invalidPosition)
-      || (filter === 'lowBattery' && device.lowBattery);
+        const matchesFilter =
+          filter === 'all' ||
+          (filter === 'online' && device.online) ||
+          (filter === 'offline' && !device.online) ||
+          (filter === 'noReport' && device.noReport) ||
+          (filter === 'invalidPosition' && device.invalidPosition) ||
+          (filter === 'lowBattery' && device.lowBattery);
 
-    return matchesSearch && matchesFilter;
-  }), [devices, search, filter]);
+        return matchesSearch && matchesFilter;
+      }),
+    [devices, search, filter],
+  );
 
   const handleExportExcel = () => {
     const headers = [
@@ -209,10 +203,9 @@ const MonitoringHealthPage = () => {
       device.issue || 'OK',
     ]);
 
-    const csvContent = [
-      headers,
-      ...rows,
-    ].map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(';')).join('\n');
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(';'))
+      .join('\n');
 
     const blob = new Blob([`\uFEFF${csvContent}`], {
       type: 'application/vnd.ms-excel;charset=utf-8;',
@@ -228,35 +221,64 @@ const MonitoringHealthPage = () => {
   };
 
   return (
-    <PageLayout
-      menu={<MonitoringMenu />}
-      breadcrumbs={['Monitoreo', 'Salud GPS']}
-    >
+    <PageLayout menu={<MonitoringMenu />} breadcrumbs={['Monitoreo', 'Salud GPS']}>
       <Box sx={{ p: 3 }}>
         {loading || !summary ? (
           <CircularProgress />
         ) : (
           <>
-
-
             <Grid container spacing={2} sx={{ mb: 3 }}>
               <Grid item xs={12} md={2}>
-                <HealthCard title="Total GPS" value={summary.total} icon={<GpsFixedIcon />} total={summary.total} />
+                <HealthCard
+                  title="Total GPS"
+                  value={summary.total}
+                  icon={<GpsFixedIcon />}
+                  total={summary.total}
+                />
               </Grid>
               <Grid item xs={12} md={2}>
-                <HealthCard title="Online" value={summary.online} icon={<CheckCircleIcon />} color="success" total={summary.total} />
+                <HealthCard
+                  title="Online"
+                  value={summary.online}
+                  icon={<CheckCircleIcon />}
+                  color="success"
+                  total={summary.total}
+                />
               </Grid>
               <Grid item xs={12} md={2}>
-                <HealthCard title="Offline" value={summary.offline} icon={<CloudOffIcon />} total={summary.total} />
+                <HealthCard
+                  title="Offline"
+                  value={summary.offline}
+                  icon={<CloudOffIcon />}
+                  total={summary.total}
+                />
               </Grid>
               <Grid item xs={12} md={2}>
-                <HealthCard title="Sin reporte" value={summary.noReport} icon={<ReportProblemIcon />} color="warning" total={summary.total} />
+                <HealthCard
+                  title="Sin reporte"
+                  value={summary.noReport}
+                  icon={<ReportProblemIcon />}
+                  color="warning"
+                  total={summary.total}
+                />
               </Grid>
               <Grid item xs={12} md={2}>
-                <HealthCard title="Posición inválida" value={summary.invalidPosition} icon={<WrongLocationIcon />} color="error" total={summary.total} />
+                <HealthCard
+                  title="Posición inválida"
+                  value={summary.invalidPosition}
+                  icon={<WrongLocationIcon />}
+                  color="error"
+                  total={summary.total}
+                />
               </Grid>
               <Grid item xs={12} md={2}>
-                <HealthCard title="Batería baja" value={summary.lowBattery} icon={<BatteryAlertIcon />} color="error" total={summary.total} />
+                <HealthCard
+                  title="Batería baja"
+                  value={summary.lowBattery}
+                  icon={<BatteryAlertIcon />}
+                  color="error"
+                  total={summary.total}
+                />
               </Grid>
             </Grid>
 

@@ -38,6 +38,7 @@ import java.io.IOException;
 import java.lang.reflect.Method;
 import java.security.GeneralSecurityException;
 import java.util.Date;
+import java.util.Set;
 
 public class SecurityRequestFilter implements ContainerRequestFilter {
 
@@ -111,6 +112,10 @@ public class SecurityRequestFilter implements ContainerRequestFilter {
 
         if (securityContext != null) {
             requestContext.setSecurityContext(securityContext);
+            Method method = resourceInfo.getResourceMethod();
+            if (!method.isAnnotationPresent(PermitAll.class)) {
+                checkMenuAccess(requestContext, securityContext);
+            }
         } else {
             Method method = resourceInfo.getResourceMethod();
             if (!method.isAnnotationPresent(PermitAll.class)) {
@@ -123,6 +128,72 @@ public class SecurityRequestFilter implements ContainerRequestFilter {
             }
         }
 
+    }
+
+    private void checkMenuAccess(ContainerRequestContext requestContext, SecurityContext securityContext) {
+        Set<String> menuKeys = getMenuKeys(requestContext.getUriInfo().getPath(), requestContext.getMethod());
+        if (!menuKeys.isEmpty()) {
+            UserPrincipal principal = (UserPrincipal) securityContext.getUserPrincipal();
+            try {
+                if (isOwnUserEndpoint(requestContext, principal.getUserId())) {
+                    return;
+                }
+                User user = injector.getInstance(PermissionsService.class).getUser(principal.getUserId());
+                if (user != null && menuKeys.stream().anyMatch(user.getMenuKeys()::contains)) {
+                    return;
+                }
+            } catch (SecurityException | StorageException e) {
+                LOGGER.warn("Menu access denied for user {} on {} {} requiring {}",
+                        principal.getUserId(), requestContext.getMethod(),
+                        requestContext.getUriInfo().getPath(), menuKeys, e);
+            }
+            throw new WebApplicationException(Response.status(Response.Status.FORBIDDEN).build());
+        }
+    }
+
+    private boolean isOwnUserEndpoint(ContainerRequestContext requestContext, long userId) {
+        String path = requestContext.getUriInfo().getPath();
+        String method = requestContext.getMethod();
+        return path.equals("users/" + userId) && ("GET".equals(method) || "PUT".equals(method));
+    }
+
+    private Set<String> getMenuKeys(String path, String method) {
+        if (path.startsWith("roles")) {
+            return Set.of(MenuKeys.ROLES);
+        }
+        if (path.startsWith("reports")) {
+            return Set.of(MenuKeys.REPORTS);
+        }
+        if (path.startsWith("geofences") || path.startsWith("geofenceFolders")) {
+            return Set.of(MenuKeys.GEOFENCES, MenuKeys.MAP, MenuKeys.REPORTS, MenuKeys.SETTINGS, MenuKeys.MONITORING);
+        }
+        if (path.startsWith("alerts")) {
+            return Set.of(MenuKeys.ALERTS);
+        }
+        if (path.startsWith("health") || path.startsWith("gps-inventory")) {
+            return Set.of(MenuKeys.MONITORING);
+        }
+        if (path.startsWith("forward")) {
+            return Set.of(MenuKeys.MONITORING, MenuKeys.SETTINGS);
+        }
+        if (path.startsWith("commands/send") || path.startsWith("commands/types")) {
+            return Set.of(MenuKeys.VEHICLES, MenuKeys.SETTINGS);
+        }
+        if (path.startsWith("notifications/types")) {
+            return Set.of(MenuKeys.REPORTS, MenuKeys.SETTINGS);
+        }
+        if (path.startsWith("calendars")) {
+            return Set.of(MenuKeys.REPORTS, MenuKeys.SETTINGS);
+        }
+        if (path.startsWith("groups")) {
+            return Set.of(MenuKeys.VEHICLES, MenuKeys.REPORTS, MenuKeys.SETTINGS, MenuKeys.MONITORING);
+        }
+        if (path.startsWith("users") || path.startsWith("notifications")
+                || path.startsWith("drivers") || path.startsWith("attributes")
+                || path.startsWith("maintenance") || path.startsWith("commands")) {
+            return Set.of(MenuKeys.SETTINGS);
+        }
+        return Set.of();
     }
 
 }

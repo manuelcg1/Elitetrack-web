@@ -41,6 +41,16 @@ import { map } from '../map/core/MapView';
 import useSettingsStyles from './common/useSettingsStyles';
 import fetchOrThrow from '../common/util/fetchOrThrow';
 
+const restrictionDefaults = {
+  readonly: false,
+  deviceReadonly: false,
+  limitCommands: false,
+  disableReports: false,
+  fixedEmail: false,
+};
+
+const restrictionKeys = Object.keys(restrictionDefaults);
+
 const UserPage = () => {
   const { classes } = useSettingsStyles();
   const navigate = useNavigate();
@@ -68,6 +78,14 @@ const UserPage = () => {
   const [deleteFailed, setDeleteFailed] = useState(false);
   const [revokeDialogOpen, setRevokeDialogOpen] = useState(false);
   const [revokeToken, setRevokeToken] = useState('');
+
+  const handleAdministratorChange = (administrator) => {
+    setItem({
+      ...item,
+      administrator,
+      ...(administrator ? restrictionDefaults : {}),
+    });
+  };
 
   const handleDelete = useCatch(async () => {
     if (deleteEmail === currentUser.email) {
@@ -113,6 +131,12 @@ const UserPage = () => {
       }
     }
   }, [item, searchParams, setSearchParams, attribute]);
+
+  useEffect(() => {
+    if (item?.administrator && restrictionKeys.some((key) => item[key])) {
+      setItem({ ...item, ...restrictionDefaults });
+    }
+  }, [item]);
 
   const onItemSaved = (result) => {
     if (result.id === currentUser.id) {
@@ -399,7 +423,7 @@ const UserPage = () => {
                   control={
                     <Checkbox
                       checked={item.administrator}
-                      onChange={(e) => setItem({ ...item, administrator: e.target.checked })}
+                      onChange={(e) => handleAdministratorChange(e.target.checked)}
                     />
                   }
                   label={t('userAdmin')}
@@ -413,7 +437,7 @@ const UserPage = () => {
                     />
                   }
                   label={t('serverReadonly')}
-                  disabled={!manager}
+                  disabled={!manager || item.administrator}
                 />
                 <FormControlLabel
                   control={
@@ -423,7 +447,7 @@ const UserPage = () => {
                     />
                   }
                   label={t('userDeviceReadonly')}
-                  disabled={!manager}
+                  disabled={!manager || item.administrator}
                 />
                 <FormControlLabel
                   control={
@@ -433,7 +457,7 @@ const UserPage = () => {
                     />
                   }
                   label={t('userLimitCommands')}
-                  disabled={!manager}
+                  disabled={!manager || item.administrator}
                 />
                 <FormControlLabel
                   control={
@@ -443,7 +467,7 @@ const UserPage = () => {
                     />
                   }
                   label={t('userDisableReports')}
-                  disabled={!manager}
+                  disabled={!manager || item.administrator}
                 />
                 <FormControlLabel
                   control={
@@ -453,7 +477,7 @@ const UserPage = () => {
                     />
                   }
                   label={t('userFixedEmail')}
-                  disabled={!manager}
+                  disabled={!manager || item.administrator}
                 />
               </FormGroup>
             </AccordionDetails>

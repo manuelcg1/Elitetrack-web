@@ -125,6 +125,7 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
   const t = useTranslation();
 
   const readonly = useRestriction('readonly');
+  const disableReports = useRestriction('disableReports');
   const deviceReadonly = useDeviceReadonly();
 
   const shareDisabled = useSelector((state) => state.session.server.attributes.disableShare);
@@ -254,7 +255,7 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
                 <Tooltip title={t('reportReplay')}>
                   <IconButton
                     onClick={() => navigate(`/replay?deviceId=${deviceId}`)}
-                    disabled={disableActions || !position}
+                    disabled={disableActions || disableReports || !position}
                   >
                     <RouteIcon />
                   </IconButton>

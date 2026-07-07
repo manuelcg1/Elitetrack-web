@@ -20,10 +20,12 @@ import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import PlaceIcon from '@mui/icons-material/Place';
 import SettingsIcon from '@mui/icons-material/Settings';
 import WarningIcon from '@mui/icons-material/Warning';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import { sessionActions } from '../store';
 import { useColorMode } from '../AppThemeProvider';
 import { nativePostMessage } from '../common/components/NativeInterface';
 import logoMenuLateral from '../resources/images/logo-menu-lateral.svg';
+import { useMenuAccess } from '../common/util/permissions';
 
 const useStyles = makeStyles()((theme, { collapsed }) => ({
   root: {
@@ -148,6 +150,14 @@ const MainNavigation = ({ collapsed, vehiclesPanelOpen, onVehiclesClick, onMapCl
   const dispatch = useDispatch();
   const { toggleDarkMode } = useColorMode();
   const user = useSelector((state) => state.session.user);
+  const showVehicles = useMenuAccess('vehicles');
+  const showGeofences = useMenuAccess('geofences');
+  const showMap = useMenuAccess('map');
+  const showReports = useMenuAccess('reports');
+  const showSettings = useMenuAccess('settings');
+  const showAlerts = useMenuAccess('alerts');
+  const showMonitoring = useMenuAccess('monitoring');
+  const showRoles = useMenuAccess('roles');
 
   const logout = async () => {
     await fetch('/api/session', { method: 'DELETE' });
@@ -224,49 +234,63 @@ const MainNavigation = ({ collapsed, vehiclesPanelOpen, onVehiclesClick, onMapCl
       </Box>
       <Divider />
       <Stack className={classes.content} spacing={0.5}>
-        {item({
-          label: 'Vehiculos',
-          icon: <DirectionsCarIcon fontSize="small" />,
-          path: '/',
-          active: vehiclesPanelOpen,
-          onClick: () => {
-            onVehiclesClick();
-            navigate('/');
-          },
-        })}
-        {item({ label: 'Geocercas', icon: <PlaceIcon fontSize="small" />, path: '/geofences' })}
-        {item({
-          label: 'Mapa',
-          icon: <MapIcon fontSize="small" />,
-          path: '/',
-          active: location.pathname === '/' && !vehiclesPanelOpen,
-          onClick: () => {
-            onMapClick();
-            navigate('/');
-          },
-        })}
-        {item({
-          label: 'Reportes',
-          icon: <DescriptionIcon fontSize="small" />,
-          path: '/reports/combined',
-          selectedPath: '/reports',
-        })}
-        {item({
-          label: 'Ajustes',
-          icon: <SettingsIcon fontSize="small" />,
-          path: '/settings/preferences',
-          selectedPath: '/settings',
-        })}
-        {item({
-          label: 'Alertas',
-          icon: <WarningIcon fontSize="small" />,
-          path: '/monitoring/alerts',
-        })}
-        {item({
-          label: 'Monitoreo',
-          icon: <NotificationsActiveIcon fontSize="small" />,
-          path: '/monitoring/health',
-        })}
+        {showVehicles &&
+          item({
+            label: 'Vehiculos',
+            icon: <DirectionsCarIcon fontSize="small" />,
+            path: '/',
+            active: vehiclesPanelOpen,
+            onClick: () => {
+              onVehiclesClick();
+              navigate('/');
+            },
+          })}
+        {showGeofences &&
+          item({ label: 'Geocercas', icon: <PlaceIcon fontSize="small" />, path: '/geofences' })}
+        {showMap &&
+          item({
+            label: 'Mapa',
+            icon: <MapIcon fontSize="small" />,
+            path: '/',
+            active: location.pathname === '/' && !vehiclesPanelOpen,
+            onClick: () => {
+              onMapClick();
+              navigate('/');
+            },
+          })}
+        {showReports &&
+          item({
+            label: 'Reportes',
+            icon: <DescriptionIcon fontSize="small" />,
+            path: '/reports/combined',
+            selectedPath: '/reports',
+          })}
+        {showSettings &&
+          item({
+            label: 'Ajustes',
+            icon: <SettingsIcon fontSize="small" />,
+            path: '/settings/preferences',
+            selectedPath: '/settings',
+          })}
+        {showAlerts &&
+          item({
+            label: 'Alertas',
+            icon: <WarningIcon fontSize="small" />,
+            path: '/monitoring/alerts',
+          })}
+        {showMonitoring &&
+          item({
+            label: 'Monitoreo',
+            icon: <NotificationsActiveIcon fontSize="small" />,
+            path: '/monitoring/health',
+          })}
+        {showRoles &&
+          item({
+            label: 'Roles',
+            icon: <AdminPanelSettingsIcon fontSize="small" />,
+            path: '/roles/rol',
+            selectedPath: '/roles',
+          })}
       </Stack>
       <Box className={classes.footer}>
         <Tooltip title={collapsed ? 'Modo oscuro' : ''} placement="right">

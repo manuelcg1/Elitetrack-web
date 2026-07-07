@@ -18,9 +18,7 @@ const GeofenceFolderDeleteDialog = ({ open, folder, onClose, onConfirm }) => (
     </DialogContent>
 
     <DialogActions>
-      <Button onClick={onClose}>
-        Cancelar
-      </Button>
+      <Button onClick={onClose}>Cancelar</Button>
       <Button color="error" variant="contained" onClick={onConfirm}>
         Eliminar carpeta con geocercas
       </Button>

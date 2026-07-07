@@ -20,7 +20,7 @@ import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 
 import { sessionActions } from '../../store';
 import { useTranslation } from './LocalizationProvider';
-import { useRestriction } from '../util/permissions';
+import { useMenuAccess, useRestriction } from '../util/permissions';
 import { nativePostMessage } from './NativeInterface';
 
 const BottomMenu = () => {
@@ -31,6 +31,10 @@ const BottomMenu = () => {
 
   const readonly = useRestriction('readonly');
   const disableReports = useRestriction('disableReports');
+  const showMap = useMenuAccess('map');
+  const showReports = useMenuAccess('reports');
+  const showSettings = useMenuAccess('settings');
+  const showMonitoring = useMenuAccess('monitoring');
   const devices = useSelector((state) => state.devices.items);
   const user = useSelector((state) => state.session.user);
   const socket = useSelector((state) => state.session.socket);
@@ -163,24 +167,28 @@ const BottomMenu = () => {
         showLabels
         sx={{ height: 56 }}
       >
-        <BottomNavigationAction
-          label={t('mapTitle')}
-          icon={
-            <Badge color="error" variant="dot" overlap="circular" invisible={socket !== false}>
-              <MapIcon />
-            </Badge>
-          }
-          value="map"
-          sx={actionSx}
-        />
+        {showMap && (
+          <BottomNavigationAction
+            label={t('mapTitle')}
+            icon={
+              <Badge color="error" variant="dot" overlap="circular" invisible={socket !== false}>
+                <MapIcon />
+              </Badge>
+            }
+            value="map"
+            sx={actionSx}
+          />
+        )}
 
-        <BottomNavigationAction
-          label="Monitoreo"
-          icon={<MonitorHeartIcon />}
-          value="monitoring"
-          sx={actionSx}
-        />
-        {!disableReports && (
+        {showMonitoring && (
+          <BottomNavigationAction
+            label="Monitoreo"
+            icon={<MonitorHeartIcon />}
+            value="monitoring"
+            sx={actionSx}
+          />
+        )}
+        {showReports && !disableReports && (
           <BottomNavigationAction
             label={t('reportTitle')}
             icon={<DescriptionIcon />}
@@ -188,12 +196,14 @@ const BottomMenu = () => {
             sx={actionSx}
           />
         )}
-        <BottomNavigationAction
-          label={t('settingsTitle')}
-          icon={<SettingsIcon />}
-          value="settings"
-          sx={actionSx}
-        />
+        {showSettings && (
+          <BottomNavigationAction
+            label={t('settingsTitle')}
+            icon={<SettingsIcon />}
+            value="settings"
+            sx={actionSx}
+          />
+        )}
         {readonly ? (
           <BottomNavigationAction
             label={t('loginLogout')}

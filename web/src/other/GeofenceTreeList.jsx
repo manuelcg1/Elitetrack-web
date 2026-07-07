@@ -118,13 +118,11 @@ const filterTree = (node, search) => {
 
   const value = search.toLowerCase();
 
-  const children = node.children
-    .map((child) => filterTree(child, search))
-    .filter(Boolean);
+  const children = node.children.map((child) => filterTree(child, search)).filter(Boolean);
 
-  const geofences = node.geofences.filter((geofence) => (
-    geofence.name?.toLowerCase().includes(value)
-  ));
+  const geofences = node.geofences.filter((geofence) =>
+    geofence.name?.toLowerCase().includes(value),
+  );
 
   const folderMatches = node.name?.toLowerCase().includes(value);
 
@@ -157,11 +155,10 @@ const GeofenceTreeNode = ({
   const isRoot = node.id === ROOT_PARENT_ID;
   const geofenceIds = getFolderGeofenceIds(node);
 
-  const checked = geofenceIds.length > 0
-    && geofenceIds.every((id) => visibleGeofenceIds.includes(id));
+  const checked =
+    geofenceIds.length > 0 && geofenceIds.every((id) => visibleGeofenceIds.includes(id));
 
-  const indeterminate = geofenceIds.some((id) => visibleGeofenceIds.includes(id))
-    && !checked;
+  const indeterminate = geofenceIds.some((id) => visibleGeofenceIds.includes(id)) && !checked;
 
   return (
     <Box>
@@ -177,7 +174,15 @@ const GeofenceTreeNode = ({
               {open ? <ExpandMoreIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
             </IconButton>
 
-            <Box sx={{ width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', color: open ? 'primary.main' : 'text.secondary' }}>
+            <Box
+              sx={{
+                width: 22,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: open ? 'primary.main' : 'text.secondary',
+              }}
+            >
               {open ? <FolderOpenIcon fontSize="small" /> : <FolderIcon fontSize="small" />}
             </Box>
 
@@ -200,13 +205,21 @@ const GeofenceTreeNode = ({
 
           <Stack className="treeActions" direction="row" spacing={0.25} sx={treeActionSx}>
             <Tooltip title="Crear subcarpeta">
-              <IconButton size="small" onClick={() => onCreateFolder(node.id)} sx={treeIconButtonSx}>
+              <IconButton
+                size="small"
+                onClick={() => onCreateFolder(node.id)}
+                sx={treeIconButtonSx}
+              >
                 <CreateNewFolderIcon fontSize="small" />
               </IconButton>
             </Tooltip>
 
             <Tooltip title="Crear geocerca">
-              <IconButton size="small" onClick={() => onCreateGeofence(node.id)} sx={treeIconButtonSx}>
+              <IconButton
+                size="small"
+                onClick={() => onCreateGeofence(node.id)}
+                sx={treeIconButtonSx}
+              >
                 <AddIcon fontSize="small" />
               </IconButton>
             </Tooltip>
@@ -218,7 +231,11 @@ const GeofenceTreeNode = ({
             </Tooltip>
 
             <Tooltip title="Eliminar carpeta">
-              <IconButton size="small" onClick={() => onDeleteFolder(node)} sx={{ ...treeIconButtonSx, '&:hover': { color: 'error.main' } }}>
+              <IconButton
+                size="small"
+                onClick={() => onDeleteFolder(node)}
+                sx={{ ...treeIconButtonSx, '&:hover': { color: 'error.main' } }}
+              >
                 <DeleteIcon fontSize="small" />
               </IconButton>
             </Tooltip>
@@ -253,7 +270,15 @@ const GeofenceTreeNode = ({
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, minWidth: 0, flex: 1 }}>
               <Box sx={{ width: 26, flexShrink: 0 }} />
-              <Box sx={{ width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary' }}>
+              <Box
+                sx={{
+                  width: 22,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'text.secondary',
+                }}
+              >
                 <PlaceOutlinedIcon fontSize="small" />
               </Box>
 
@@ -264,20 +289,32 @@ const GeofenceTreeNode = ({
                 sx={{ p: 0.5 }}
               />
 
-              <Typography variant="body2" noWrap sx={{ flex: 1, minWidth: 0, color: 'text.primary' }}>
+              <Typography
+                variant="body2"
+                noWrap
+                sx={{ flex: 1, minWidth: 0, color: 'text.primary' }}
+              >
                 {geofence.name}
               </Typography>
             </Box>
 
             <Stack className="treeActions" direction="row" spacing={0.25} sx={treeActionSx}>
               <Tooltip title="Editar geocerca">
-                <IconButton size="small" onClick={() => navigate(`/settings/geofence/${geofence.id}`)} sx={treeIconButtonSx}>
+                <IconButton
+                  size="small"
+                  onClick={() => navigate(`/settings/geofence/${geofence.id}`)}
+                  sx={treeIconButtonSx}
+                >
                   <EditIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
 
               <Tooltip title="Eliminar geocerca">
-                <IconButton size="small" onClick={() => onDeleteGeofence(geofence)} sx={{ ...treeIconButtonSx, '&:hover': { color: 'error.main' } }}>
+                <IconButton
+                  size="small"
+                  onClick={() => onDeleteGeofence(geofence)}
+                  sx={{ ...treeIconButtonSx, '&:hover': { color: 'error.main' } }}
+                >
                   <DeleteIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
@@ -314,9 +351,9 @@ const GeofenceTreeList = ({ onGeofenceSelected }) => {
   const visibleGeofenceIds = useSelector((state) => state.geofences.visibleIds);
 
   const handleToggleFolder = (folder, visible) => {
-  const ids = getFolderGeofenceIds(folder);
-  dispatch(geofencesActions.setVisibleMany({ ids, visible }));
-};
+    const ids = getFolderGeofenceIds(folder);
+    dispatch(geofencesActions.setVisibleMany({ ids, visible }));
+  };
 
   const loadData = useCallback(async () => {
     const [foldersResponse, geofencesResponse] = await Promise.all([
@@ -342,10 +379,9 @@ const GeofenceTreeList = ({ onGeofenceSelected }) => {
   }, [folders, geofences, search]);
 
   const handleToggleGeofence = (id, visible) => {
-  dispatch(geofencesActions.setVisible({ id, visible }));
-  onGeofenceSelected?.(visible ? id : null);
-};
-
+    dispatch(geofencesActions.setVisible({ id, visible }));
+    onGeofenceSelected?.(visible ? id : null);
+  };
 
   const handleCreateFolder = (parentId = ROOT_PARENT_ID) => {
     setEditingFolder(null);
@@ -373,9 +409,7 @@ const GeofenceTreeList = ({ onGeofenceSelected }) => {
           body: JSON.stringify(folder),
         });
 
-        setFolders((current) => current.map((item) => (
-          item.id === folder.id ? folder : item
-        )));
+        setFolders((current) => current.map((item) => (item.id === folder.id ? folder : item)));
       } else {
         const response = await fetchOrThrow('/api/geofenceFolders', {
           method: 'POST',
@@ -465,10 +499,12 @@ const GeofenceTreeList = ({ onGeofenceSelected }) => {
         method: 'DELETE',
       });
 
-      dispatch(geofencesActions.setVisible({
-        id: geofenceToDelete.id,
-        visible: false,
-      }));
+      dispatch(
+        geofencesActions.setVisible({
+          id: geofenceToDelete.id,
+          visible: false,
+        }),
+      );
 
       setDeleteGeofenceDialogOpen(false);
       setGeofenceToDelete(null);
@@ -512,13 +548,21 @@ const GeofenceTreeList = ({ onGeofenceSelected }) => {
         </Typography>
 
         <Tooltip title="Crear carpeta">
-          <IconButton size="small" onClick={() => handleCreateFolder(ROOT_PARENT_ID)} sx={treeIconButtonSx}>
+          <IconButton
+            size="small"
+            onClick={() => handleCreateFolder(ROOT_PARENT_ID)}
+            sx={treeIconButtonSx}
+          >
             <CreateNewFolderIcon fontSize="small" />
           </IconButton>
         </Tooltip>
 
         <Tooltip title="Crear geocerca sin carpeta">
-          <IconButton size="small" onClick={() => handleCreateGeofence(ROOT_PARENT_ID)} sx={treeIconButtonSx}>
+          <IconButton
+            size="small"
+            onClick={() => handleCreateGeofence(ROOT_PARENT_ID)}
+            sx={treeIconButtonSx}
+          >
             <AddIcon fontSize="small" />
           </IconButton>
         </Tooltip>

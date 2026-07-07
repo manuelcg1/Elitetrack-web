@@ -1,12 +1,5 @@
 import { useState, useCallback } from 'react';
-import {
-  Box,
-  Collapse,
-  IconButton,
-  Tooltip,
-  Typography,
-  Chip,
-} from '@mui/material';
+import { Box, Collapse, IconButton, Tooltip, Typography, Chip } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import FolderIcon from '@mui/icons-material/Folder';
@@ -17,9 +10,9 @@ import useGroupTree from './useGroupTree';
 
 // ── Tokens de marca ───────────────────────────────────────────────────────────
 const ET = {
-  green:     '#00E65B',
+  green: '#00E65B',
   greenGlow: 'rgba(0,230,91,0.10)',
-  silver:    '#8A9099',
+  silver: '#8A9099',
 };
 
 const INDENT_PX = 16;
@@ -32,15 +25,21 @@ const FilterNode = ({ node, selectedGroupId, onSelect }) => {
   const hasChildren = node.children.length > 0;
   const isSelected = selectedGroupId === node.id;
 
-  const handleToggle = useCallback((e) => {
-    e.stopPropagation();
-    if (hasChildren) setExpanded((prev) => !prev);
-  }, [hasChildren]);
+  const handleToggle = useCallback(
+    (e) => {
+      e.stopPropagation();
+      if (hasChildren) setExpanded((prev) => !prev);
+    },
+    [hasChildren],
+  );
 
-  const handleSelect = useCallback((e) => {
-    e.stopPropagation();
-    onSelect(isSelected ? null : node.id);
-  }, [isSelected, node.id, onSelect]);
+  const handleSelect = useCallback(
+    (e) => {
+      e.stopPropagation();
+      onSelect(isSelected ? null : node.id);
+    },
+    [isSelected, node.id, onSelect],
+  );
 
   return (
     <Box>
@@ -61,23 +60,22 @@ const FilterNode = ({ node, selectedGroupId, onSelect }) => {
         onClick={handleSelect}
       >
         {/* Chevron */}
-        <Box
-          sx={{ width: 20, flexShrink: 0, display: 'flex' }}
-          onClick={handleToggle}
-        >
-          {hasChildren && (
-            expanded
-              ? <ExpandMoreIcon sx={{ fontSize: 16, color: ET.green }} />
-              : <ChevronRightIcon sx={{ fontSize: 16, color: ET.silver }} />
-          )}
+        <Box sx={{ width: 20, flexShrink: 0, display: 'flex' }} onClick={handleToggle}>
+          {hasChildren &&
+            (expanded ? (
+              <ExpandMoreIcon sx={{ fontSize: 16, color: ET.green }} />
+            ) : (
+              <ChevronRightIcon sx={{ fontSize: 16, color: ET.silver }} />
+            ))}
         </Box>
 
         {/* Ícono carpeta */}
         <Box sx={{ mr: 0.75, display: 'flex', color: isSelected ? ET.green : ET.silver }}>
-          {hasChildren && expanded
-            ? <FolderOpenIcon sx={{ fontSize: 16 }} />
-            : <FolderIcon sx={{ fontSize: 16 }} />
-          }
+          {hasChildren && expanded ? (
+            <FolderOpenIcon sx={{ fontSize: 16 }} />
+          ) : (
+            <FolderIcon sx={{ fontSize: 16 }} />
+          )}
         </Box>
 
         {/* Nombre */}
@@ -113,7 +111,12 @@ const FilterNode = ({ node, selectedGroupId, onSelect }) => {
       {/* Hijos */}
       {hasChildren && (
         <Collapse in={expanded} timeout={150}>
-          <Box sx={{ borderLeft: `1.5px solid ${ET.greenGlow}`, ml: `${node.depth * INDENT_PX + 12}px` }}>
+          <Box
+            sx={{
+              borderLeft: `1.5px solid ${ET.greenGlow}`,
+              ml: `${node.depth * INDENT_PX + 12}px`,
+            }}
+          >
             {node.children.map((child) => (
               <FilterNode
                 key={child.id}
@@ -143,10 +146,12 @@ const GroupFilter = ({ selectedGroupId, onGroupSelect }) => {
   if (tree.length === 0) return null;
 
   const selectedNode = selectedGroupId
-    ? tree.flatMap((n) => {
-        const collect = (node) => [node, ...node.children.flatMap(collect)];
-        return collect(n);
-      }).find((n) => n.id === selectedGroupId)
+    ? tree
+        .flatMap((n) => {
+          const collect = (node) => [node, ...node.children.flatMap(collect)];
+          return collect(n);
+        })
+        .find((n) => n.id === selectedGroupId)
     : null;
 
   return (

@@ -48,4 +48,9 @@ export default [
     },
   },
   prettierRecommended,
+  {
+    rules: {
+      'prettier/prettier': ['error', { endOfLine: 'auto' }],
+    },
+  },
 ];

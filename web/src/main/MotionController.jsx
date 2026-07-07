@@ -4,6 +4,7 @@ import { motionActions } from '../store';
 import { useAttributePreference } from '../common/util/preferences';
 import { useEffectAsync } from '../reactHelper';
 import fetchOrThrow from '../common/util/fetchOrThrow';
+import { useMenuAccess } from '../common/util/permissions';
 
 const buildSegments = (events, fromTimestamp, toTimestamp) => {
   const segments = [];
@@ -45,9 +46,10 @@ const MotionController = () => {
   const dispatch = useDispatch();
 
   const deviceSecondary = useAttributePreference('deviceSecondary', '');
+  const reportsAccess = useMenuAccess('reports');
 
   useEffectAsync(async () => {
-    if (deviceSecondary !== 'motion') {
+    if (deviceSecondary !== 'motion' || !reportsAccess) {
       dispatch(motionActions.clear());
       return;
     }
@@ -95,7 +97,7 @@ const MotionController = () => {
       active = false;
       clearInterval(interval);
     };
-  }, [deviceSecondary]);
+  }, [deviceSecondary, reportsAccess]);
 
   return null;
 };

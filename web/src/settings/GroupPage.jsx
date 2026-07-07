@@ -91,9 +91,7 @@ const GroupPage = () => {
             <AccordionDetails className={classes.details}>
               <SelectField
                 value={item.groupId || ''}
-                onChange={(e) =>
-                  setItem({ ...item, groupId: Number(e.target.value) || null })
-                }
+                onChange={(e) => setItem({ ...item, groupId: Number(e.target.value) || null })}
                 endpoint="/api/groups"
                 label={t('groupParent')}
               />

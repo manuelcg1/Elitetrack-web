@@ -125,56 +125,64 @@ const MonitoringAlertsPage = () => {
   const [alertToDelete, setAlertToDelete] = useState(null);
   const [deletingAlert, setDeletingAlert] = useState(false);
 
-  const vehicleOptions = useMemo(() => [
-    ...groups.map((group) => ({
-      id: group.id,
-      kind: 'group',
-      group: 'Flotas',
-      label: group.name,
-    })),
-    ...devices.map((device) => ({
-      id: device.id,
-      kind: 'device',
-      group: 'Vehiculos',
-      label: device.name || device.uniqueId,
-    })),
-  ], [devices, groups]);
+  const vehicleOptions = useMemo(
+    () => [
+      ...groups.map((group) => ({
+        id: group.id,
+        kind: 'group',
+        group: 'Flotas',
+        label: group.name,
+      })),
+      ...devices.map((device) => ({
+        id: device.id,
+        kind: 'device',
+        group: 'Vehiculos',
+        label: device.name || device.uniqueId,
+      })),
+    ],
+    [devices, groups],
+  );
 
-  const geofenceOptions = useMemo(() => [
-    ...geofenceFolders.map((folder) => ({
-      id: folder.id,
-      kind: 'folder',
-      group: 'Carpetas de geocercas',
-      label: folder.name,
-    })),
-    ...geofences.map((geofence) => ({
-      id: geofence.id,
-      kind: 'geofence',
-      group: 'Geocercas',
-      label: geofence.name,
-    })),
-  ], [geofences, geofenceFolders]);
+  const geofenceOptions = useMemo(
+    () => [
+      ...geofenceFolders.map((folder) => ({
+        id: folder.id,
+        kind: 'folder',
+        group: 'Carpetas de geocercas',
+        label: folder.name,
+      })),
+      ...geofences.map((geofence) => ({
+        id: geofence.id,
+        kind: 'geofence',
+        group: 'Geocercas',
+        label: geofence.name,
+      })),
+    ],
+    [geofences, geofenceFolders],
+  );
 
-  const selectedVehicleOptions = useMemo(() => vehicleOptions.filter((option) => (
-    option.kind === 'device'
-      ? item.deviceIds.includes(option.id)
-      : item.vehicleGroupIds.includes(option.id)
-  )), [item.deviceIds, item.vehicleGroupIds, vehicleOptions]);
+  const selectedVehicleOptions = useMemo(
+    () =>
+      vehicleOptions.filter((option) =>
+        option.kind === 'device'
+          ? item.deviceIds.includes(option.id)
+          : item.vehicleGroupIds.includes(option.id),
+      ),
+    [item.deviceIds, item.vehicleGroupIds, vehicleOptions],
+  );
 
-  const selectedGeofenceOptions = useMemo(() => geofenceOptions.filter((option) => (
-    option.kind === 'geofence'
-      ? item.geofenceIds.includes(option.id)
-      : item.geofenceGroupIds.includes(option.id)
-  )), [item.geofenceIds, item.geofenceGroupIds, geofenceOptions]);
+  const selectedGeofenceOptions = useMemo(
+    () =>
+      geofenceOptions.filter((option) =>
+        option.kind === 'geofence'
+          ? item.geofenceIds.includes(option.id)
+          : item.geofenceGroupIds.includes(option.id),
+      ),
+    [item.geofenceIds, item.geofenceGroupIds, geofenceOptions],
+  );
 
   const loadData = async () => {
-    const [
-      alertsData,
-      devicesData,
-      groupsData,
-      geofencesData,
-      foldersData,
-    ] = await Promise.all([
+    const [alertsData, devicesData, groupsData, geofencesData, foldersData] = await Promise.all([
       loadJson('/api/alerts'),
       loadJson(['/api/devices?all=true', '/api/devices'], true),
       loadJson(['/api/groups?all=true', '/api/groups'], true),
@@ -197,15 +205,21 @@ const MonitoringAlertsPage = () => {
     setItem((current) => ({
       ...current,
       deviceIds: selected.filter((option) => option.kind === 'device').map((option) => option.id),
-      vehicleGroupIds: selected.filter((option) => option.kind === 'group').map((option) => option.id),
+      vehicleGroupIds: selected
+        .filter((option) => option.kind === 'group')
+        .map((option) => option.id),
     }));
   };
 
   const handleGeofenceChange = (_, selected) => {
     setItem((current) => ({
       ...current,
-      geofenceIds: selected.filter((option) => option.kind === 'geofence').map((option) => option.id),
-      geofenceGroupIds: selected.filter((option) => option.kind === 'folder').map((option) => option.id),
+      geofenceIds: selected
+        .filter((option) => option.kind === 'geofence')
+        .map((option) => option.id),
+      geofenceGroupIds: selected
+        .filter((option) => option.kind === 'folder')
+        .map((option) => option.id),
     }));
   };
 
@@ -240,10 +254,7 @@ const MonitoringAlertsPage = () => {
         body: JSON.stringify(payload),
       });
       const saved = await response.json();
-      setAlerts((current) => [
-        saved,
-        ...current.filter((alert) => alert.id !== saved.id),
-      ]);
+      setAlerts((current) => [saved, ...current.filter((alert) => alert.id !== saved.id)]);
       setItem(emptyAlert);
       await loadData();
       setSaveSuccess(true);
@@ -282,7 +293,13 @@ const MonitoringAlertsPage = () => {
       <Box>
         <Typography variant="body2">{option.label}</Typography>
         <Typography variant="caption" color="text.secondary">
-          {option.kind === 'device' ? 'Vehiculo individual' : option.kind === 'group' ? 'Flota' : option.kind === 'geofence' ? 'Geocerca individual' : 'Grupo de geocercas'}
+          {option.kind === 'device'
+            ? 'Vehiculo individual'
+            : option.kind === 'group'
+              ? 'Flota'
+              : option.kind === 'geofence'
+                ? 'Geocerca individual'
+                : 'Grupo de geocercas'}
         </Typography>
       </Box>
     </li>
@@ -318,9 +335,7 @@ const MonitoringAlertsPage = () => {
             },
           }}
         >
-          <DialogTitle sx={{ pb: 0.5, fontWeight: 700 }}>
-            Confirmar eliminacion
-          </DialogTitle>
+          <DialogTitle sx={{ pb: 0.5, fontWeight: 700 }}>Confirmar eliminacion</DialogTitle>
           <DialogContent sx={{ pt: 1 }}>
             <Typography variant="body2" color="text.secondary">
               Esta accion eliminara permanentemente la alerta seleccionada:
@@ -356,7 +371,13 @@ const MonitoringAlertsPage = () => {
               color="error"
               variant="contained"
               disabled={deletingAlert}
-              startIcon={deletingAlert ? <CircularProgress size={16} color="inherit" /> : <DeleteForeverIcon />}
+              startIcon={
+                deletingAlert ? (
+                  <CircularProgress size={16} color="inherit" />
+                ) : (
+                  <DeleteForeverIcon />
+                )
+              }
               onClick={handleConfirmDelete}
             >
               {deletingAlert ? 'Eliminando' : 'Eliminar alerta'}
@@ -438,7 +459,12 @@ const MonitoringAlertsPage = () => {
                 onChange={handleVehicleChange}
                 sx={autocompleteSx}
                 renderInput={(params) => (
-                  <TextField {...params} size="small" label="Vehiculos y flotas" placeholder="Buscar placa o flota" />
+                  <TextField
+                    {...params}
+                    size="small"
+                    label="Vehiculos y flotas"
+                    placeholder="Buscar placa o flota"
+                  />
                 )}
               />
 
@@ -454,7 +480,12 @@ const MonitoringAlertsPage = () => {
                 onChange={handleGeofenceChange}
                 sx={autocompleteSx}
                 renderInput={(params) => (
-                  <TextField {...params} size="small" label="Geocercas y grupos" placeholder="Buscar geocerca o carpeta" />
+                  <TextField
+                    {...params}
+                    size="small"
+                    label="Geocercas y grupos"
+                    placeholder="Buscar geocerca o carpeta"
+                  />
                 )}
               />
 
@@ -474,12 +505,12 @@ const MonitoringAlertsPage = () => {
                     whiteSpace: 'nowrap',
                     '& .MuiFormControlLabel-label': { fontSize: 14 },
                   }}
-                  control={(
+                  control={
                     <Checkbox
                       checked={item.active}
                       onChange={(event) => setItem({ ...item, active: event.target.checked })}
                     />
-                  )}
+                  }
                   label="Activa"
                 />
                 <Button
@@ -525,7 +556,11 @@ const MonitoringAlertsPage = () => {
                     <TableCell>{alert.type}</TableCell>
                     <TableCell>{alert.speedLimit} km/h</TableCell>
                     <TableCell>
-                      <Chip size="small" label={alert.active ? 'Activa' : 'Inactiva'} color={alert.active ? 'success' : 'default'} />
+                      <Chip
+                        size="small"
+                        label={alert.active ? 'Activa' : 'Inactiva'}
+                        color={alert.active ? 'success' : 'default'}
+                      />
                     </TableCell>
                     <TableCell>
                       {(alert.deviceIds?.length || 0) + (alert.vehicleGroupIds?.length || 0)}
@@ -536,12 +571,20 @@ const MonitoringAlertsPage = () => {
                     <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                       <Stack direction="row" spacing={0.5} justifyContent="flex-end">
                         <Tooltip title="Editar alerta">
-                          <IconButton size="small" color="primary" onClick={() => handleEdit(alert)}>
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => handleEdit(alert)}
+                          >
                             <EditIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Eliminar alerta">
-                          <IconButton size="small" color="error" onClick={() => handleDelete(alert)}>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => handleDelete(alert)}
+                          >
                             <DeleteIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>

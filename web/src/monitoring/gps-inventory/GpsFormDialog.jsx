@@ -83,9 +83,7 @@ const GpsFormDialog = ({ open, gps, onClose, onSave }) => {
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>
-        {isEditing ? 'Editar GPS' : 'Agregar GPS al inventario'}
-      </DialogTitle>
+      <DialogTitle>{isEditing ? 'Editar GPS' : 'Agregar GPS al inventario'}</DialogTitle>
 
       <DialogContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
@@ -147,11 +145,7 @@ const GpsFormDialog = ({ open, gps, onClose, onSave }) => {
         <Button onClick={onClose} disabled={saving}>
           Cancelar
         </Button>
-        <Button
-          onClick={handleSave}
-          variant="contained"
-          disabled={saving}
-        >
+        <Button onClick={handleSave} variant="contained" disabled={saving}>
           {saving ? 'Guardando...' : 'Guardar'}
         </Button>
       </DialogActions>

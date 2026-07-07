@@ -13,13 +13,7 @@ import {
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 
-const GeofenceDeleteDialog = ({
-  open,
-  geofence,
-  onClose,
-  onConfirm,
-  loading = false,
-}) => (
+const GeofenceDeleteDialog = ({ open, geofence, onClose, onConfirm, loading = false }) => (
   <Dialog
     open={open}
     onClose={loading ? undefined : onClose}
@@ -32,9 +26,7 @@ const GeofenceDeleteDialog = ({
       },
     }}
   >
-    <DialogTitle sx={{ pb: 0.5, fontWeight: 700 }}>
-      Confirmar eliminacion
-    </DialogTitle>
+    <DialogTitle sx={{ pb: 0.5, fontWeight: 700 }}>Confirmar eliminacion</DialogTitle>
 
     <DialogContent sx={{ pt: 1 }}>
       <Box

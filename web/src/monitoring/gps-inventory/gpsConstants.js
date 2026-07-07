@@ -6,24 +6,24 @@
 
 // ── Marcas/modelos disponibles ────────────────────────────────────────────────
 export const GPS_BRANDS = [
-  { value: 'concox',   label: 'Concox' },
-  { value: 'suntech',  label: 'Suntech' },
+  { value: 'concox', label: 'Concox' },
+  { value: 'suntech', label: 'Suntech' },
   { value: 'queclink', label: 'Queclink' },
   { value: 'teltonika', label: 'Teltonika' },
-  { value: 'ruptela',  label: 'Ruptela' },
+  { value: 'ruptela', label: 'Ruptela' },
   { value: 'meitrack', label: 'Meitrack' },
-  { value: 'otro',     label: 'Otro' },
+  { value: 'otro', label: 'Otro' },
 ];
 
 // ── Estados del ciclo de vida ──────────────────────────────────────────────────
 export const GPS_STATUS = {
-  EN_ALMACEN:    'en_almacen',
-  ASIGNADO:      'asignado',
-  INSTALADO:     'instalado',
-  EN_REVISION:   'en_revision',
-  DESINSTALADO:  'desinstalado',
-  DANADO:        'danado',
-  DADO_DE_BAJA:  'dado_de_baja',
+  EN_ALMACEN: 'en_almacen',
+  ASIGNADO: 'asignado',
+  INSTALADO: 'instalado',
+  EN_REVISION: 'en_revision',
+  DESINSTALADO: 'desinstalado',
+  DANADO: 'danado',
+  DADO_DE_BAJA: 'dado_de_baja',
 };
 
 // ── Metadata visual por estado — color, label, ícono ──────────────────────────

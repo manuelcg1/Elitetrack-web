@@ -160,12 +160,8 @@ const MapView = ({ children }) => {
   // ── Actualizar estilos disponibles ─────────────────────────────────────────
   // Garantiza que el switcher ya esté agregado al mapa antes de llamar updateStyles
   useEffect(() => {
-    const filtered = mapStyles.filter(
-      (s) => s.available && activeMapStyles.includes(s.id),
-    );
-    const styles = filtered.length
-      ? filtered
-      : mapStyles.filter((s) => s.id === 'osm');
+    const filtered = mapStyles.filter((s) => s.available && activeMapStyles.includes(s.id));
+    const styles = filtered.length ? filtered : mapStyles.filter((s) => s.id === 'osm');
 
     if (switcherAddedRef.current) {
       // El switcher ya está en el mapa — aplicar inmediatamente

@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.1.xsd">
+
+  <changeSet author="elitetrack" id="roles-create-roles">
+    <preConditions onFail="MARK_RAN">
+      <not>
+        <tableExists tableName="tc_roles" />
+      </not>
+    </preConditions>
+    <createTable tableName="tc_roles">
+      <column autoIncrement="true" name="id" type="INT">
+        <constraints primaryKey="true" />
+      </column>
+      <column name="name" type="VARCHAR(128)">
+        <constraints nullable="false" unique="true" />
+      </column>
+    </createTable>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="roles-create-role-menus">
+    <preConditions onFail="MARK_RAN">
+      <not>
+        <tableExists tableName="tc_role_menus" />
+      </not>
+    </preConditions>
+    <createTable tableName="tc_role_menus">
+      <column autoIncrement="true" name="id" type="INT">
+        <constraints primaryKey="true" />
+      </column>
+      <column name="roleid" type="INT">
+        <constraints nullable="false" />
+      </column>
+      <column name="menukey" type="VARCHAR(64)">
+        <constraints nullable="false" />
+      </column>
+    </createTable>
+    <addUniqueConstraint tableName="tc_role_menus" columnNames="roleid, menukey"
+        constraintName="uk_role_menus_role_menu" />
+    <addForeignKeyConstraint baseTableName="tc_role_menus" baseColumnNames="roleid"
+        constraintName="fk_role_menus_role" onDelete="CASCADE"
+        referencedTableName="tc_roles" referencedColumnNames="id" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="roles-add-users-roleid">
+    <preConditions onFail="MARK_RAN">
+      <not>
+        <columnExists tableName="tc_users" columnName="roleid" />
+      </not>
+    </preConditions>
+    <addColumn tableName="tc_users">
+      <column name="roleid" type="INT" />
+    </addColumn>
+    <addForeignKeyConstraint baseTableName="tc_users" baseColumnNames="roleid"
+        constraintName="fk_users_role" onDelete="SET NULL"
+        referencedTableName="tc_roles" referencedColumnNames="id" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="roles-seed-default-roles">
+    <sql>
+      INSERT INTO tc_roles (name)
+      SELECT 'Super administrador'
+      WHERE NOT EXISTS (SELECT 1 FROM tc_roles WHERE name = 'Super administrador');
+    </sql>
+    <sql>
+      INSERT INTO tc_roles (name)
+      SELECT 'Sin asignar'
+      WHERE NOT EXISTS (SELECT 1 FROM tc_roles WHERE name = 'Sin asignar');
+    </sql>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="roles-seed-super-admin-menus">
+    <sql>
+      INSERT INTO tc_role_menus (roleid, menukey)
+      SELECT r.id, m.menukey
+      FROM tc_roles r
+      CROSS JOIN (
+        SELECT 'vehicles' AS menukey UNION ALL
+        SELECT 'geofences' UNION ALL
+        SELECT 'map' UNION ALL
+        SELECT 'reports' UNION ALL
+        SELECT 'settings' UNION ALL
+        SELECT 'alerts' UNION ALL
+        SELECT 'monitoring' UNION ALL
+        SELECT 'roles'
+      ) m
+      WHERE r.name = 'Super administrador'
+        AND NOT EXISTS (
+          SELECT 1 FROM tc_role_menus rm WHERE rm.roleid = r.id AND rm.menukey = m.menukey
+        );
+    </sql>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="roles-seed-unassigned-menus">
+    <sql>
+      INSERT INTO tc_role_menus (roleid, menukey)
+      SELECT r.id, m.menukey
+      FROM tc_roles r
+      CROSS JOIN (
+        SELECT 'vehicles' AS menukey UNION ALL
+        SELECT 'map'
+      ) m
+      WHERE r.name = 'Sin asignar'
+        AND NOT EXISTS (
+          SELECT 1 FROM tc_role_menus rm WHERE rm.roleid = r.id AND rm.menukey = m.menukey
+        );
+    </sql>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="roles-assign-existing-users">
+    <sql>
+      UPDATE tc_users
+      SET roleid = (SELECT id FROM tc_roles WHERE name = 'Super administrador')
+      WHERE administrator = true
+        AND roleid IS NULL;
+    </sql>
+    <sql>
+      UPDATE tc_users
+      SET roleid = (SELECT id FROM tc_roles WHERE name = 'Sin asignar')
+      WHERE (administrator = false OR administrator IS NULL)
+        AND roleid IS NULL;
+    </sql>
+  </changeSet>
+
+</databaseChangeLog>

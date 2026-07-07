@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from 'react';
+import { createContext, useContext } from 'react';
 import { useSelector } from 'react-redux';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
@@ -8,15 +8,15 @@ import palette from './common/theme/palette';
 
 // ── Tokens de marca EliteTrack ────────────────────────────────────────────────
 const ET = {
-  green:        '#00E65B',
-  greenDark:    '#00B848',
-  greenLight:   '#33FF7A',
-  greenGlow:    (alpha) => `rgba(0,230,91,${alpha})`,
-  dark:         '#212529',
-  darkSoft:     '#2C3136',
-  silver:       '#4A5056',
-  silverLight:  '#8A9099',
-  white:        '#FFFFFF',
+  green: '#00E65B',
+  greenDark: '#00B848',
+  greenLight: '#33FF7A',
+  greenGlow: (alpha) => `rgba(0,230,91,${alpha})`,
+  dark: '#212529',
+  darkSoft: '#2C3136',
+  silver: '#4A5056',
+  silverLight: '#8A9099',
+  white: '#FFFFFF',
 };
 
 // ── Contexto dark mode ────────────────────────────────────────────────────────
@@ -47,10 +47,10 @@ const AppThemeProvider = ({ children }) => {
     // ── Tipografía ────────────────────────────────────────────────────────────
     typography: {
       fontFamily: '"Plus Jakarta Sans", "Inter", system-ui, sans-serif',
-      fontWeightLight:   300,
+      fontWeightLight: 300,
       fontWeightRegular: 400,
-      fontWeightMedium:  500,
-      fontWeightBold:    700,
+      fontWeightMedium: 500,
+      fontWeightBold: 700,
       h1: { fontWeight: 800, letterSpacing: '-0.04em', lineHeight: 1.1 },
       h2: { fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1.2 },
       h3: { fontWeight: 700, letterSpacing: '-0.02em' },
@@ -107,11 +107,11 @@ const AppThemeProvider = ({ children }) => {
 
     // ── Overrides de componentes — todos con condicional light/dark ───────────
     components: {
-
       // ── Global: fuente, scrollbar ─────────────────────────────────────────
       MuiCssBaseline: {
         styleOverrides: {
-          '@import': 'url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap")',
+          '@import':
+            'url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap")',
           body: {
             backgroundColor: m('#F4F6F8', ET.dark),
             color: m(ET.dark, '#F0F2F4'),
@@ -143,7 +143,7 @@ const AppThemeProvider = ({ children }) => {
             color: ET.dark,
             '&:hover': {
               background: `linear-gradient(135deg, ${ET.greenLight} 0%, ${ET.green} 100%)`,
-              boxShadow: `0 4px 20px ${ET.greenGlow(0.40)}`,
+              boxShadow: `0 4px 20px ${ET.greenGlow(0.4)}`,
             },
             '&:disabled': {
               background: m('rgba(0,230,91,0.3)', 'rgba(0,230,91,0.15)'),
@@ -179,8 +179,8 @@ const AppThemeProvider = ({ children }) => {
             color: ET.green,
             '&:hover': { backgroundColor: ET.greenGlow(0.08) },
           },
-          sizeSmall:  { borderRadius: 8,  padding: '5px 12px',  fontSize: '0.8125rem' },
-          sizeLarge:  { borderRadius: 12, padding: '11px 24px', fontSize: '1rem' },
+          sizeSmall: { borderRadius: 8, padding: '5px 12px', fontSize: '0.8125rem' },
+          sizeLarge: { borderRadius: 12, padding: '11px 24px', fontSize: '1rem' },
         },
       },
 
@@ -203,7 +203,7 @@ const AppThemeProvider = ({ children }) => {
           colorPrimary: {
             color: ET.green,
             '&:hover': {
-              backgroundColor: ET.greenGlow(0.10),
+              backgroundColor: ET.greenGlow(0.1),
             },
           },
         },
@@ -278,19 +278,13 @@ const AppThemeProvider = ({ children }) => {
           root: {
             backgroundImage: 'none',
             backgroundColor: m(ET.white, ET.darkSoft),
-            border: m(
-              '1px solid rgba(33,37,41,0.08)',
-              '1px solid rgba(255,255,255,0.06)',
-            ),
+            border: m('1px solid rgba(33,37,41,0.08)', '1px solid rgba(255,255,255,0.06)'),
             transition: 'background-color 0.25s ease, border-color 0.25s ease',
           },
           elevation0: { border: 'none' },
           elevation3: {
             border: 'none',
-            boxShadow: m(
-              '0 4px 24px rgba(0,0,0,0.08)',
-              '0 4px 24px rgba(0,0,0,0.50)',
-            ),
+            boxShadow: m('0 4px 24px rgba(0,0,0,0.08)', '0 4px 24px rgba(0,0,0,0.50)'),
           },
         },
       },
@@ -301,10 +295,7 @@ const AppThemeProvider = ({ children }) => {
           root: {
             borderRadius: 14,
             backgroundColor: m(ET.white, ET.darkSoft),
-            border: m(
-              '1px solid rgba(33,37,41,0.08)',
-              '1px solid rgba(255,255,255,0.06)',
-            ),
+            border: m('1px solid rgba(33,37,41,0.08)', '1px solid rgba(255,255,255,0.06)'),
             transition: 'transform 0.2s ease, box-shadow 0.2s ease',
             '&:hover': { transform: 'translateY(-2px)' },
           },
@@ -324,18 +315,18 @@ const AppThemeProvider = ({ children }) => {
               color: m(ET.silver, ET.silverLight),
             },
             '&:hover': {
-              backgroundColor: m(ET.greenGlow(0.07), ET.greenGlow(0.10)),
+              backgroundColor: m(ET.greenGlow(0.07), ET.greenGlow(0.1)),
               color: m(ET.dark, ET.white),
               '& .MuiListItemIcon-root': { color: ET.green },
             },
             '&.Mui-selected': {
               fontWeight: 600,
               color: ET.green,
-              backgroundColor: m(ET.greenGlow(0.10), ET.greenGlow(0.14)),
+              backgroundColor: m(ET.greenGlow(0.1), ET.greenGlow(0.14)),
               '& .MuiListItemIcon-root': { color: ET.green },
               '& .MuiListItemText-primary': { fontWeight: 600 },
               '&:hover': {
-                backgroundColor: m(ET.greenGlow(0.15), ET.greenGlow(0.20)),
+                backgroundColor: m(ET.greenGlow(0.15), ET.greenGlow(0.2)),
               },
             },
             '&.Mui-disabled': {
@@ -416,10 +407,7 @@ const AppThemeProvider = ({ children }) => {
             borderRadius: 16,
             backgroundColor: m(ET.white, ET.darkSoft),
             border: m('none', '1px solid rgba(255,255,255,0.07)'),
-            boxShadow: m(
-              '0 24px 64px rgba(0,0,0,0.12)',
-              '0 24px 64px rgba(0,0,0,0.60)',
-            ),
+            boxShadow: m('0 24px 64px rgba(0,0,0,0.12)', '0 24px 64px rgba(0,0,0,0.60)'),
           },
           backdrop: {
             backgroundColor: m('rgba(33,37,41,0.5)', 'rgba(0,0,0,0.75)'),
@@ -435,10 +423,7 @@ const AppThemeProvider = ({ children }) => {
             backdropFilter: 'blur(12px)',
             backgroundColor: m('rgba(255,255,255,0.90)', 'rgba(33,37,41,0.90)'),
             color: m(ET.dark, '#F0F2F4'),
-            borderBottom: m(
-              '1px solid rgba(33,37,41,0.08)',
-              '1px solid rgba(255,255,255,0.06)',
-            ),
+            borderBottom: m('1px solid rgba(33,37,41,0.08)', '1px solid rgba(255,255,255,0.06)'),
           },
         },
       },
@@ -448,10 +433,7 @@ const AppThemeProvider = ({ children }) => {
         styleOverrides: {
           paper: {
             backgroundColor: m(ET.white, ET.darkSoft),
-            borderRight: m(
-              '1px solid rgba(33,37,41,0.08)',
-              '1px solid rgba(255,255,255,0.06)',
-            ),
+            borderRight: m('1px solid rgba(33,37,41,0.08)', '1px solid rgba(255,255,255,0.06)'),
           },
         },
       },
@@ -461,10 +443,7 @@ const AppThemeProvider = ({ children }) => {
         styleOverrides: {
           root: {
             backgroundColor: m(ET.white, ET.darkSoft),
-            borderTop: m(
-              '1px solid rgba(33,37,41,0.08)',
-              '1px solid rgba(255,255,255,0.06)',
-            ),
+            borderTop: m('1px solid rgba(33,37,41,0.08)', '1px solid rgba(255,255,255,0.06)'),
           },
         },
       },
@@ -511,10 +490,7 @@ const AppThemeProvider = ({ children }) => {
         styleOverrides: {
           root: { padding: 6 },
           thumb: {
-            boxShadow: m(
-              '0 2px 4px rgba(0,0,0,0.20)',
-              '0 2px 4px rgba(0,0,0,0.50)',
-            ),
+            boxShadow: m('0 2px 4px rgba(0,0,0,0.20)', '0 2px 4px rgba(0,0,0,0.50)'),
             backgroundColor: m(ET.white, '#CDD1D6'),
           },
           track: {
@@ -593,7 +569,7 @@ const AppThemeProvider = ({ children }) => {
         styleOverrides: {
           root: { borderRadius: 10, fontWeight: 500 },
           standardSuccess: {
-            backgroundColor: m(ET.greenGlow(0.10), ET.greenGlow(0.14)),
+            backgroundColor: m(ET.greenGlow(0.1), ET.greenGlow(0.14)),
             color: m(ET.greenDark, ET.greenLight),
           },
           standardError: {
@@ -670,14 +646,8 @@ const AppThemeProvider = ({ children }) => {
           paper: {
             borderRadius: 12,
             backgroundColor: m(ET.white, ET.darkSoft),
-            border: m(
-              '1px solid rgba(33,37,41,0.10)',
-              '1px solid rgba(255,255,255,0.08)',
-            ),
-            boxShadow: m(
-              '0 8px 32px rgba(0,0,0,0.10)',
-              '0 8px 32px rgba(0,0,0,0.55)',
-            ),
+            border: m('1px solid rgba(33,37,41,0.10)', '1px solid rgba(255,255,255,0.08)'),
+            boxShadow: m('0 8px 32px rgba(0,0,0,0.10)', '0 8px 32px rgba(0,0,0,0.55)'),
           },
         },
       },
@@ -691,10 +661,10 @@ const AppThemeProvider = ({ children }) => {
             fontWeight: 400,
             color: m(ET.dark, '#E0E4E8'),
             '&:hover': {
-              backgroundColor: m(ET.greenGlow(0.07), ET.greenGlow(0.10)),
+              backgroundColor: m(ET.greenGlow(0.07), ET.greenGlow(0.1)),
             },
             '&.Mui-selected': {
-              backgroundColor: m(ET.greenGlow(0.10), ET.greenGlow(0.14)),
+              backgroundColor: m(ET.greenGlow(0.1), ET.greenGlow(0.14)),
               color: ET.green,
               fontWeight: 600,
               '&:hover': {

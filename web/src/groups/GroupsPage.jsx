@@ -28,12 +28,10 @@ const GroupsPage = () => {
   const navigate = useNavigate();
   const t = useTranslation();
 
-  const limitCommands = useSelector((state) =>
-    state.session.user?.attributes?.limitCommands ?? false,
+  const limitCommands = useSelector(
+    (state) => state.session.user?.attributes?.limitCommands ?? false,
   );
-  const shareDisabled = useSelector(
-    (state) => state.session.server.attributes.disableShare,
-  );
+  const shareDisabled = useSelector((state) => state.session.server.attributes.disableShare);
   const user = useSelector((state) => state.session.user);
 
   const [loading, setLoading] = useState(false);
@@ -84,12 +82,8 @@ const GroupsPage = () => {
   const hasResults = filteredTree.length > 0;
 
   return (
-    <PageLayout
-      menu={<SettingsMenu />}
-      breadcrumbs={['settingsTitle', 'settingsGroups']}
-    >
+    <PageLayout menu={<SettingsMenu />} breadcrumbs={['settingsTitle', 'settingsGroups']}>
       <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-
         {/* Buscador */}
         <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
           <TextField
@@ -119,18 +113,27 @@ const GroupsPage = () => {
           )}
 
           {!loading && error && (
-            <Alert severity="error" sx={{ m: 2 }}>{error}</Alert>
+            <Alert severity="error" sx={{ m: 2 }}>
+              {error}
+            </Alert>
           )}
 
           {!loading && !error && !hasResults && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 6, gap: 1, color: 'text.secondary' }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                pt: 6,
+                gap: 1,
+                color: 'text.secondary',
+              }}
+            >
               <Typography variant="body2">
                 {searchKeyword ? t('sharedNoResults') : t('settingsGroups')}
               </Typography>
               {!searchKeyword && (
-                <Typography variant="caption">
-                  Crea tu primer grupo con el botón +
-                </Typography>
+                <Typography variant="caption">Crea tu primer grupo con el botón +</Typography>
               )}
             </Box>
           )}

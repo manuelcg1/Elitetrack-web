@@ -25,6 +25,7 @@ import org.traccar.model.GroupedModel;
 import org.traccar.model.LinkedDevice;
 import org.traccar.model.ManagedUser;
 import org.traccar.model.Notification;
+import org.traccar.model.RoleMenu;
 import org.traccar.model.Schedulable;
 import org.traccar.model.Server;
 import org.traccar.model.User;
@@ -36,7 +37,9 @@ import org.traccar.storage.query.Condition;
 import org.traccar.storage.query.Request;
 
 import jakarta.inject.Inject;
+import java.util.LinkedHashSet;
 import java.util.Objects;
+import java.util.Set;
 
 @RequestScoped
 public class PermissionsService {
@@ -66,9 +69,36 @@ public class PermissionsService {
             } else {
                 user = storage.getObject(
                         User.class, new Request(new Columns.All(), new Condition.Equals("id", userId)));
+                enrichUserMenus(user);
             }
         }
         return user;
+    }
+
+    public void enrichUserMenus(User user) throws StorageException {
+        if (user == null) {
+            return;
+        }
+        Set<String> menuKeys = new LinkedHashSet<>();
+        if (user.getRoleId() > 0) {
+            storage.getObjects(RoleMenu.class, new Request(
+                    new Columns.All(), new Condition.Equals("roleId", user.getRoleId())))
+                    .forEach((roleMenu) -> menuKeys.add(roleMenu.getMenuKey()));
+        }
+        if (menuKeys.isEmpty() && user.getAdministrator()) {
+            menuKeys.addAll(MenuKeys.ALL);
+        }
+        user.setMenuKeys(menuKeys);
+    }
+
+    public void checkMenuAccess(long userId, String menuKey) throws StorageException {
+        if (menuKey == null || userId == ServiceAccountUser.ID) {
+            return;
+        }
+        User user = getUser(userId);
+        if (user == null || !user.getMenuKeys().contains(menuKey)) {
+            throw new SecurityException("Menu access denied");
+        }
     }
 
     public boolean notAdmin(long userId) throws StorageException {
@@ -182,6 +212,9 @@ public class PermissionsService {
                 || before.getDeviceLimit() != after.getDeviceLimit()
                 || before.getUserLimit() != after.getUserLimit()) {
             checkAdmin(userId);
+        }
+        if (before.getRoleId() != after.getRoleId()) {
+            checkMenuAccess(userId, MenuKeys.ROLES);
         }
         User user = userId > 0 ? getUser(userId) : null;
         if (user != null && user.getExpirationTime() != null

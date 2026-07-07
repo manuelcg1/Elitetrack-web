@@ -22,13 +22,9 @@ const MonitoringPanel = () => {
 
       {positions.map((pos, index) => (
         <div key={index}>
-          <b>Device:</b> {pos.deviceId} |
-          <b> Speed:</b> {pos.speed}
-
+          <b>Device:</b> {pos.deviceId} |<b> Speed:</b> {pos.speed}
           {pos.speed > 80 && (
-            <span style={{ color: 'red', marginLeft: '10px' }}>
-              ⚠️ Exceso de velocidad
-            </span>
+            <span style={{ color: 'red', marginLeft: '10px' }}>⚠️ Exceso de velocidad</span>
           )}
         </div>
       ))}

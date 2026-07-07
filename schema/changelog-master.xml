@@ -39,5 +39,6 @@
   <include file="changelog-6.13.1.xml" relativeToChangelogFile="true" />
   <include file="changelog-alerts.xml" relativeToChangelogFile="true" />
   <include file="changelog-forward-servers.xml" relativeToChangelogFile="true" />
+  <include file="changelog-roles.xml" relativeToChangelogFile="true" />
 
 </databaseChangeLog>
