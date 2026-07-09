@@ -15,6 +15,48 @@ import {
 } from './SmartVehicleMarker';
 import './SmartVehicleMarker.css';
 
+const isValidCoordinate = (value, min, max) => {
+  const coordinate = Number(value);
+  return value !== null && value !== '' && Number.isFinite(coordinate) && coordinate >= min && coordinate <= max;
+};
+
+const isValidLatitude = (value) => isValidCoordinate(value, -90, 90);
+
+const isValidLongitude = (value) => isValidCoordinate(value, -180, 180);
+
+const isValidPosition = (position) =>
+  !!position && isValidLatitude(position.latitude) && isValidLongitude(position.longitude);
+
+const getMarkerLngLat = (item) => {
+  if (!item) {
+    return null;
+  }
+
+  if (isValidPosition(item.position)) {
+    return [Number(item.position.longitude), Number(item.position.latitude)];
+  }
+
+  if (isValidPosition(item)) {
+    return [Number(item.longitude), Number(item.latitude)];
+  }
+
+  if (item.lngLat && isValidLongitude(item.lngLat.lng) && isValidLatitude(item.lngLat.lat)) {
+    return [Number(item.lngLat.lng), Number(item.lngLat.lat)];
+  }
+
+  const coordinates = item.geometry?.coordinates || item.coordinates;
+  if (
+    Array.isArray(coordinates)
+    && coordinates.length >= 2
+    && isValidLongitude(coordinates[0])
+    && isValidLatitude(coordinates[1])
+  ) {
+    return [Number(coordinates[0]), Number(coordinates[1])];
+  }
+
+  return null;
+};
+
 const MapPositions = ({
   positions,
   onMapClick,
@@ -54,8 +96,8 @@ const MapPositions = ({
     return {
       id: position.id,
       deviceId: position.deviceId,
-      name: device.name,
-      category: mapIconKey(device.category),
+      name: device?.name,
+      category: mapIconKey(device?.category),
       rotation: position.course,
       direction: showDirection,
     };
@@ -66,8 +108,9 @@ const MapPositions = ({
 
   const onMapClickCallback = useCallback(
     (event) => {
-      if (!event.defaultPrevented && onMapClick) {
-        onMapClick(event.lngLat.lat, event.lngLat.lng);
+      const lngLat = getMarkerLngLat(event);
+      if (!event.defaultPrevented && onMapClick && lngLat) {
+        onMapClick(lngLat[1], lngLat[0]);
       }
     },
     [onMapClick],
@@ -79,10 +122,15 @@ const MapPositions = ({
       const features = map.queryRenderedFeatures(event.point, {
         layers: [clusters],
       });
-      const clusterId = features[0].properties.cluster_id;
+      const feature = features[0];
+      const center = getMarkerLngLat(feature);
+      const clusterId = feature?.properties?.cluster_id;
+      if (!center || clusterId === undefined) {
+        return;
+      }
       const zoom = await map.getSource(id).getClusterExpansionZoom(clusterId);
       map.easeTo({
-        center: features[0].geometry.coordinates,
+        center,
         zoom,
       });
     },
@@ -103,16 +151,20 @@ const MapPositions = ({
     const detail = getSmartMarkerDetail(map.getZoom());
     const wanted = new Set();
     const bounds = map.getBounds();
-    const isVisible = ({ longitude, latitude }) =>
-      Number.isFinite(longitude) && Number.isFinite(latitude) && bounds.contains([longitude, latitude]);
+    const isVisible = (item) => {
+      const lngLat = getMarkerLngLat(item);
+      return !!lngLat && bounds.contains(lngLat);
+    };
 
     try {
       map.querySourceFeatures(id)
         .filter((feature) => !feature.properties?.point_count)
         .forEach((feature) => {
-          const data = markerData.current.get(Number(feature.properties.deviceId));
-          if (data && isVisible(data.position)) {
-            wanted.add(Number(feature.properties.deviceId));
+          const featureLngLat = getMarkerLngLat(feature);
+          const deviceId = Number(feature.properties?.deviceId);
+          const data = markerData.current.get(deviceId);
+          if (featureLngLat && data && isVisible(data.position)) {
+            wanted.add(deviceId);
           }
         });
     } catch {
@@ -132,7 +184,10 @@ const MapPositions = ({
     }
 
     if (selectedDeviceId && markerData.current.has(selectedDeviceId)) {
-      wanted.add(selectedDeviceId);
+      const data = markerData.current.get(selectedDeviceId);
+      if (data && isValidPosition(data.position)) {
+        wanted.add(selectedDeviceId);
+      }
     }
 
     smartMarkers.current.forEach(({ marker }, deviceId) => {
@@ -144,7 +199,8 @@ const MapPositions = ({
 
     wanted.forEach((deviceId) => {
       const data = markerData.current.get(deviceId);
-      if (!data) {
+      const lngLat = getMarkerLngLat(data);
+      if (!data || !lngLat) {
         return;
       }
       let entry = smartMarkers.current.get(deviceId);
@@ -166,7 +222,7 @@ const MapPositions = ({
         };
         smartMarkers.current.set(deviceId, entry);
       }
-      entry.marker.setLngLat([data.position.longitude, data.position.latitude]);
+      entry.marker.setLngLat(lngLat);
       updateSmartVehicleMarkerElement(entry.element, {
         device: data.device,
         position: data.position,
@@ -264,25 +320,31 @@ const MapPositions = ({
   ]);
 
   useEffect(() => {
+    const validPositions = (positions || [])
+      .filter((it) => devices.hasOwnProperty(it.deviceId))
+      .filter(isValidPosition);
+
     markerData.current = new Map(
-      positions
-        .filter((it) => devices.hasOwnProperty(it.deviceId))
-        .filter((it) => Number.isFinite(it.longitude) && Number.isFinite(it.latitude))
-        .map((position) => [
-          position.deviceId,
+      validPositions.map((position) => {
+        const normalizedPosition = {
+          ...position,
+          latitude: Number(position.latitude),
+          longitude: Number(position.longitude),
+        };
+        return [
+          normalizedPosition.deviceId,
           {
-            position,
-            device: devices[position.deviceId],
+            position: normalizedPosition,
+            device: devices[normalizedPosition.deviceId],
           },
-        ]),
+        ];
+      }),
     );
 
     [id, selected].forEach((source) => {
       map.getSource(source)?.setData({
         type: 'FeatureCollection',
-        features: positions
-          .filter((it) => devices.hasOwnProperty(it.deviceId))
-          .filter((it) => Number.isFinite(it.longitude) && Number.isFinite(it.latitude))
+        features: validPositions
           .filter((it) =>
             source === id ? it.deviceId !== selectedDeviceId : it.deviceId === selectedDeviceId,
           )
@@ -290,7 +352,7 @@ const MapPositions = ({
             type: 'Feature',
             geometry: {
               type: 'Point',
-              coordinates: [position.longitude, position.latitude],
+              coordinates: [Number(position.longitude), Number(position.latitude)],
             },
             properties: createFeature(devices, position, selectedPosition && selectedPosition.id),
           })),

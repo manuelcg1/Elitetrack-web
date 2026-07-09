@@ -76,13 +76,17 @@ export const updateSmartVehicleMarkerElement = (
     selected = false,
   },
 ) => {
+  if (!element || !position) {
+    return;
+  }
+
   const state = getVehicleState(device, position);
   const color = statusMeta[state]?.color || eliteGreen;
   const speed = formatSpeed(position);
   const previousSpeed = element.dataset.speed;
 
-  element.dataset.deviceId = String(device?.id || position.deviceId);
-  element.dataset.positionId = String(position.id);
+  element.dataset.deviceId = String(device?.id || position.deviceId || '');
+  element.dataset.positionId = String(position.id || '');
   element.dataset.speed = String(speed);
   element.style.setProperty('--marker-accent', color);
   element.style.setProperty('--marker-border', selected ? '#1976d2' : eliteGreen);
@@ -97,9 +101,15 @@ export const updateSmartVehicleMarkerElement = (
   const name = element.querySelector('.smart-vehicle-marker-name');
   const speedValue = element.querySelector('.smart-vehicle-marker-speed-value');
 
-  icon.src = getIconSource(device?.category);
-  name.textContent = truncateName(device?.name || device?.uniqueId);
-  speedValue.textContent = `${speed} km/h`;
+  if (icon) {
+    icon.src = getIconSource(device?.category);
+  }
+  if (name) {
+    name.textContent = truncateName(device?.name || device?.uniqueId);
+  }
+  if (speedValue) {
+    speedValue.textContent = `${speed} km/h`;
+  }
 
   if (previousSpeed !== undefined && previousSpeed !== String(speed)) {
     element.classList.remove('smart-vehicle-marker-pulse');
