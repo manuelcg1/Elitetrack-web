@@ -16,11 +16,12 @@
 package org.traccar.web;
 
 import com.google.inject.Injector;
+import org.traccar.api.resource.AlertEventResource;
+import org.traccar.api.resource.AlertResource;
 import org.traccar.api.resource.ForwardServerResource;
 import org.traccar.api.resource.HealthResource;
 import org.traccar.api.resource.GeofenceFolderResource;
 import org.traccar.api.resource.RoleResource;
-import org.traccar.api.resource.SpeedAlertResource;
 import com.google.inject.servlet.GuiceFilter;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.SessionCookieConfig;
@@ -201,7 +202,8 @@ public class WebServer implements LifecycleObject {
         resourceConfig.registerClasses(GeofenceFolderResource.class);
         resourceConfig.registerClasses(ForwardServerResource.class);
         resourceConfig.registerClasses(HealthResource.class);
-        resourceConfig.registerClasses(SpeedAlertResource.class);
+        resourceConfig.registerClasses(AlertResource.class);
+        resourceConfig.registerClasses(AlertEventResource.class);
         resourceConfig.registerClasses(RoleResource.class);
 
         if (resourceConfig.getClasses().stream().filter(ServerResource.class::equals).findAny().isEmpty()) {

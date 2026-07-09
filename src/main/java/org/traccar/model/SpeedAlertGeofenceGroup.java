@@ -2,7 +2,7 @@ package org.traccar.model;
 
 import org.traccar.storage.StorageName;
 
-@StorageName("alert_geofence_groups")
+@StorageName("tc_alert_geofence_groups")
 public class SpeedAlertGeofenceGroup extends BaseModel {
 
     private long alertId;

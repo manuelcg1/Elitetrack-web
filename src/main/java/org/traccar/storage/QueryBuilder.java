@@ -183,24 +183,43 @@ public final class QueryBuilder {
     public QueryBuilder setObject(Object object, List<String> columns) throws SQLException {
         try {
             for (int index = 0; index < columns.size(); index++) {
+                int parameterIndex = index;
                 String column = columns.get(index);
                 Method method = ReflectionCache.getProperties(object.getClass(), "get").get(column).method();
-                if (method.getReturnType().equals(boolean.class)) {
-                    setBoolean(index, (Boolean) method.invoke(object));
-                } else if (method.getReturnType().equals(int.class)) {
-                    setInteger(index, (Integer) method.invoke(object));
-                } else if (method.getReturnType().equals(long.class)) {
-                    setLong(index, (Long) method.invoke(object), column.endsWith("Id"));
-                } else if (method.getReturnType().equals(double.class)) {
-                    setDouble(index, (Double) method.invoke(object));
-                } else if (method.getReturnType().equals(String.class)) {
-                    setString(index, (String) method.invoke(object));
-                } else if (method.getReturnType().equals(Date.class)) {
-                    setDate(index, (Date) method.invoke(object));
-                } else if (method.getReturnType().equals(byte[].class)) {
-                    setBlob(index, (byte[]) method.invoke(object));
+                Object value = method.invoke(object);
+                Class<?> returnType = method.getReturnType();
+                if (returnType.equals(boolean.class) || returnType.equals(Boolean.class)) {
+                    if (value != null) {
+                        setBoolean(index, (Boolean) value);
+                    } else {
+                        setValue(() -> statement.setNull(parameterIndex + 1, Types.BOOLEAN));
+                    }
+                } else if (returnType.equals(int.class) || returnType.equals(Integer.class)) {
+                    if (value != null) {
+                        setInteger(index, (Integer) value);
+                    } else {
+                        setValue(() -> statement.setNull(parameterIndex + 1, Types.INTEGER));
+                    }
+                } else if (returnType.equals(long.class) || returnType.equals(Long.class)) {
+                    if (value != null) {
+                        setLong(index, (Long) value, column.endsWith("Id"));
+                    } else {
+                        setValue(() -> statement.setNull(parameterIndex + 1, Types.BIGINT));
+                    }
+                } else if (returnType.equals(double.class) || returnType.equals(Double.class)) {
+                    if (value != null) {
+                        setDouble(index, (Double) value);
+                    } else {
+                        setValue(() -> statement.setNull(parameterIndex + 1, Types.DOUBLE));
+                    }
+                } else if (returnType.equals(String.class)) {
+                    setString(index, (String) value);
+                } else if (returnType.equals(Date.class)) {
+                    setDate(index, (Date) value);
+                } else if (returnType.equals(byte[].class)) {
+                    setBlob(index, (byte[]) value);
                 } else {
-                    setString(index, objectMapper.writeValueAsString(method.invoke(object)));
+                    setString(index, objectMapper.writeValueAsString(value));
                 }
             }
         } catch (ReflectiveOperationException | JsonProcessingException e) {
@@ -219,12 +238,32 @@ public final class QueryBuilder {
             final Class<?> parameterType, final Method method, final String name) {
         if (parameterType.equals(boolean.class)) {
             processors.add((object, resultSet) -> method.invoke(object, resultSet.getBoolean(name)));
+        } else if (parameterType.equals(Boolean.class)) {
+            processors.add((object, resultSet) -> {
+                boolean value = resultSet.getBoolean(name);
+                method.invoke(object, resultSet.wasNull() ? null : value);
+            });
         } else if (parameterType.equals(int.class)) {
             processors.add((object, resultSet) -> method.invoke(object, resultSet.getInt(name)));
+        } else if (parameterType.equals(Integer.class)) {
+            processors.add((object, resultSet) -> {
+                int value = resultSet.getInt(name);
+                method.invoke(object, resultSet.wasNull() ? null : value);
+            });
         } else if (parameterType.equals(long.class)) {
             processors.add((object, resultSet) -> method.invoke(object, resultSet.getLong(name)));
+        } else if (parameterType.equals(Long.class)) {
+            processors.add((object, resultSet) -> {
+                long value = resultSet.getLong(name);
+                method.invoke(object, resultSet.wasNull() ? null : value);
+            });
         } else if (parameterType.equals(double.class)) {
             processors.add((object, resultSet) -> method.invoke(object, resultSet.getDouble(name)));
+        } else if (parameterType.equals(Double.class)) {
+            processors.add((object, resultSet) -> {
+                double value = resultSet.getDouble(name);
+                method.invoke(object, resultSet.wasNull() ? null : value);
+            });
         } else if (parameterType.equals(String.class)) {
             processors.add((object, resultSet) -> method.invoke(object, resultSet.getString(name)));
         } else if (parameterType.equals(Date.class)) {

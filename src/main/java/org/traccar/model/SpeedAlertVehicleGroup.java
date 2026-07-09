@@ -2,7 +2,7 @@ package org.traccar.model;
 
 import org.traccar.storage.StorageName;
 
-@StorageName("alert_vehicle_groups")
+@StorageName("tc_alert_vehicle_groups")
 public class SpeedAlertVehicleGroup extends BaseModel {
 
     private long alertId;

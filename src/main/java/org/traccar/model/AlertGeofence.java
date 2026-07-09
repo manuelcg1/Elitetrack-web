@@ -3,10 +3,11 @@ package org.traccar.model;
 import org.traccar.storage.StorageName;
 
 @StorageName("tc_alert_geofences")
-public class SpeedAlertGeofence extends BaseModel {
+public class AlertGeofence extends BaseModel {
 
     private long alertId;
-    private long geofenceId;
+    private Long geofenceId;
+    private Long groupId;
 
     public long getAlertId() {
         return alertId;
@@ -16,12 +17,20 @@ public class SpeedAlertGeofence extends BaseModel {
         this.alertId = alertId;
     }
 
-    public long getGeofenceId() {
+    public Long getGeofenceId() {
         return geofenceId;
     }
 
-    public void setGeofenceId(long geofenceId) {
+    public void setGeofenceId(Long geofenceId) {
         this.geofenceId = geofenceId;
+    }
+
+    public Long getGroupId() {
+        return groupId;
+    }
+
+    public void setGroupId(Long groupId) {
+        this.groupId = groupId;
     }
 
 }

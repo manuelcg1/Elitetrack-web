@@ -21,6 +21,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import org.traccar.alert.AlertProcessor;
 import org.traccar.config.Config;
 import org.traccar.database.BufferingManager;
 import org.traccar.database.NotificationManager;
@@ -114,7 +115,8 @@ public class ProcessingHandler extends ChannelInboundHandlerAdapter implements B
                 CopyAttributesHandler.class,
                 EngineHoursHandler.class,
                 PositionForwardingHandler.class,
-                DatabaseHandler.class)
+                DatabaseHandler.class,
+                AlertProcessor.class)
                 .map((clazz) -> (BasePositionHandler) injector.getInstance(clazz))
                 .filter(Objects::nonNull)
                 .toList();

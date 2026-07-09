@@ -358,4 +358,389 @@ END $$;
     ]]></sql>
   </changeSet>
 
+  <changeSet author="elitetrack" id="alerts-rename-legacy-tables-to-traccar-names">
+    <preConditions onFail="MARK_RAN">
+      <and>
+        <tableExists tableName="alerts" />
+        <not>
+          <tableExists tableName="tc_alerts" />
+        </not>
+      </and>
+    </preConditions>
+    <renameTable oldTableName="alerts" newTableName="tc_alerts" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-rename-legacy-device-relations-to-traccar-names">
+    <preConditions onFail="MARK_RAN">
+      <and>
+        <tableExists tableName="alert_devices" />
+        <not>
+          <tableExists tableName="tc_alert_devices" />
+        </not>
+      </and>
+    </preConditions>
+    <renameTable oldTableName="alert_devices" newTableName="tc_alert_devices" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-rename-legacy-geofence-relations-to-traccar-names">
+    <preConditions onFail="MARK_RAN">
+      <and>
+        <tableExists tableName="alert_geofences" />
+        <not>
+          <tableExists tableName="tc_alert_geofences" />
+        </not>
+      </and>
+    </preConditions>
+    <renameTable oldTableName="alert_geofences" newTableName="tc_alert_geofences" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-rename-legacy-events-to-traccar-names">
+    <preConditions onFail="MARK_RAN">
+      <and>
+        <tableExists tableName="alert_logs" />
+        <not>
+          <tableExists tableName="tc_alert_events" />
+        </not>
+      </and>
+    </preConditions>
+    <renameTable oldTableName="alert_logs" newTableName="tc_alert_events" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-rename-legacy-vehicle-group-relations-to-traccar-names">
+    <preConditions onFail="MARK_RAN">
+      <and>
+        <tableExists tableName="alert_vehicle_groups" />
+        <not>
+          <tableExists tableName="tc_alert_vehicle_groups" />
+        </not>
+      </and>
+    </preConditions>
+    <renameTable oldTableName="alert_vehicle_groups" newTableName="tc_alert_vehicle_groups" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-rename-legacy-geofence-group-relations-to-traccar-names">
+    <preConditions onFail="MARK_RAN">
+      <and>
+        <tableExists tableName="alert_geofence_groups" />
+        <not>
+          <tableExists tableName="tc_alert_geofence_groups" />
+        </not>
+      </and>
+    </preConditions>
+    <renameTable oldTableName="alert_geofence_groups" newTableName="tc_alert_geofence_groups" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-create-tc-alerts-if-missing">
+    <preConditions onFail="MARK_RAN">
+      <not>
+        <tableExists tableName="tc_alerts" />
+      </not>
+    </preConditions>
+    <createTable tableName="tc_alerts">
+      <column autoIncrement="true" name="id" type="INT">
+        <constraints primaryKey="true" />
+      </column>
+      <column name="type" type="VARCHAR(32)" defaultValue="Velocidad">
+        <constraints nullable="false" />
+      </column>
+      <column name="name" type="VARCHAR(128)">
+        <constraints nullable="false" />
+      </column>
+      <column name="speedlimit" type="DOUBLE">
+        <constraints nullable="false" />
+      </column>
+      <column name="active" type="BOOLEAN" defaultValueBoolean="true">
+        <constraints nullable="false" />
+      </column>
+    </createTable>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-create-tc-alert-devices-if-missing">
+    <preConditions onFail="MARK_RAN">
+      <not>
+        <tableExists tableName="tc_alert_devices" />
+      </not>
+    </preConditions>
+    <createTable tableName="tc_alert_devices">
+      <column autoIncrement="true" name="id" type="INT">
+        <constraints primaryKey="true" />
+      </column>
+      <column name="alertid" type="INT">
+        <constraints nullable="false" />
+      </column>
+      <column name="deviceid" type="INT">
+        <constraints nullable="false" />
+      </column>
+    </createTable>
+    <addForeignKeyConstraint baseTableName="tc_alert_devices" baseColumnNames="alertid"
+        constraintName="fk_tc_alert_devices_alert" onDelete="CASCADE"
+        referencedTableName="tc_alerts" referencedColumnNames="id" />
+    <addForeignKeyConstraint baseTableName="tc_alert_devices" baseColumnNames="deviceid"
+        constraintName="fk_tc_alert_devices_device" onDelete="CASCADE"
+        referencedTableName="tc_devices" referencedColumnNames="id" />
+    <createIndex tableName="tc_alert_devices" indexName="idx_tc_alert_devices_alert">
+      <column name="alertid" />
+    </createIndex>
+    <createIndex tableName="tc_alert_devices" indexName="idx_tc_alert_devices_device">
+      <column name="deviceid" />
+    </createIndex>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-create-tc-alert-geofences-if-missing">
+    <preConditions onFail="MARK_RAN">
+      <not>
+        <tableExists tableName="tc_alert_geofences" />
+      </not>
+    </preConditions>
+    <createTable tableName="tc_alert_geofences">
+      <column autoIncrement="true" name="id" type="INT">
+        <constraints primaryKey="true" />
+      </column>
+      <column name="alertid" type="INT">
+        <constraints nullable="false" />
+      </column>
+      <column name="geofenceid" type="INT">
+        <constraints nullable="false" />
+      </column>
+    </createTable>
+    <addForeignKeyConstraint baseTableName="tc_alert_geofences" baseColumnNames="alertid"
+        constraintName="fk_tc_alert_geofences_alert" onDelete="CASCADE"
+        referencedTableName="tc_alerts" referencedColumnNames="id" />
+    <addForeignKeyConstraint baseTableName="tc_alert_geofences" baseColumnNames="geofenceid"
+        constraintName="fk_tc_alert_geofences_geofence" onDelete="CASCADE"
+        referencedTableName="tc_geofences" referencedColumnNames="id" />
+    <createIndex tableName="tc_alert_geofences" indexName="idx_tc_alert_geofences_alert">
+      <column name="alertid" />
+    </createIndex>
+    <createIndex tableName="tc_alert_geofences" indexName="idx_tc_alert_geofences_geofence">
+      <column name="geofenceid" />
+    </createIndex>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-create-tc-alert-events-if-missing">
+    <preConditions onFail="MARK_RAN">
+      <not>
+        <tableExists tableName="tc_alert_events" />
+      </not>
+    </preConditions>
+    <createTable tableName="tc_alert_events">
+      <column autoIncrement="true" name="id" type="INT">
+        <constraints primaryKey="true" />
+      </column>
+      <column name="alertid" type="INT" />
+      <column name="plate" type="VARCHAR(128)" />
+      <column name="latitude" type="DOUBLE" />
+      <column name="longitude" type="DOUBLE" />
+      <column name="driver" type="VARCHAR(128)" />
+      <column name="vehiclegroup" type="VARCHAR(128)" />
+      <column name="geofencename" type="VARCHAR(128)" />
+      <column name="alertname" type="VARCHAR(128)" />
+      <column name="recordedspeed" type="DOUBLE" />
+      <column name="eventtime" type="TIMESTAMP">
+        <constraints nullable="false" />
+      </column>
+    </createTable>
+    <addForeignKeyConstraint baseTableName="tc_alert_events" baseColumnNames="alertid"
+        constraintName="fk_tc_alert_events_alert" onDelete="SET NULL"
+        referencedTableName="tc_alerts" referencedColumnNames="id" />
+    <createIndex tableName="tc_alert_events" indexName="idx_tc_alert_events_alert">
+      <column name="alertid" />
+    </createIndex>
+    <createIndex tableName="tc_alert_events" indexName="idx_tc_alert_events_eventtime">
+      <column name="eventtime" />
+    </createIndex>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-create-tc-alert-vehicle-groups-if-missing">
+    <preConditions onFail="MARK_RAN">
+      <not>
+        <tableExists tableName="tc_alert_vehicle_groups" />
+      </not>
+    </preConditions>
+    <createTable tableName="tc_alert_vehicle_groups">
+      <column autoIncrement="true" name="id" type="INT">
+        <constraints primaryKey="true" />
+      </column>
+      <column name="alertid" type="INT">
+        <constraints nullable="false" />
+      </column>
+      <column name="groupid" type="INT">
+        <constraints nullable="false" />
+      </column>
+    </createTable>
+    <addForeignKeyConstraint baseTableName="tc_alert_vehicle_groups" baseColumnNames="alertid"
+        constraintName="fk_tc_alert_vehicle_groups_alert" onDelete="CASCADE"
+        referencedTableName="tc_alerts" referencedColumnNames="id" />
+    <addForeignKeyConstraint baseTableName="tc_alert_vehicle_groups" baseColumnNames="groupid"
+        constraintName="fk_tc_alert_vehicle_groups_group" onDelete="CASCADE"
+        referencedTableName="tc_groups" referencedColumnNames="id" />
+    <createIndex tableName="tc_alert_vehicle_groups" indexName="idx_tc_alert_vehicle_groups_alert">
+      <column name="alertid" />
+    </createIndex>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-create-tc-alert-geofence-groups-if-missing">
+    <preConditions onFail="MARK_RAN">
+      <not>
+        <tableExists tableName="tc_alert_geofence_groups" />
+      </not>
+    </preConditions>
+    <createTable tableName="tc_alert_geofence_groups">
+      <column autoIncrement="true" name="id" type="INT">
+        <constraints primaryKey="true" />
+      </column>
+      <column name="alertid" type="INT">
+        <constraints nullable="false" />
+      </column>
+      <column name="geofencegroupid" type="INT">
+        <constraints nullable="false" />
+      </column>
+    </createTable>
+    <addForeignKeyConstraint baseTableName="tc_alert_geofence_groups" baseColumnNames="alertid"
+        constraintName="fk_tc_alert_geofence_groups_alert" onDelete="CASCADE"
+        referencedTableName="tc_alerts" referencedColumnNames="id" />
+    <addForeignKeyConstraint baseTableName="tc_alert_geofence_groups" baseColumnNames="geofencegroupid"
+        constraintName="fk_tc_alert_geofence_groups_folder" onDelete="CASCADE"
+        referencedTableName="tc_geofence_folders" referencedColumnNames="id" />
+    <createIndex tableName="tc_alert_geofence_groups" indexName="idx_tc_alert_geofence_groups_alert">
+      <column name="alertid" />
+    </createIndex>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-api-model-columns-postgresql">
+    <preConditions onFail="MARK_RAN">
+      <and>
+        <dbms type="postgresql" />
+        <tableExists tableName="tc_alerts" />
+      </and>
+    </preConditions>
+    <sql splitStatements="false" stripComments="false"><![CDATA[
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alerts' AND column_name = 'description') THEN
+    ALTER TABLE tc_alerts ADD COLUMN description VARCHAR(4000);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alerts' AND column_name = 'severity') THEN
+    ALTER TABLE tc_alerts ADD COLUMN severity VARCHAR(32) DEFAULT 'medium';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alerts' AND column_name = 'limitvalue') THEN
+    ALTER TABLE tc_alerts ADD COLUMN limitvalue DOUBLE PRECISION;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alerts' AND column_name = 'speedlimit') THEN
+    UPDATE tc_alerts SET limitvalue = speedlimit WHERE limitvalue IS NULL;
+    ALTER TABLE tc_alerts ALTER COLUMN speedlimit DROP NOT NULL;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alerts' AND column_name = 'unit') THEN
+    ALTER TABLE tc_alerts ADD COLUMN unit VARCHAR(32);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alerts' AND column_name = 'operator') THEN
+    ALTER TABLE tc_alerts ADD COLUMN operator VARCHAR(16);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alerts' AND column_name = 'createdby') THEN
+    ALTER TABLE tc_alerts ADD COLUMN createdby INT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alerts' AND column_name = 'createdat') THEN
+    ALTER TABLE tc_alerts ADD COLUMN createdat TIMESTAMP;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alerts' AND column_name = 'updatedat') THEN
+    ALTER TABLE tc_alerts ADD COLUMN updatedat TIMESTAMP;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alerts' AND column_name = 'attributes') THEN
+    ALTER TABLE tc_alerts ADD COLUMN attributes VARCHAR(4000);
+  END IF;
+END $$;
+    ]]></sql>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-api-relations-columns-postgresql">
+    <preConditions onFail="MARK_RAN">
+      <and>
+        <dbms type="postgresql" />
+        <tableExists tableName="tc_alert_devices" />
+        <tableExists tableName="tc_alert_geofences" />
+      </and>
+    </preConditions>
+    <sql splitStatements="false" stripComments="false"><![CDATA[
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alert_devices' AND column_name = 'groupid') THEN
+    ALTER TABLE tc_alert_devices ADD COLUMN groupid INT;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alert_devices' AND column_name = 'deviceid') THEN
+    ALTER TABLE tc_alert_devices ALTER COLUMN deviceid DROP NOT NULL;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alert_geofences' AND column_name = 'groupid') THEN
+    ALTER TABLE tc_alert_geofences ADD COLUMN groupid INT;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alert_geofences' AND column_name = 'geofenceid') THEN
+    ALTER TABLE tc_alert_geofences ALTER COLUMN geofenceid DROP NOT NULL;
+  END IF;
+END $$;
+    ]]></sql>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="alerts-api-event-columns-postgresql">
+    <preConditions onFail="MARK_RAN">
+      <and>
+        <dbms type="postgresql" />
+        <tableExists tableName="tc_alert_events" />
+      </and>
+    </preConditions>
+    <sql splitStatements="false" stripComments="false"><![CDATA[
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alert_events' AND column_name = 'deviceid') THEN
+    ALTER TABLE tc_alert_events ADD COLUMN deviceid INT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alert_events' AND column_name = 'positionid') THEN
+    ALTER TABLE tc_alert_events ADD COLUMN positionid INT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alert_events' AND column_name = 'type') THEN
+    ALTER TABLE tc_alert_events ADD COLUMN type VARCHAR(32);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alert_events' AND column_name = 'severity') THEN
+    ALTER TABLE tc_alert_events ADD COLUMN severity VARCHAR(32);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alert_events' AND column_name = 'status') THEN
+    ALTER TABLE tc_alert_events ADD COLUMN status VARCHAR(32) DEFAULT 'open';
+  END IF;
+  UPDATE tc_alert_events SET status = 'open' WHERE status IS NULL;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alert_events' AND column_name = 'acknowledgedat') THEN
+    ALTER TABLE tc_alert_events ADD COLUMN acknowledgedat TIMESTAMP;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alert_events' AND column_name = 'acknowledgedby') THEN
+    ALTER TABLE tc_alert_events ADD COLUMN acknowledgedby INT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alert_events' AND column_name = 'resolvedat') THEN
+    ALTER TABLE tc_alert_events ADD COLUMN resolvedat TIMESTAMP;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alert_events' AND column_name = 'message') THEN
+    ALTER TABLE tc_alert_events ADD COLUMN message VARCHAR(4000);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alert_events' AND column_name = 'value') THEN
+    ALTER TABLE tc_alert_events ADD COLUMN value DOUBLE PRECISION;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alert_events' AND column_name = 'threshold') THEN
+    ALTER TABLE tc_alert_events ADD COLUMN threshold DOUBLE PRECISION;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alert_events' AND column_name = 'unit') THEN
+    ALTER TABLE tc_alert_events ADD COLUMN unit VARCHAR(32);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alert_events' AND column_name = 'address') THEN
+    ALTER TABLE tc_alert_events ADD COLUMN address VARCHAR(512);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alert_events' AND column_name = 'geofenceid') THEN
+    ALTER TABLE tc_alert_events ADD COLUMN geofenceid INT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alert_events' AND column_name = 'groupid') THEN
+    ALTER TABLE tc_alert_events ADD COLUMN groupid INT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tc_alert_events' AND column_name = 'attributes') THEN
+    ALTER TABLE tc_alert_events ADD COLUMN attributes VARCHAR(4000);
+  END IF;
+END $$;
+    ]]></sql>
+  </changeSet>
+
 </databaseChangeLog>

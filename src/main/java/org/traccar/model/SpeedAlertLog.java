@@ -4,7 +4,7 @@ import org.traccar.storage.StorageName;
 
 import java.util.Date;
 
-@StorageName("alert_logs")
+@StorageName("tc_alert_events")
 public class SpeedAlertLog extends BaseModel {
 
     private long alertId;

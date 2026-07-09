@@ -66,12 +66,18 @@ public class SpeedAlertEvaluator {
             if (!matchesVehicle(alert, telemetry.getDeviceId(), vehicleGroupId)) {
                 continue;
             }
-            for (Geofence geofence : containingGeofences) {
-                if (matchesGeofence(alert, geofence.getId(), geofenceFolders.get(geofence.getId()))) {
-                    SpeedAlertLog log = buildLog(alert, telemetry, vehicleGroup, geofence);
-                    log.setId(storage.addObject(log, new Request(new Columns.Exclude("id"))));
-                    createdLogs.add(log);
+            if (hasGeofenceScope(alert)) {
+                for (Geofence geofence : containingGeofences) {
+                    if (matchesGeofence(alert, geofence.getId(), geofenceFolders.get(geofence.getId()))) {
+                        SpeedAlertLog log = buildLog(alert, telemetry, vehicleGroup, geofence);
+                        log.setId(storage.addObject(log, new Request(new Columns.Exclude("id"))));
+                        createdLogs.add(log);
+                    }
                 }
+            } else {
+                SpeedAlertLog log = buildLog(alert, telemetry, vehicleGroup, null);
+                log.setId(storage.addObject(log, new Request(new Columns.Exclude("id"))));
+                createdLogs.add(log);
             }
         }
         return createdLogs;
@@ -140,6 +146,10 @@ public class SpeedAlertEvaluator {
                 || folderIds != null && folderIds.stream().anyMatch(alert.getGeofenceGroupIds()::contains);
     }
 
+    private boolean hasGeofenceScope(SpeedAlert alert) {
+        return !alert.getGeofenceIds().isEmpty() || !alert.getGeofenceGroupIds().isEmpty();
+    }
+
     private SpeedAlertLog buildLog(
             SpeedAlert alert, SpeedAlertTelemetry telemetry, Group vehicleGroup, Geofence geofence) {
         SpeedAlertLog log = new SpeedAlertLog();
@@ -149,7 +159,7 @@ public class SpeedAlertEvaluator {
         log.setLongitude(telemetry.getLongitude());
         log.setDriver(telemetry.getDriver());
         log.setVehicleGroup(vehicleGroup != null ? vehicleGroup.getName() : null);
-        log.setGeofenceName(geofence.getName());
+        log.setGeofenceName(geofence != null ? geofence.getName() : null);
         log.setAlertName(alert.getName());
         log.setRecordedSpeed(telemetry.getSpeed());
         log.setEventTime(new Date());

@@ -28,7 +28,6 @@ import org.traccar.storage.query.Request;
 
 import java.util.List;
 
-@Path("alerts")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class SpeedAlertResource extends BaseResource {

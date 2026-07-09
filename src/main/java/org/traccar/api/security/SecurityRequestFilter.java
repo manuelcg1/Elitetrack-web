@@ -167,7 +167,7 @@ public class SecurityRequestFilter implements ContainerRequestFilter {
         if (path.startsWith("geofences") || path.startsWith("geofenceFolders")) {
             return Set.of(MenuKeys.GEOFENCES, MenuKeys.MAP, MenuKeys.REPORTS, MenuKeys.SETTINGS, MenuKeys.MONITORING);
         }
-        if (path.startsWith("alerts")) {
+        if (path.startsWith("alerts") || path.startsWith("alert-events")) {
             return Set.of(MenuKeys.ALERTS);
         }
         if (path.startsWith("health") || path.startsWith("gps-inventory")) {

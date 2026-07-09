@@ -18,6 +18,12 @@ java {
 compileJava.options.encoding = "UTF-8"
 jar.destinationDirectory = file("$projectDir/target")
 
+processResources {
+    from("schema") {
+        into "schema"
+    }
+}
+
 checkstyle {
     toolVersion = "10.23.1"
     configFile = file("gradle/checkstyle.xml")

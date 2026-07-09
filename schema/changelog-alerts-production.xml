@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.1.xsd">
+
+  <changeSet author="elitetrack" id="alerts-production-postgresql">
+    <preConditions onFail="MARK_RAN">
+      <and>
+        <dbms type="postgresql" />
+        <tableExists tableName="tc_alert_events" />
+        <tableExists tableName="tc_alert_devices" />
+        <tableExists tableName="tc_alert_geofences" />
+      </and>
+    </preConditions>
+    <sql splitStatements="false" stripComments="false"><![CDATA[
+DO $$
+BEGIN
+  IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'tc_alert_events' AND column_name = 'dismissedat') THEN
+    ALTER TABLE tc_alert_events ADD COLUMN dismissedat TIMESTAMP;
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_tc_alert_events_alert_device_status
+  ON tc_alert_events (alertid, deviceid, status);
+
+CREATE INDEX IF NOT EXISTS idx_tc_alert_events_status_eventtime
+  ON tc_alert_events (status, eventtime);
+
+CREATE INDEX IF NOT EXISTS idx_tc_alert_devices_alert_device
+  ON tc_alert_devices (alertid, deviceid);
+
+CREATE INDEX IF NOT EXISTS idx_tc_alert_devices_alert_group
+  ON tc_alert_devices (alertid, groupid);
+
+CREATE INDEX IF NOT EXISTS idx_tc_alert_geofences_alert_geofence
+  ON tc_alert_geofences (alertid, geofenceid);
+    ]]></sql>
+  </changeSet>
+
+</databaseChangeLog>

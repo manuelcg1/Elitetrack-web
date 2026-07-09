@@ -1,12 +1,14 @@
 package org.traccar.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.traccar.storage.QueryIgnore;
 import org.traccar.storage.StorageName;
 
 import java.util.ArrayList;
 import java.util.List;
 
-@StorageName("alerts")
+@StorageName("tc_alerts")
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class SpeedAlert extends BaseModel {
 
     public static final String TYPE_SPEED = "Velocidad";
@@ -45,6 +47,15 @@ public class SpeedAlert extends BaseModel {
         this.speedLimit = speedLimit;
     }
 
+    @QueryIgnore
+    public double getLimitValue() {
+        return speedLimit;
+    }
+
+    public void setLimitValue(double limitValue) {
+        this.speedLimit = limitValue;
+    }
+
     public boolean getActive() {
         return active;
     }
@@ -69,6 +80,15 @@ public class SpeedAlert extends BaseModel {
 
     public void setVehicleGroupIds(List<Long> vehicleGroupIds) {
         this.vehicleGroupIds = vehicleGroupIds != null ? vehicleGroupIds : new ArrayList<>();
+    }
+
+    @QueryIgnore
+    public List<Long> getGroupIds() {
+        return vehicleGroupIds;
+    }
+
+    public void setGroupIds(List<Long> groupIds) {
+        this.vehicleGroupIds = groupIds != null ? groupIds : new ArrayList<>();
     }
 
     @QueryIgnore
