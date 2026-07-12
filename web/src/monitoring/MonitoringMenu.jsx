@@ -9,6 +9,7 @@ import InventoryIcon from '@mui/icons-material/Inventory2';
 import { useLocation } from 'react-router-dom';
 
 import MenuItem from '../common/components/MenuItem';
+import { COMPACT_DESKTOP_DRAWER_WIDTH } from '../common/theme/navigation';
 
 const MonitoringMenu = () => {
   const location = useLocation();
@@ -59,5 +60,8 @@ const MonitoringMenu = () => {
     </List>
   );
 };
+
+MonitoringMenu.desktopDrawerWidth = COMPACT_DESKTOP_DRAWER_WIDTH;
+MonitoringMenu.compactDesktopMenu = true;
 
 export default MonitoringMenu;

@@ -1,90 +1,114 @@
 .smart-vehicle-marker {
   --marker-accent: #00c853;
-  --marker-border: #00c853;
+  --marker-background: #e8f5e9;
+  --marker-glow: rgba(0, 200, 83, 0.35);
   --marker-speed-width: 0%;
-  align-items: center;
-  background: rgba(255, 255, 255, 0.94);
-  border: 2px solid var(--marker-border);
-  border-radius: 12px;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.22), 0 1px 3px rgba(15, 23, 42, 0.18);
   box-sizing: border-box;
   color: #0f172a;
   cursor: pointer;
-  display: inline-flex;
-  font-family: "Roboto", "Helvetica", "Arial", sans-serif;
-  gap: 8px;
-  max-width: 184px;
-  min-height: 38px;
-  padding: 6px 9px 6px 7px;
+  font-family: 'Roboto', 'Helvetica', 'Arial', sans-serif;
+  height: 38px;
+  padding: 0;
   pointer-events: auto;
-  position: relative;
-  transform: translateY(-8px);
-  transition: border-color 160ms ease, box-shadow 160ms ease, opacity 160ms ease, transform 160ms ease;
+  /* MapLibre posiciona esta raiz mediante transform durante pan y zoom. */
+  position: absolute;
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    opacity 160ms ease;
   user-select: none;
-  will-change: transform;
+  width: 38px;
 }
 
-.smart-vehicle-marker::after {
-  border-left: 7px solid transparent;
-  border-right: 7px solid transparent;
-  border-top: 8px solid var(--marker-border);
-  bottom: -9px;
-  content: "";
-  left: 50%;
-  position: absolute;
-  transform: translateX(-50%);
+.smart-vehicle-marker:hover .smart-vehicle-marker-content,
+.smart-vehicle-marker.smart-vehicle-marker-selected .smart-vehicle-marker-content {
+  box-shadow:
+    0 10px 26px rgba(15, 23, 42, 0.28),
+    0 2px 6px rgba(15, 23, 42, 0.2),
+    0 0 10px var(--marker-glow);
 }
 
-.smart-vehicle-marker::before {
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-top: 6px solid rgba(255, 255, 255, 0.94);
-  bottom: -5px;
-  content: "";
-  left: 50%;
-  position: absolute;
-  transform: translateX(-50%);
-  z-index: 1;
-}
-
-.smart-vehicle-marker:hover,
-.smart-vehicle-marker.smart-vehicle-marker-selected {
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.28), 0 2px 6px rgba(15, 23, 42, 0.2);
-  transform: translateY(-10px);
-}
-
-.smart-vehicle-marker-selected {
-  --marker-border: #1976d2;
-}
-
-.smart-vehicle-marker-pulse {
+.smart-vehicle-marker-pulse .smart-vehicle-marker-content {
   animation: smartVehicleMarkerPulse 460ms ease;
 }
 
 .smart-vehicle-marker-icon {
   align-items: center;
-  background: color-mix(in srgb, var(--marker-accent) 14%, white);
-  border: 1px solid color-mix(in srgb, var(--marker-accent) 42%, white);
-  border-radius: 9px;
+  background: var(--marker-background);
+  border: 2px solid var(--marker-accent);
+  border-radius: 50%;
+  box-shadow:
+    0 4px 12px rgba(15, 23, 42, 0.2),
+    0 0 10px var(--marker-glow);
   color: var(--marker-accent);
   display: flex;
   flex: 0 0 auto;
-  height: 26px;
+  height: 38px;
   justify-content: center;
   overflow: hidden;
-  width: 26px;
+  position: relative;
+  width: 38px;
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
 }
 
 .smart-vehicle-marker-icon img {
   display: block;
-  height: 17px;
-  width: 17px;
+  height: 24px;
+  width: 24px;
 }
 
 .smart-vehicle-marker-content {
+  background: var(--marker-background);
+  border: 2px solid var(--marker-accent);
+  border-radius: 12px;
+  box-sizing: border-box;
+  box-shadow:
+    0 8px 22px rgba(15, 23, 42, 0.22),
+    0 1px 3px rgba(15, 23, 42, 0.18),
+    0 0 10px var(--marker-glow);
   display: grid;
   gap: 2px;
-  min-width: 0;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  max-width: 184px;
+  min-width: 104px;
+  padding: 6px 10px;
+  position: absolute;
+  transform: translateX(-50%);
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+  width: max-content;
+}
+
+.smart-vehicle-marker-content::after {
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 8px solid var(--marker-accent);
+  bottom: -9px;
+  content: '';
+  left: 50%;
+  position: absolute;
+  transform: translateX(-50%);
+  transition: border-color 0.25s ease;
+}
+
+.smart-vehicle-marker-content::before {
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid var(--marker-background);
+  bottom: -5px;
+  content: '';
+  left: 50%;
+  position: absolute;
+  transform: translateX(-50%);
+  z-index: 1;
+  transition: border-color 0.25s ease;
 }
 
 .smart-vehicle-marker-name {
@@ -110,6 +134,7 @@
   line-height: 1;
   min-width: 0;
   transition: color 160ms ease;
+  white-space: nowrap;
 }
 
 .smart-vehicle-marker-status-dot {
@@ -119,6 +144,9 @@
   flex: 0 0 auto;
   height: 7px;
   width: 7px;
+  transition:
+    background-color 0.25s ease,
+    box-shadow 0.25s ease;
 }
 
 .smart-vehicle-marker-speed-value {
@@ -129,7 +157,7 @@
   background: var(--marker-accent);
   border-radius: 99px;
   bottom: -4px;
-  content: "";
+  content: '';
   height: 2px;
   left: 0;
   opacity: 0.28;
@@ -139,25 +167,14 @@
   width: var(--marker-speed-width);
 }
 
-.smart-vehicle-marker-medium .smart-vehicle-marker-speed {
-  display: none;
-}
-
 .smart-vehicle-marker-low {
-  border-radius: 50%;
-  gap: 0;
-  height: 36px;
-  justify-content: center;
-  max-width: none;
-  min-height: 36px;
-  padding: 4px;
-  width: 36px;
+  height: 34px;
+  width: 34px;
 }
 
 .smart-vehicle-marker-low .smart-vehicle-marker-icon {
-  border-radius: 50%;
-  height: 26px;
-  width: 26px;
+  height: 34px;
+  width: 34px;
 }
 
 .smart-vehicle-marker-low .smart-vehicle-marker-content {
@@ -166,12 +183,12 @@
 
 @keyframes smartVehicleMarkerPulse {
   0% {
-    transform: translateY(-8px) scale(1);
+    filter: brightness(1);
   }
   45% {
-    transform: translateY(-11px) scale(1.045);
+    filter: brightness(1.08);
   }
   100% {
-    transform: translateY(-8px) scale(1);
+    filter: brightness(1);
   }
 }

@@ -40,6 +40,7 @@ import fetchOrThrow from '../common/util/fetchOrThrow';
 import exportExcel from '../common/util/exportExcel';
 import AddressValue from '../common/components/AddressValue';
 import { deviceEquality } from '../common/util/deviceEquality';
+import ReportMapSplit from './components/ReportMapSplit';
 
 const columnsArray = [
   ['eventTime', 'positionFixTime'],
@@ -96,11 +97,39 @@ const EventReportPage = () => {
   }, [searchParams, setSearchParams, eventTypes]);
 
   useEffect(() => {
-    if (selectedItem?.positionId) {
-      setPosition(positions[selectedItem.positionId] || null);
-    } else {
+    const positionId = selectedItem?.positionId;
+    if (!positionId) {
       setPosition(null);
+      return undefined;
     }
+
+    const cachedPosition = positions[positionId];
+    if (cachedPosition) {
+      setPosition(cachedPosition);
+      return undefined;
+    }
+
+    let active = true;
+    setPosition(null);
+    const loadSelectedPosition = async () => {
+      const query = new URLSearchParams({ id: positionId });
+      const response = await fetchOrThrow(`/api/positions?${query.toString()}`, {
+        headers: { Accept: 'application/json' },
+      });
+      const [selectedPosition] = await response.json();
+      if (active) {
+        setPosition(selectedPosition || null);
+      }
+    };
+    loadSelectedPosition().catch(() => {
+      if (active) {
+        setPosition(null);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
   }, [selectedItem, positions]);
 
   useEffectAsync(async () => {
@@ -239,107 +268,126 @@ const EventReportPage = () => {
   return (
     <PageLayout menu={<ReportsMenu />} breadcrumbs={['reportTitle', 'reportEvents']}>
       <div className={classes.container}>
-        {selectedItem && (
-          <div className={classes.containerMap}>
-            <MapView>
-              <MapGeofence />
-              {position && <MapPositions positions={[position]} titleField="fixTime" />}
-            </MapView>
-            <MapScale />
-            {position && <MapCamera latitude={position.latitude} longitude={position.longitude} />}
-          </div>
-        )}
-        <div className={classes.containerMain}>
-          <div className={classes.header}>
-            <ReportFilter
-              onShow={onShow}
-              onExport={onExport}
-              onSchedule={onSchedule}
-              deviceType="multiple"
-              loading={loading}
-            >
-              <div className={classes.filterItem}>
-                <FormControl fullWidth>
-                  <InputLabel>{t('reportEventTypes')}</InputLabel>
-                  <Select
-                    label={t('reportEventTypes')}
-                    value={eventTypes}
-                    onChange={(e, child) => {
-                      let values = e.target.value;
-                      const clicked = child.props.value;
-                      if (values.includes('allEvents') && values.length > 1) {
-                        values = [clicked];
-                      }
-                      updateReportParams(searchParams, setSearchParams, 'eventType', values);
-                    }}
-                    multiple
-                  >
-                    {allEventTypes.map(([key, string]) => (
-                      <MenuItem key={key} value={key}>
-                        {t(string)}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+        <ReportMapSplit
+          storageKey="reportEventsSplitHeight"
+          mapPanel={
+            selectedItem ? (
+              <div className={classes.containerMap}>
+                <MapView>
+                  <MapGeofence />
+                  {position && <MapPositions positions={[position]} titleField="fixTime" />}
+                </MapView>
+                <MapScale />
+                {position && (
+                  <MapCamera latitude={position.latitude} longitude={position.longitude} />
+                )}
               </div>
-              {eventTypes[0] !== 'allEvents' && eventTypes.includes('alarm') && (
-                <div className={classes.filterItem}>
-                  <SelectField
-                    multiple
-                    singleLine
-                    value={alarmTypes}
-                    onChange={(e) =>
-                      updateReportParams(searchParams, setSearchParams, 'alarmType', e.target.value)
-                    }
-                    data={alarms}
-                    keyGetter={(it) => it.key}
-                    label={t('sharedAlarms')}
-                    fullWidth
+            ) : null
+          }
+          contentPanel={
+            <div className={classes.containerMain}>
+              <div className={classes.header}>
+                <ReportFilter
+                  onShow={onShow}
+                  onExport={onExport}
+                  onSchedule={onSchedule}
+                  deviceType="multiple"
+                  loading={loading}
+                >
+                  <div className={classes.filterEvent}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>{t('reportEventTypes')}</InputLabel>
+                      <Select
+                        size="small"
+                        label={t('reportEventTypes')}
+                        value={eventTypes}
+                        onChange={(e, child) => {
+                          let values = e.target.value;
+                          const clicked = child.props.value;
+                          if (values.includes('allEvents') && values.length > 1) {
+                            values = [clicked];
+                          }
+                          updateReportParams(searchParams, setSearchParams, 'eventType', values);
+                        }}
+                        multiple
+                      >
+                        {allEventTypes.map(([key, string]) => (
+                          <MenuItem key={key} value={key}>
+                            {t(string)}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </div>
+                  {eventTypes[0] !== 'allEvents' && eventTypes.includes('alarm') && (
+                    <div className={classes.filterEvent}>
+                      <SelectField
+                        multiple
+                        singleLine
+                        value={alarmTypes}
+                        onChange={(e) =>
+                          updateReportParams(
+                            searchParams,
+                            setSearchParams,
+                            'alarmType',
+                            e.target.value,
+                          )
+                        }
+                        data={alarms}
+                        keyGetter={(it) => it.key}
+                        label={t('sharedAlarms')}
+                        fullWidth
+                      />
+                    </div>
+                  )}
+                  <ColumnSelect
+                    columns={columns}
+                    setColumns={setColumns}
+                    columnsArray={columnsArray}
                   />
-                </div>
-              )}
-              <ColumnSelect columns={columns} setColumns={setColumns} columnsArray={columnsArray} />
-            </ReportFilter>
-          </div>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell className={classes.columnAction} />
-                <TableCell>{t('sharedDevice')}</TableCell>
-                {columns.map((key) => (
-                  <TableCell key={key}>{t(columnsMap.get(key))}</TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {!loading ? (
-                items.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className={classes.columnAction} padding="none">
-                      {(item.positionId &&
-                        (selectedItem === item ? (
-                          <IconButton size="small" onClick={() => setSelectedItem(null)}>
-                            <GpsFixedIcon fontSize="small" />
-                          </IconButton>
-                        ) : (
-                          <IconButton size="small" onClick={() => setSelectedItem(item)}>
-                            <LocationSearchingIcon fontSize="small" />
-                          </IconButton>
-                        ))) ||
-                        ''}
-                    </TableCell>
-                    <TableCell>{devices[item.deviceId].name}</TableCell>
+                </ReportFilter>
+              </div>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell className={classes.columnAction} />
+                    <TableCell>{t('sharedDevice')}</TableCell>
                     {columns.map((key) => (
-                      <TableCell key={key}>{formatValue(item, key)}</TableCell>
+                      <TableCell key={key}>{t(columnsMap.get(key))}</TableCell>
                     ))}
                   </TableRow>
-                ))
-              ) : (
-                <TableShimmer columns={columns.length + 2} />
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                </TableHead>
+                <TableBody>
+                  {!loading ? (
+                    items.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className={classes.columnAction} padding="none">
+                          {(item.positionId &&
+                            (selectedItem === item ? (
+                              <IconButton size="small" onClick={() => setSelectedItem(null)}>
+                                <GpsFixedIcon fontSize="small" />
+                              </IconButton>
+                            ) : (
+                              <IconButton size="small" onClick={() => setSelectedItem(item)}>
+                                <LocationSearchingIcon fontSize="small" />
+                              </IconButton>
+                            ))) ||
+                            ''}
+                        </TableCell>
+                        <TableCell>{devices[item.deviceId].name}</TableCell>
+                        {columns.map((key) => (
+                          <TableCell key={key}>{formatValue(item, key)}</TableCell>
+                        ))}
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableShimmer columns={columns.length + 2} />
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          }
+        />
       </div>
     </PageLayout>
   );

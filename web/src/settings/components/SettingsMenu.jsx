@@ -20,6 +20,7 @@ import { useTranslation } from '../../common/components/LocalizationProvider';
 import { useAdministrator, useManager, useRestriction } from '../../common/util/permissions';
 import useFeatures from '../../common/util/useFeatures';
 import MenuItem from '../../common/components/MenuItem';
+import { COMPACT_DESKTOP_DRAWER_WIDTH } from '../../common/theme/navigation';
 
 const SettingsMenu = () => {
   const t = useTranslation();
@@ -159,5 +160,8 @@ const SettingsMenu = () => {
     </>
   );
 };
+
+SettingsMenu.desktopDrawerWidth = COMPACT_DESKTOP_DRAWER_WIDTH;
+SettingsMenu.compactDesktopMenu = true;
 
 export default SettingsMenu;

@@ -41,12 +41,20 @@ const useStyles = makeStyles()((theme, { navigationWidth, sidebarLeft, sidebarOp
     zIndex: 7,
     width: 34,
     height: 34,
-    color: theme.palette.text.primary,
-    backgroundColor: theme.palette.common.white,
-    border: `1px solid ${theme.palette.divider}`,
+    color: theme.palette.mode === 'dark' ? theme.palette.primary.main : theme.palette.text.primary,
+    backgroundColor:
+      theme.palette.mode === 'dark' ? theme.palette.background.paper : theme.palette.common.white,
+    border: `1px solid ${
+      theme.palette.mode === 'dark' ? theme.palette.primary.main : theme.palette.divider
+    }`,
     boxShadow: '0 10px 24px rgba(15, 23, 42, 0.16)',
     '&:hover': {
-      backgroundColor: theme.palette.common.white,
+      color:
+        theme.palette.mode === 'dark' ? theme.palette.primary.light : theme.palette.text.primary,
+      backgroundColor:
+        theme.palette.mode === 'dark' ? theme.palette.action.selected : theme.palette.common.white,
+      borderColor:
+        theme.palette.mode === 'dark' ? theme.palette.primary.light : theme.palette.divider,
       boxShadow: '0 12px 28px rgba(15, 23, 42, 0.22)',
     },
     [theme.breakpoints.down('md')]: {
@@ -173,7 +181,7 @@ const MainPage = () => {
     false,
   );
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
-  const [devicesOpen, setDevicesOpen] = useState(!desktop);
+  const [devicesOpen, setDevicesOpen] = useState(false);
   const [eventsOpen, setEventsOpen] = useState(false);
 
   const onEventsClick = useCallback(() => setEventsOpen(true), []);
@@ -187,12 +195,6 @@ const MainPage = () => {
       setDevicesOpen(false);
     }
   }, [desktop, mapOnSelect, selectedDeviceId]);
-
-  useEffect(() => {
-    if (!desktop && !selectedDeviceId) {
-      setDevicesOpen(true);
-    }
-  }, [desktop, selectedDeviceId]);
 
   useFilter(
     keyword,

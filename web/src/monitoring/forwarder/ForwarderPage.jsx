@@ -46,15 +46,29 @@ const ForwarderPage = () => {
   const [deleteItem, setDeleteItem] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState('success');
 
   const loadData = async (isActive = () => true) => {
-    const serversResponse = await fetchOrThrow('/api/forward/servers');
+    const timestamp = Date.now();
+    const requestOptions = { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } };
+    const serversResponse = await fetchOrThrow(
+      `/api/forward/servers?_ts=${timestamp}`,
+      requestOptions,
+    );
     const nextServers = await serversResponse.json();
     const nextAssignments = {};
     await Promise.all(
       nextServers.map(async (server) => {
-        const response = await fetchOrThrow(`/api/forward/servers/${server.id}/devices`);
-        nextAssignments[server.id] = await response.json();
+        const response = await fetchOrThrow(
+          `/api/forward/servers/${server.id}/devices?_ts=${timestamp}`,
+          requestOptions,
+        );
+        const serverAssignments = await response.json();
+        nextAssignments[server.id] = Array.from(
+          new Map(
+            serverAssignments.map((assignment) => [assignment.deviceId, assignment]),
+          ).values(),
+        );
       }),
     );
     if (isActive()) {
@@ -65,15 +79,25 @@ const ForwarderPage = () => {
 
   useEffect(() => {
     let active = true;
-    const refresh = () => {
-      loadData(() => active).catch((error) => {
+    let refreshing = false;
+    const refresh = async () => {
+      if (refreshing) {
+        return;
+      }
+      refreshing = true;
+      try {
+        await loadData(() => active);
+      } catch {
         if (active) {
-          setSnackbarMessage(error.message || 'No se pudieron cargar los destinos');
+          setSnackbarSeverity('error');
+          setSnackbarMessage('No se pudo actualizar');
         }
-      });
+      } finally {
+        refreshing = false;
+      }
     };
     refresh();
-    const interval = setInterval(refresh, 30000);
+    const interval = setInterval(refresh, 15000);
     return () => {
       active = false;
       clearInterval(interval);
@@ -105,6 +129,7 @@ const ForwarderPage = () => {
     try {
       await fetchOrThrow(`/api/forward/servers/${deleteItem.id}`, { method: 'DELETE' });
       await loadData();
+      setSnackbarSeverity('success');
       setSnackbarMessage(`Destino "${deleteItem.name}" eliminado correctamente`);
       setDeleteItem(null);
     } finally {
@@ -129,6 +154,7 @@ const ForwarderPage = () => {
         : [...previous, savedServer],
     );
     await loadData();
+    setSnackbarSeverity('success');
     setSnackbarMessage(
       isUpdate
         ? `Destino "${savedServer.name}" actualizado correctamente`
@@ -330,6 +356,18 @@ const ForwarderPage = () => {
                             const lastSentLabel = assignment.lastSent
                               ? formatTime(assignment.lastSent, 'seconds')
                               : null;
+                            const lastSentTime = assignment.lastSent
+                              ? new Date(assignment.lastSent).getTime()
+                              : null;
+                            const isReceiving =
+                              lastSentTime !== null &&
+                              Number.isFinite(lastSentTime) &&
+                              Date.now() - lastSentTime <= 5 * 60 * 1000;
+                            const forwardingStatus = !assignment.lastSent
+                              ? { label: 'Sin envío', color: 'default' }
+                              : isReceiving
+                                ? { label: 'Recibiendo', color: 'success' }
+                                : { label: 'Sin señal', color: 'warning' };
                             return (
                               <Paper
                                 key={device.id}
@@ -367,8 +405,8 @@ const ForwarderPage = () => {
                                   >
                                     <Chip
                                       size="small"
-                                      color={position ? 'success' : 'default'}
-                                      label={position ? 'Recibiendo' : 'Sin posicion'}
+                                      color={forwardingStatus.color}
+                                      label={forwardingStatus.label}
                                     />
                                     <Chip
                                       size="small"
@@ -425,7 +463,7 @@ const ForwarderPage = () => {
         onClose={() => setSnackbarMessage('')}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
-        <Alert severity="success" variant="filled" onClose={() => setSnackbarMessage('')}>
+        <Alert severity={snackbarSeverity} variant="filled" onClose={() => setSnackbarMessage('')}>
           {snackbarMessage}
         </Alert>
       </Snackbar>

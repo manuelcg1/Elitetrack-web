@@ -17,56 +17,79 @@ import MenuIcon from '@mui/icons-material/Menu';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from './LocalizationProvider';
 import BackIcon from './BackIcon';
+import { COMPACT_MENU_HORIZONTAL_PADDING, COMPACT_MENU_ICON_MIN_WIDTH } from '../theme/navigation';
 
-const useStyles = makeStyles()((theme, { miniVariant }) => ({
-  root: {
-    height: '100%',
-    display: 'flex',
-    backgroundColor: theme.palette.background.default,
-    [theme.breakpoints.down('md')]: {
-      flexDirection: 'column',
-    },
-  },
-  desktopDrawer: {
-    width: miniVariant ? theme.spacing(7) : theme.dimensions.drawerWidthDesktop,
-    overflowX: 'hidden',
-    transition: theme.transitions.create('width', {
-      easing: theme.transitions.easing.sharp,
-      duration: theme.transitions.duration.enteringScreen,
-    }),
-    ...(miniVariant && {
-      '& .MuiListItemButton-root': {
-        minHeight: 48,
+const useStyles = makeStyles()(
+  (theme, { miniVariant, desktopDrawerWidth, compactDesktopMenu }) => ({
+    root: {
+      height: '100%',
+      display: 'flex',
+      backgroundColor: theme.palette.background.default,
+      [theme.breakpoints.down('md')]: {
+        flexDirection: 'column',
       },
-      '& .MuiListItemText-root': {
+    },
+    desktopDrawer: {
+      flexBasis: miniVariant ? theme.spacing(7) : desktopDrawerWidth,
+      flexShrink: 0,
+      width: miniVariant ? theme.spacing(7) : desktopDrawerWidth,
+      overflowX: 'hidden',
+      transition: theme.transitions.create(['width', 'flex-basis'], {
+        easing: theme.transitions.easing.sharp,
+        duration: theme.transitions.duration.enteringScreen,
+      }),
+      ...(compactDesktopMenu &&
+        !miniVariant && {
+          '& .MuiListItemButton-root': {
+            paddingLeft: COMPACT_MENU_HORIZONTAL_PADDING,
+            paddingRight: COMPACT_MENU_HORIZONTAL_PADDING,
+          },
+          '& .MuiListItemIcon-root': {
+            minWidth: COMPACT_MENU_ICON_MIN_WIDTH,
+          },
+        }),
+      ...(miniVariant && {
+        '& .MuiListItemText-root': {
+          display: 'none',
+        },
+        '& .MuiListItemButton-root': {
+          justifyContent: 'center',
+          minHeight: 48,
+          paddingLeft: theme.spacing(1),
+          paddingRight: theme.spacing(1),
+        },
+        '& .MuiListItemIcon-root': {
+          minWidth: 0,
+        },
+      }),
+      '@media print': {
         display: 'none',
       },
-    }),
-    '@media print': {
-      display: 'none',
     },
-  },
-  mobileDrawer: {
-    width: theme.dimensions.drawerWidthTablet,
-    '@media print': {
-      display: 'none',
+    mobileDrawer: {
+      width: theme.dimensions.drawerWidthTablet,
+      '@media print': {
+        display: 'none',
+      },
     },
-  },
-  mobileToolbar: {
-    zIndex: 1,
-    '@media print': {
-      display: 'none',
+    mobileToolbar: {
+      zIndex: 1,
+      '@media print': {
+        display: 'none',
+      },
     },
-  },
-  content: {
-    flexGrow: 1,
-    alignItems: 'stretch',
-    display: 'flex',
-    flexDirection: 'column',
-    overflowY: 'auto',
-    backgroundColor: theme.palette.background.default,
-  },
-}));
+    content: {
+      flex: '1 1 auto',
+      flexGrow: 1,
+      minWidth: 0,
+      alignItems: 'stretch',
+      display: 'flex',
+      flexDirection: 'column',
+      overflowY: 'auto',
+      backgroundColor: theme.palette.background.default,
+    },
+  }),
+);
 
 const PageTitle = ({ breadcrumbs }) => {
   const theme = useTheme();
@@ -97,8 +120,10 @@ const PageTitle = ({ breadcrumbs }) => {
 
 const PageLayout = ({ menu, breadcrumbs, children }) => {
   const [miniVariant, setMiniVariant] = useState(false);
-  const { classes } = useStyles({ miniVariant });
   const theme = useTheme();
+  const desktopDrawerWidth = menu?.type?.desktopDrawerWidth || theme.dimensions.drawerWidthDesktop;
+  const compactDesktopMenu = menu?.type?.compactDesktopMenu || false;
+  const { classes } = useStyles({ miniVariant, desktopDrawerWidth, compactDesktopMenu });
   const navigate = useNavigate();
 
   const desktop = useMediaQuery(theme.breakpoints.up('md'));

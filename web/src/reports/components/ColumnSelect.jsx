@@ -7,10 +7,11 @@ const ColumnSelect = ({ columns, setColumns, columnsArray, rawValues, disabled }
   const t = useTranslation();
 
   return (
-    <div className={classes.filterItem}>
-      <FormControl fullWidth>
+    <div className={classes.filterColumns}>
+      <FormControl fullWidth size="small">
         <InputLabel>{t('sharedColumns')}</InputLabel>
         <Select
+          size="small"
           label={t('sharedColumns')}
           value={columns}
           onChange={(e) => setColumns(e.target.value)}

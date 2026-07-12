@@ -17,6 +17,10 @@ import fetchOrThrow from '../common/util/fetchOrThrow';
 import SelectField from '../common/components/SelectField';
 import exportExcel from '../common/util/exportExcel';
 import { deviceEquality } from '../common/util/deviceEquality';
+import MapView from '../map/core/MapView';
+import MapGeofence from '../map/MapGeofence';
+import MapScale from '../map/MapScale';
+import ReportMapSplit from './components/ReportMapSplit';
 
 const columnsArray = [
   ['geofenceId', 'sharedGeofence'],
@@ -94,50 +98,83 @@ const GeofenceReportPage = () => {
 
   return (
     <PageLayout menu={<ReportsMenu />} breadcrumbs={['reportTitle', 'sharedGeofences']}>
-      <div className={classes.header}>
-        <ReportFilter onShow={onShow} onExport={onExport} deviceType="multiple" loading={loading}>
-          <div className={classes.filterItem}>
-            <SelectField
-              label={t('sharedGeofences')}
-              value={geofenceIds}
-              onChange={(e) =>
-                updateReportParams(searchParams, setSearchParams, 'geofenceId', e.target.value)
-              }
-              endpoint="/api/geofences"
-              multiple
-              singleLine
-              fullWidth
-            />
-          </div>
-          <ColumnSelect columns={columns} setColumns={setColumns} columnsArray={columnsArray} />
-        </ReportFilter>
+      <div className={classes.container}>
+        <ReportMapSplit
+          storageKey="reportGeofencesSplitHeight"
+          mapPanel={
+            items.length ? (
+              <div className={classes.containerMap}>
+                <MapView>
+                  <MapGeofence />
+                </MapView>
+                <MapScale />
+              </div>
+            ) : null
+          }
+          contentPanel={
+            <div className={classes.containerMain}>
+              <div className={classes.header}>
+                <ReportFilter
+                  onShow={onShow}
+                  onExport={onExport}
+                  deviceType="multiple"
+                  loading={loading}
+                >
+                  <div className={classes.filterGeofence}>
+                    <SelectField
+                      label={t('sharedGeofences')}
+                      value={geofenceIds}
+                      onChange={(e) =>
+                        updateReportParams(
+                          searchParams,
+                          setSearchParams,
+                          'geofenceId',
+                          e.target.value,
+                        )
+                      }
+                      endpoint="/api/geofences"
+                      multiple
+                      singleLine
+                      fullWidth
+                    />
+                  </div>
+                  <ColumnSelect
+                    columns={columns}
+                    setColumns={setColumns}
+                    columnsArray={columnsArray}
+                  />
+                </ReportFilter>
+              </div>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{t('sharedDevice')}</TableCell>
+                    {columns.map((key) => (
+                      <TableCell key={key}>{t(columnsMap.get(key))}</TableCell>
+                    ))}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {!loading ? (
+                    items.map((item) => (
+                      <TableRow
+                        key={`${item.deviceId}_${item.geofenceId}_${item.startTime}_${item.endTime}`}
+                      >
+                        <TableCell>{devices[item.deviceId]?.name || item.deviceId}</TableCell>
+                        {columns.map((key) => (
+                          <TableCell key={key}>{formatValue(item, key)}</TableCell>
+                        ))}
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableShimmer columns={columns.length + 1} />
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          }
+        />
       </div>
-      <Table>
-        <TableHead>
-          <TableRow>
-            <TableCell>{t('sharedDevice')}</TableCell>
-            {columns.map((key) => (
-              <TableCell key={key}>{t(columnsMap.get(key))}</TableCell>
-            ))}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {!loading ? (
-            items.map((item) => (
-              <TableRow
-                key={`${item.deviceId}_${item.geofenceId}_${item.startTime}_${item.endTime}`}
-              >
-                <TableCell>{devices[item.deviceId]?.name || item.deviceId}</TableCell>
-                {columns.map((key) => (
-                  <TableCell key={key}>{formatValue(item, key)}</TableCell>
-                ))}
-              </TableRow>
-            ))
-          ) : (
-            <TableShimmer columns={columns.length + 1} />
-          )}
-        </TableBody>
-      </Table>
     </PageLayout>
   );
 };

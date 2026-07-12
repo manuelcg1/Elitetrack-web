@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Autocomplete, TextField, Chip } from '@mui/material';
+import { Autocomplete, TextField, Chip, Tooltip } from '@mui/material';
 import { makeStyles } from 'tss-react/mui';
 import { useEffectAsync } from '../../reactHelper';
 import fetchOrThrow from '../util/fetchOrThrow';
@@ -95,17 +95,28 @@ const SelectField = ({
                 if (!tagValue.length) {
                   return null;
                 }
+                const visibleTags = tagValue.slice(0, 2);
+                const remainingTags = tagValue.slice(2);
                 return (
                   <>
-                    <Chip
-                      key={keyGetter(tagValue[0])}
-                      {...getItemProps({ index: 0 })}
-                      label={titleGetter(tagValue[0])}
-                      size="small"
-                      sx={{ minWidth: 0 }}
-                    />
-                    {tagValue.length > 1 && (
-                      <Chip label={`${tagValue.length - 1}`} size="small" sx={{ flexShrink: 0 }} />
+                    {visibleTags.map((item, index) => (
+                      <Tooltip key={keyGetter(item)} title={titleGetter(item)}>
+                        <Chip
+                          {...getItemProps({ index })}
+                          label={titleGetter(item)}
+                          size="small"
+                          sx={{ minWidth: 0 }}
+                        />
+                      </Tooltip>
+                    ))}
+                    {remainingTags.length > 0 && (
+                      <Tooltip title={remainingTags.map(titleGetter).join(', ')}>
+                        <Chip
+                          label={`+${remainingTags.length}`}
+                          size="small"
+                          sx={{ flexShrink: 0 }}
+                        />
+                      </Tooltip>
                     )}
                   </>
                 );

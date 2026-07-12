@@ -18,6 +18,7 @@ import MapRouteCoordinates from '../map/MapRouteCoordinates';
 import MapScale from '../map/MapScale';
 import fetchOrThrow from '../common/util/fetchOrThrow';
 import { deviceEquality } from '../common/util/deviceEquality';
+import ReportMapSplit from './components/ReportMapSplit';
 
 const CombinedReportPage = () => {
   const { classes } = useReportStyles();
@@ -57,53 +58,60 @@ const CombinedReportPage = () => {
   return (
     <PageLayout menu={<ReportsMenu />} breadcrumbs={['reportTitle', 'reportCombined']}>
       <div className={classes.container}>
-        {Boolean(items.length) && (
-          <div className={classes.containerMap}>
-            <MapView>
-              <MapGeofence />
-              {items.map((item) => (
-                <MapRouteCoordinates
-                  key={item.deviceId}
-                  name={devices[item.deviceId].name}
-                  coordinates={item.route}
-                  deviceId={item.deviceId}
-                />
-              ))}
-              <MapMarkers markers={createMarkers()} />
-            </MapView>
-            <MapScale />
-            <MapCamera coordinates={itemsCoordinates} />
-          </div>
-        )}
-        <div className={classes.containerMain}>
-          <div className={classes.header}>
-            <ReportFilter onShow={onShow} deviceType="multiple" loading={loading} />
-          </div>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>{t('sharedDevice')}</TableCell>
-                <TableCell>{t('positionFixTime')}</TableCell>
-                <TableCell>{t('sharedType')}</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {!loading ? (
-                items.flatMap((item) =>
-                  item.events.map((event, index) => (
-                    <TableRow key={event.id}>
-                      <TableCell>{index ? '' : devices[item.deviceId].name}</TableCell>
-                      <TableCell>{formatTime(event.eventTime, 'seconds')}</TableCell>
-                      <TableCell>{t(prefixString('event', event.type))}</TableCell>
-                    </TableRow>
-                  )),
-                )
-              ) : (
-                <TableShimmer columns={3} />
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        <ReportMapSplit
+          storageKey="reportCombinedSplitHeight"
+          mapPanel={
+            items.length ? (
+              <div className={classes.containerMap}>
+                <MapView>
+                  <MapGeofence />
+                  {items.map((item) => (
+                    <MapRouteCoordinates
+                      key={item.deviceId}
+                      name={devices[item.deviceId].name}
+                      coordinates={item.route}
+                      deviceId={item.deviceId}
+                    />
+                  ))}
+                  <MapMarkers markers={createMarkers()} />
+                </MapView>
+                <MapScale />
+                <MapCamera coordinates={itemsCoordinates} />
+              </div>
+            ) : null
+          }
+          contentPanel={
+            <div className={classes.containerMain}>
+              <div className={classes.header}>
+                <ReportFilter onShow={onShow} deviceType="multiple" loading={loading} />
+              </div>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{t('sharedDevice')}</TableCell>
+                    <TableCell>{t('positionFixTime')}</TableCell>
+                    <TableCell>{t('sharedType')}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {!loading ? (
+                    items.flatMap((item) =>
+                      item.events.map((event, index) => (
+                        <TableRow key={event.id}>
+                          <TableCell>{index ? '' : devices[item.deviceId].name}</TableCell>
+                          <TableCell>{formatTime(event.eventTime, 'seconds')}</TableCell>
+                          <TableCell>{t(prefixString('event', event.type))}</TableCell>
+                        </TableRow>
+                      )),
+                    )
+                  ) : (
+                    <TableShimmer columns={3} />
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          }
+        />
       </div>
     </PageLayout>
   );

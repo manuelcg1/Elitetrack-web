@@ -113,7 +113,19 @@ const MapView = ({ children }) => {
     const currentEl = containerRef.current;
     currentEl.appendChild(element);
     map.resize();
+
+    let resizeTimer;
+    const resizeObserver = new ResizeObserver(() => {
+      clearTimeout(resizeTimer);
+      // Evita redibujar el canvas en cada frame mientras se arrastra un divisor.
+      // Los consumidores interactivos ejecutan map.resize() al finalizar el gesto.
+      resizeTimer = setTimeout(() => map.resize(), 120);
+    });
+    resizeObserver.observe(currentEl);
+
     return () => {
+      resizeObserver.disconnect();
+      clearTimeout(resizeTimer);
       currentEl.removeChild(element);
     };
   }, []);

@@ -35,6 +35,7 @@ import MapScale from '../map/MapScale';
 import fetchOrThrow from '../common/util/fetchOrThrow';
 import exportExcel from '../common/util/exportExcel';
 import { deviceEquality } from '../common/util/deviceEquality';
+import ReportMapSplit from './components/ReportMapSplit';
 
 const columnsArray = [
   ['startTime', 'reportStartTime'],
@@ -213,75 +214,86 @@ const TripReportPage = () => {
   return (
     <PageLayout menu={<ReportsMenu />} breadcrumbs={['reportTitle', 'reportTrips']}>
       <div className={classes.container}>
-        {selectedItem && (
-          <div className={classes.containerMap}>
-            <MapView>
-              <MapGeofence />
-              {route && (
-                <>
-                  <MapRoutePath positions={route} />
-                  <MapMarkers markers={createMarkers()} />
-                  <MapCamera positions={route} />
-                </>
-              )}
-            </MapView>
-            <MapScale />
-          </div>
-        )}
-        <div className={classes.containerMain}>
-          <div className={classes.header}>
-            <ReportFilter
-              onShow={onShow}
-              onExport={onExport}
-              onSchedule={onSchedule}
-              deviceType="multiple"
-              loading={loading}
-            >
-              <ColumnSelect columns={columns} setColumns={setColumns} columnsArray={columnsArray} />
-            </ReportFilter>
-          </div>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell className={classes.columnAction} />
-                <TableCell>{t('sharedDevice')}</TableCell>
-                {columns.map((key) => (
-                  <TableCell key={key}>{t(columnsMap.get(key))}</TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {!loading ? (
-                items.map((item) => (
-                  <TableRow key={item.startPositionId}>
-                    <TableCell className={classes.columnAction} padding="none">
-                      <div className={classes.columnActionContainer}>
-                        {selectedItem === item ? (
-                          <IconButton size="small" onClick={() => setSelectedItem(null)}>
-                            <GpsFixedIcon fontSize="small" />
-                          </IconButton>
-                        ) : (
-                          <IconButton size="small" onClick={() => setSelectedItem(item)}>
-                            <LocationSearchingIcon fontSize="small" />
-                          </IconButton>
-                        )}
-                        <IconButton size="small" onClick={() => navigateToReplay(item)}>
-                          <RouteIcon fontSize="small" />
-                        </IconButton>
-                      </div>
-                    </TableCell>
-                    <TableCell>{devices[item.deviceId].name}</TableCell>
+        <ReportMapSplit
+          storageKey="reportTripsSplitHeight"
+          mapPanel={
+            selectedItem ? (
+              <div className={classes.containerMap}>
+                <MapView>
+                  <MapGeofence />
+                  {route && (
+                    <>
+                      <MapRoutePath positions={route} />
+                      <MapMarkers markers={createMarkers()} />
+                      <MapCamera positions={route} />
+                    </>
+                  )}
+                </MapView>
+                <MapScale />
+              </div>
+            ) : null
+          }
+          contentPanel={
+            <div className={classes.containerMain}>
+              <div className={classes.header}>
+                <ReportFilter
+                  onShow={onShow}
+                  onExport={onExport}
+                  onSchedule={onSchedule}
+                  deviceType="multiple"
+                  loading={loading}
+                >
+                  <ColumnSelect
+                    columns={columns}
+                    setColumns={setColumns}
+                    columnsArray={columnsArray}
+                  />
+                </ReportFilter>
+              </div>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell className={classes.columnAction} />
+                    <TableCell>{t('sharedDevice')}</TableCell>
                     {columns.map((key) => (
-                      <TableCell key={key}>{formatValue(item, key)}</TableCell>
+                      <TableCell key={key}>{t(columnsMap.get(key))}</TableCell>
                     ))}
                   </TableRow>
-                ))
-              ) : (
-                <TableShimmer columns={columns.length + 2} startAction />
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                </TableHead>
+                <TableBody>
+                  {!loading ? (
+                    items.map((item) => (
+                      <TableRow key={item.startPositionId}>
+                        <TableCell className={classes.columnAction} padding="none">
+                          <div className={classes.columnActionContainer}>
+                            {selectedItem === item ? (
+                              <IconButton size="small" onClick={() => setSelectedItem(null)}>
+                                <GpsFixedIcon fontSize="small" />
+                              </IconButton>
+                            ) : (
+                              <IconButton size="small" onClick={() => setSelectedItem(item)}>
+                                <LocationSearchingIcon fontSize="small" />
+                              </IconButton>
+                            )}
+                            <IconButton size="small" onClick={() => navigateToReplay(item)}>
+                              <RouteIcon fontSize="small" />
+                            </IconButton>
+                          </div>
+                        </TableCell>
+                        <TableCell>{devices[item.deviceId].name}</TableCell>
+                        {columns.map((key) => (
+                          <TableCell key={key}>{formatValue(item, key)}</TableCell>
+                        ))}
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableShimmer columns={columns.length + 2} startAction />
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          }
+        />
       </div>
     </PageLayout>
   );

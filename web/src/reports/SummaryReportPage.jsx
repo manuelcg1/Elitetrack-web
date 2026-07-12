@@ -150,9 +150,10 @@ const SummaryReportPage = () => {
           loading={loading}
         >
           <div className={classes.filterItem}>
-            <FormControl fullWidth>
+            <FormControl fullWidth size="small">
               <InputLabel>{t('sharedType')}</InputLabel>
               <Select
+                size="small"
                 label={t('sharedType')}
                 value={daily}
                 onChange={(e) =>

@@ -13,11 +13,20 @@ import {
   getSmartMarkerDetail,
   updateSmartVehicleMarkerElement,
 } from './SmartVehicleMarker';
+import { getVehicleStatus } from './utils/vehicleStatus';
 import './SmartVehicleMarker.css';
+
+const DEBUG_MARKER_ANCHOR = false;
 
 const isValidCoordinate = (value, min, max) => {
   const coordinate = Number(value);
-  return value !== null && value !== '' && Number.isFinite(coordinate) && coordinate >= min && coordinate <= max;
+  return (
+    value !== null &&
+    value !== '' &&
+    Number.isFinite(coordinate) &&
+    coordinate >= min &&
+    coordinate <= max
+  );
 };
 
 const isValidLatitude = (value) => isValidCoordinate(value, -90, 90);
@@ -26,6 +35,16 @@ const isValidLongitude = (value) => isValidCoordinate(value, -180, 180);
 
 const isValidPosition = (position) =>
   !!position && isValidLatitude(position.latitude) && isValidLongitude(position.longitude);
+
+const warnInvalidPosition = (position) => {
+  if (import.meta.env.DEV) {
+    console.warn('Posición GPS inválida; se omitió el marcador.', {
+      deviceId: position?.deviceId,
+      longitude: position?.longitude,
+      latitude: position?.latitude,
+    });
+  }
+};
 
 const getMarkerLngLat = (item) => {
   if (!item) {
@@ -46,10 +65,10 @@ const getMarkerLngLat = (item) => {
 
   const coordinates = item.geometry?.coordinates || item.coordinates;
   if (
-    Array.isArray(coordinates)
-    && coordinates.length >= 2
-    && isValidLongitude(coordinates[0])
-    && isValidLatitude(coordinates[1])
+    Array.isArray(coordinates) &&
+    coordinates.length >= 2 &&
+    isValidLongitude(coordinates[0]) &&
+    isValidLatitude(coordinates[1])
   ) {
     return [Number(coordinates[0]), Number(coordinates[1])];
   }
@@ -57,17 +76,12 @@ const getMarkerLngLat = (item) => {
   return null;
 };
 
-const MapPositions = ({
-  positions,
-  onMapClick,
-  onMarkerClick,
-  selectedPosition,
-}) => {
+const MapPositions = ({ positions, onMapClick, onMarkerClick, selectedPosition }) => {
   const id = useId();
   const clusters = `${id}-clusters`;
   const selected = `${id}-selected`;
-  const smartMarkers = useRef(new Map());
-  const markerData = useRef(new Map());
+  const smartMarkersRef = useRef(new Map());
+  const markerDataRef = useRef(new Map());
 
   const theme = useTheme();
   const desktop = useMediaQuery(theme.breakpoints.up('md'));
@@ -78,30 +92,40 @@ const MapPositions = ({
 
   const mapCluster = useAttributePreference('mapCluster', true);
   const directionType = useAttributePreference('mapDirection', 'selected');
+  const selectedDeviceIdRef = useRef(selectedDeviceId);
+  const mapClusterRef = useRef(mapCluster);
+  const onMarkerClickRef = useRef(onMarkerClick);
 
-  const createFeature = (devices, position, selectedPositionId) => {
-    const device = devices[position.deviceId];
-    let showDirection;
-    switch (directionType) {
-      case 'none':
-        showDirection = false;
-        break;
-      case 'all':
-        showDirection = position.course > 0;
-        break;
-      default:
-        showDirection = selectedPositionId === position.id && position.course > 0;
-        break;
-    }
-    return {
-      id: position.id,
-      deviceId: position.deviceId,
-      name: device?.name,
-      category: mapIconKey(device?.category),
-      rotation: position.course,
-      direction: showDirection,
-    };
-  };
+  selectedDeviceIdRef.current = selectedDeviceId;
+  mapClusterRef.current = mapCluster;
+  onMarkerClickRef.current = onMarkerClick;
+
+  const createFeature = useCallback(
+    (deviceItems, position, selectedPositionId) => {
+      const device = deviceItems[position.deviceId];
+      let showDirection;
+      switch (directionType) {
+        case 'none':
+          showDirection = false;
+          break;
+        case 'all':
+          showDirection = position.course > 0;
+          break;
+        default:
+          showDirection = selectedPositionId === position.id && position.course > 0;
+          break;
+      }
+      return {
+        id: position.id,
+        deviceId: position.deviceId,
+        name: device?.name,
+        category: mapIconKey(device?.category),
+        rotation: position.course,
+        direction: showDirection,
+      };
+    },
+    [directionType],
+  );
 
   const onMouseEnter = () => (map.getCanvas().style.cursor = 'pointer');
   const onMouseLeave = () => (map.getCanvas().style.cursor = '');
@@ -138,17 +162,24 @@ const MapPositions = ({
   );
 
   const removeSmartMarkers = useCallback(() => {
-    smartMarkers.current.forEach(({ marker }) => marker.remove());
-    smartMarkers.current.clear();
+    smartMarkersRef.current.forEach(({ marker, debugMarker }) => {
+      marker.remove();
+      debugMarker?.remove();
+    });
+    smartMarkersRef.current.clear();
   }, []);
 
   const updateSmartMarkers = useCallback(() => {
     const source = map.getSource(id);
-    if (!source) {
+    // Conservar la ultima visibilidad mientras MapLibre reconstruye la fuente.
+    // Consultarla durante ese intervalo produce resultados parciales y parpadeos.
+    if (!source || !map.isSourceLoaded(id)) {
       return;
     }
 
     const detail = getSmartMarkerDetail(map.getZoom());
+    const currentSelectedDeviceId = selectedDeviceIdRef.current;
+    const currentMapCluster = mapClusterRef.current;
     const wanted = new Set();
     const bounds = map.getBounds();
     const isVisible = (item) => {
@@ -157,80 +188,109 @@ const MapPositions = ({
     };
 
     try {
-      map.querySourceFeatures(id)
+      map
+        .querySourceFeatures(id)
         .filter((feature) => !feature.properties?.point_count)
         .forEach((feature) => {
           const featureLngLat = getMarkerLngLat(feature);
           const deviceId = Number(feature.properties?.deviceId);
-          const data = markerData.current.get(deviceId);
+          const data = markerDataRef.current.get(deviceId);
           if (featureLngLat && data && isVisible(data.position)) {
             wanted.add(deviceId);
           }
         });
     } catch {
-      markerData.current.forEach((_, deviceId) => {
-        const data = markerData.current.get(deviceId);
-        if (data && isVisible(data.position) && (!mapCluster || deviceId !== selectedDeviceId)) {
+      markerDataRef.current.forEach((_, deviceId) => {
+        const data = markerDataRef.current.get(deviceId);
+        if (
+          data &&
+          isVisible(data.position) &&
+          (!currentMapCluster || deviceId !== currentSelectedDeviceId)
+        ) {
           wanted.add(deviceId);
         }
       });
     }
-    if (!wanted.size && (!mapCluster || map.getZoom() >= 14)) {
-      markerData.current.forEach((data, deviceId) => {
-        if (isVisible(data.position) && deviceId !== selectedDeviceId) {
+    if (!wanted.size && (!currentMapCluster || map.getZoom() >= 14)) {
+      markerDataRef.current.forEach((data, deviceId) => {
+        if (isVisible(data.position) && deviceId !== currentSelectedDeviceId) {
           wanted.add(deviceId);
         }
       });
     }
 
-    if (selectedDeviceId && markerData.current.has(selectedDeviceId)) {
-      const data = markerData.current.get(selectedDeviceId);
+    if (currentSelectedDeviceId && markerDataRef.current.has(currentSelectedDeviceId)) {
+      const data = markerDataRef.current.get(currentSelectedDeviceId);
       if (data && isValidPosition(data.position)) {
-        wanted.add(selectedDeviceId);
+        wanted.add(currentSelectedDeviceId);
       }
     }
 
-    smartMarkers.current.forEach(({ marker }, deviceId) => {
-      if (!wanted.has(deviceId)) {
-        marker.remove();
-        smartMarkers.current.delete(deviceId);
+    smartMarkersRef.current.forEach(({ element, debugMarker }, deviceId) => {
+      const data = markerDataRef.current.get(deviceId);
+      // Los elementos fuera del viewport permanecen montados y conservan su
+      // visibilidad. El contenedor de MapLibre los recorta de forma natural.
+      // Solo reconciliamos clustering para puntos actualmente visibles.
+      if (!data || !isVisible(data.position)) {
+        return;
       }
+      const visible = wanted.has(deviceId);
+      element.style.display = visible ? '' : 'none';
+      debugMarker?.getElement().style.setProperty('display', visible ? '' : 'none');
     });
 
     wanted.forEach((deviceId) => {
-      const data = markerData.current.get(deviceId);
+      const data = markerDataRef.current.get(deviceId);
       const lngLat = getMarkerLngLat(data);
       if (!data || !lngLat) {
         return;
       }
-      let entry = smartMarkers.current.get(deviceId);
+      let entry = smartMarkersRef.current.get(deviceId);
       if (!entry) {
         const element = createSmartVehicleMarkerElement();
         element.addEventListener('click', (event) => {
           event.stopPropagation();
-          if (onMarkerClick) {
-            onMarkerClick(Number(element.dataset.positionId), deviceId);
+          if (onMarkerClickRef.current) {
+            onMarkerClickRef.current(Number(element.dataset.positionId), deviceId);
           }
         });
         entry = {
           element,
+          longitude: lngLat[0],
+          latitude: lngLat[1],
           marker: new maplibregl.Marker({
             element,
             anchor: 'bottom',
-            offset: [0, -8],
-          }).addTo(map),
+            offset: [0, 0],
+          })
+            .setLngLat(lngLat)
+            .addTo(map),
+          debugMarker:
+            DEBUG_MARKER_ANCHOR && import.meta.env.DEV
+              ? new maplibregl.Marker({ color: '#0066ff', scale: 0.25 })
+                  .setLngLat(lngLat)
+                  .addTo(map)
+              : null,
         };
-        smartMarkers.current.set(deviceId, entry);
+        smartMarkersRef.current.set(deviceId, entry);
       }
-      entry.marker.setLngLat(lngLat);
+      entry.element.style.display = '';
+      entry.debugMarker?.getElement().style.setProperty('display', '');
+      if (entry.longitude !== lngLat[0] || entry.latitude !== lngLat[1]) {
+        entry.marker.setLngLat(lngLat);
+        entry.debugMarker?.setLngLat(lngLat);
+        entry.longitude = lngLat[0];
+        entry.latitude = lngLat[1];
+      }
       updateSmartVehicleMarkerElement(entry.element, {
         device: data.device,
         position: data.position,
+        status: data.status,
         detail,
-        selected: deviceId === selectedDeviceId,
+        selected: deviceId === currentSelectedDeviceId,
       });
     });
-  }, [id, mapCluster, onMarkerClick, selectedDeviceId]);
+  }, [id]);
 
   useEffect(() => {
     map.addSource(id, {
@@ -285,7 +345,7 @@ const MapPositions = ({
     map.on('click', onMapClickCallback);
     map.on('moveend', updateSmartMarkers);
     map.on('zoomend', updateSmartMarkers);
-    map.on('sourcedata', updateSmartMarkers);
+    map.on('idle', updateSmartMarkers);
 
     return () => {
       map.off('mouseenter', clusters, onMouseEnter);
@@ -294,7 +354,7 @@ const MapPositions = ({
       map.off('click', onMapClickCallback);
       map.off('moveend', updateSmartMarkers);
       map.off('zoomend', updateSmartMarkers);
-      map.off('sourcedata', updateSmartMarkers);
+      map.off('idle', updateSmartMarkers);
       removeSmartMarkers();
 
       if (map.getLayer(clusters)) {
@@ -313,33 +373,53 @@ const MapPositions = ({
   }, [
     mapCluster,
     clusters,
+    iconScale,
+    id,
     onClusterClick,
     onMapClickCallback,
     removeSmartMarkers,
+    selected,
     updateSmartMarkers,
   ]);
 
   useEffect(() => {
-    const validPositions = (positions || [])
-      .filter((it) => devices.hasOwnProperty(it.deviceId))
-      .filter(isValidPosition);
+    const validPositions = (positions || []).filter((position) => {
+      if (!devices.hasOwnProperty(position.deviceId)) {
+        return false;
+      }
+      if (!isValidPosition(position)) {
+        warnInvalidPosition(position);
+        return false;
+      }
+      return true;
+    });
 
-    markerData.current = new Map(
+    markerDataRef.current = new Map(
       validPositions.map((position) => {
         const normalizedPosition = {
           ...position,
           latitude: Number(position.latitude),
           longitude: Number(position.longitude),
+          deviceStatus: devices[position.deviceId]?.status,
         };
         return [
           normalizedPosition.deviceId,
           {
             position: normalizedPosition,
             device: devices[normalizedPosition.deviceId],
+            status: getVehicleStatus(normalizedPosition),
           },
         ];
       }),
     );
+
+    smartMarkersRef.current.forEach(({ marker, debugMarker }, deviceId) => {
+      if (!markerDataRef.current.has(deviceId)) {
+        marker.remove();
+        debugMarker?.remove();
+        smartMarkersRef.current.delete(deviceId);
+      }
+    });
 
     [id, selected].forEach((source) => {
       map.getSource(source)?.setData({
@@ -360,6 +440,7 @@ const MapPositions = ({
     });
     window.requestAnimationFrame(updateSmartMarkers);
   }, [
+    createFeature,
     devices,
     id,
     positions,

@@ -16,6 +16,7 @@ import { useLocation } from 'react-router-dom';
 import { useTranslation } from '../../common/components/LocalizationProvider';
 import { useAdministrator, useRestriction } from '../../common/util/permissions';
 import MenuItem from '../../common/components/MenuItem';
+import { COMPACT_DESKTOP_DRAWER_WIDTH } from '../../common/theme/navigation';
 
 const ReportsMenu = () => {
   const t = useTranslation();
@@ -134,5 +135,8 @@ const ReportsMenu = () => {
     </>
   );
 };
+
+ReportsMenu.desktopDrawerWidth = COMPACT_DESKTOP_DRAWER_WIDTH;
+ReportsMenu.compactDesktopMenu = true;
 
 export default ReportsMenu;

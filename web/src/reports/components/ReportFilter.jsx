@@ -53,10 +53,10 @@ const ReportFilter = ({ children, onShow, onExport, onSchedule, deviceType, load
   const from = searchParams.get('from');
   const to = searchParams.get('to');
   const [period, setPeriod] = useState('today');
-  const [customFrom, setCustomFrom] = useState(
+  const [customFrom, setCustomFrom] = useState(() =>
     dayjs().subtract(1, 'hour').locale('en').format('YYYY-MM-DDTHH:mm'),
   );
-  const [customTo, setCustomTo] = useState(dayjs().locale('en').format('YYYY-MM-DDTHH:mm'));
+  const [customTo, setCustomTo] = useState(() => dayjs().locale('en').format('YYYY-MM-DDTHH:mm'));
   const [selectedOption, setSelectedOption] = useState('json');
 
   const [description, setDescription] = useState();
@@ -179,7 +179,7 @@ const ReportFilter = ({ children, onShow, onExport, onSchedule, deviceType, load
   return (
     <div className={classes.filter}>
       {deviceType !== 'none' && (
-        <div className={classes.filterItem}>
+        <div className={classes.filterDevice}>
           <SelectField
             label={t(deviceType === 'multiple' ? 'deviceTitle' : 'reportDevice')}
             data={deviceList}
@@ -199,7 +199,7 @@ const ReportFilter = ({ children, onShow, onExport, onSchedule, deviceType, load
         </div>
       )}
       {deviceType === 'multiple' && (
-        <div className={classes.filterItem}>
+        <div className={classes.filterGroup}>
           <SelectField
             label={t('settingsGroups')}
             data={groupList}
@@ -216,10 +216,11 @@ const ReportFilter = ({ children, onShow, onExport, onSchedule, deviceType, load
       )}
       {selectedOption !== 'schedule' ? (
         <>
-          <div className={classes.filterItem}>
-            <FormControl fullWidth>
+          <div className={classes.filterPeriod}>
+            <FormControl fullWidth size="small">
               <InputLabel>{t('reportPeriod')}</InputLabel>
               <Select
+                size="small"
                 label={t('reportPeriod')}
                 value={period}
                 onChange={(e) => setPeriod(e.target.value)}
@@ -235,7 +236,7 @@ const ReportFilter = ({ children, onShow, onExport, onSchedule, deviceType, load
             </FormControl>
           </div>
           {period === 'custom' && (
-            <div className={classes.filterItem}>
+            <div className={classes.filterDate}>
               <TextField
                 label={t('reportFrom')}
                 type="datetime-local"
@@ -246,7 +247,7 @@ const ReportFilter = ({ children, onShow, onExport, onSchedule, deviceType, load
             </div>
           )}
           {period === 'custom' && (
-            <div className={classes.filterItem}>
+            <div className={classes.filterDate}>
               <TextField
                 label={t('reportTo')}
                 type="datetime-local"
@@ -279,7 +280,7 @@ const ReportFilter = ({ children, onShow, onExport, onSchedule, deviceType, load
         </>
       )}
       {children}
-      <div className={classes.filterItem}>
+      <div className={classes.filterAction}>
         {Object.keys(options).length === 1 ? (
           <Button
             fullWidth

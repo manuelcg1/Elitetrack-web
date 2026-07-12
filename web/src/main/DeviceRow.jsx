@@ -96,6 +96,70 @@ const useStyles = makeStyles()((theme) => ({
   selectedAvatar: {
     backgroundColor: theme.palette.success.main,
   },
+  primaryLine: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+    minWidth: 0,
+  },
+  primaryValue: {
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  secondaryLine: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.75),
+    width: '100%',
+    minWidth: 0,
+  },
+  secondaryValue: {
+    flex: '1 1 auto',
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  ignitionIndicator: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    width: 20,
+    height: 20,
+  },
+  statusBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    flexShrink: 0,
+    marginLeft: 'auto',
+    maxWidth: '50%',
+    boxSizing: 'border-box',
+    padding: theme.spacing(0.125, 0.625),
+    border: '1px solid currentColor',
+    borderRadius: 999,
+    fontSize: '0.68rem',
+    fontWeight: 600,
+    lineHeight: 1.35,
+    whiteSpace: 'nowrap',
+    '&::before': {
+      content: '""',
+      width: 5,
+      height: 5,
+      flexShrink: 0,
+      borderRadius: '50%',
+      backgroundColor: 'currentColor',
+    },
+  },
+  statusText: {
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
 }));
 
 const DeviceRow = ({ devices, index, style }) => {
@@ -130,25 +194,41 @@ const DeviceRow = ({ devices, index, style }) => {
   const primaryValue = resolveFieldValue(devicePrimary);
   const secondaryValue = resolveFieldValue(deviceSecondary);
 
-  const secondaryText = () => {
-    let status;
-    if (item.status === 'online' || !item.lastUpdate) {
-      status = formatStatus(item.status, t);
-    } else {
-      status = dayjs(item.lastUpdate).fromNow();
-    }
-    return (
-      <>
-        {secondaryValue && (
-          <>
-            {secondaryValue}
-            {' • '}
-          </>
-        )}
-        <span className={classes[getStatusColor(item.status)]}>{status}</span>
-      </>
-    );
-  };
+  const status =
+    item.status === 'online' || !item.lastUpdate
+      ? formatStatus(item.status, t)
+      : dayjs(item.lastUpdate).fromNow();
+
+  const primaryText = () => (
+    <span className={classes.primaryLine}>
+      <span className={classes.primaryValue}>{primaryValue}</span>
+      <span
+        className={`${classes.statusBadge} ${classes[getStatusColor(item.status)]}`}
+        title={status}
+      >
+        <span className={classes.statusText}>{status}</span>
+      </span>
+    </span>
+  );
+
+  const secondaryText = () => (
+    <span className={classes.secondaryLine}>
+      {secondaryValue && <span className={classes.secondaryValue}>{secondaryValue}</span>}
+      {position?.attributes?.hasOwnProperty('ignition') && (
+        <Tooltip
+          title={`${t('positionIgnition')}: ${formatBoolean(position.attributes.ignition, t)}`}
+        >
+          <span className={classes.ignitionIndicator}>
+            <EngineIcon
+              width={17}
+              height={17}
+              className={position.attributes.ignition ? classes.success : classes.neutral}
+            />
+          </span>
+        </Tooltip>
+      )}
+    </span>
+  );
 
   return (
     <div style={style}>
@@ -167,8 +247,12 @@ const DeviceRow = ({ devices, index, style }) => {
           </Avatar>
         </ListItemAvatar>
         <ListItemText
-          primary={primaryValue}
-          secondary={secondaryText()}
+          primary={primaryText()}
+          secondary={
+            secondaryValue || position?.attributes?.hasOwnProperty('ignition')
+              ? secondaryText()
+              : null
+          }
           slots={{
             primary: Typography,
             secondary: Typography,
@@ -181,9 +265,10 @@ const DeviceRow = ({ devices, index, style }) => {
               lineHeight: 1.2,
             },
             secondary: {
-              noWrap: true,
+              component: 'div',
               fontSize: '0.78rem',
-              lineHeight: 1.35,
+              lineHeight: 1.4,
+              overflow: 'visible',
             },
           }}
           sx={{ minWidth: 0, mr: 0.5 }}
@@ -194,19 +279,6 @@ const DeviceRow = ({ devices, index, style }) => {
               <Tooltip title={`${t('eventAlarm')}: ${formatAlarm(position.attributes.alarm, t)}`}>
                 <IconButton size="small">
                   <ErrorIcon fontSize="small" className={classes.error} />
-                </IconButton>
-              </Tooltip>
-            )}
-            {position.attributes.hasOwnProperty('ignition') && (
-              <Tooltip
-                title={`${t('positionIgnition')}: ${formatBoolean(position.attributes.ignition, t)}`}
-              >
-                <IconButton size="small">
-                  {position.attributes.ignition ? (
-                    <EngineIcon width={20} height={20} className={classes.success} />
-                  ) : (
-                    <EngineIcon width={20} height={20} className={classes.neutral} />
-                  )}
                 </IconButton>
               </Tooltip>
             )}
