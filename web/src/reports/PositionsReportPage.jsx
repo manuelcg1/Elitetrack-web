@@ -1,6 +1,14 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { IconButton, Table, TableBody, TableCell, TableHead, TableRow } from '@mui/material';
+import {
+  IconButton,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  useTheme,
+} from '@mui/material';
 import GpsFixedIcon from '@mui/icons-material/GpsFixed';
 import LocationSearchingIcon from '@mui/icons-material/LocationSearching';
 import ReportFilter, { updateReportParams } from './components/ReportFilter';
@@ -24,11 +32,39 @@ import MapScale from '../map/MapScale';
 import fetchOrThrow from '../common/util/fetchOrThrow';
 import SelectField from '../common/components/SelectField';
 import ReportMapSplit from './components/ReportMapSplit';
+import exportExcel from '../common/util/exportExcel';
+import { useAttributePreference, usePreference } from '../common/util/preferences';
+import { speedToKnots } from '../common/util/converter';
+import {
+  formatAlarm,
+  formatAltitude,
+  formatBoolean,
+  formatConsumption,
+  formatCoordinate,
+  formatCourse,
+  formatDistance,
+  formatNumber,
+  formatNumericHours,
+  formatPercentage,
+  formatSpeed,
+  formatTemperature,
+  formatTime,
+  formatVoltage,
+  formatVolume,
+  formatAddress,
+} from '../common/util/formatter';
 
 const PositionsReportPage = () => {
   const navigate = useNavigate();
+  const theme = useTheme();
   const { classes } = useReportStyles();
   const t = useTranslation();
+
+  const distanceUnit = useAttributePreference('distanceUnit');
+  const altitudeUnit = useAttributePreference('altitudeUnit');
+  const speedUnit = useAttributePreference('speedUnit');
+  const volumeUnit = useAttributePreference('volumeUnit');
+  const coordinateFormat = usePreference('coordinateFormat');
 
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -92,13 +128,83 @@ const PositionsReportPage = () => {
     }
   });
 
-  const onExport = useCatch(async ({ deviceIds, from, to }) => {
-    const query = new URLSearchParams({ from, to });
-    if (geofenceId) {
-      query.append('geofenceId', geofenceId);
+  const formatExportValue = (position, key) => {
+    const value = position.hasOwnProperty(key) ? position[key] : position.attributes?.[key];
+    if (key === 'address') {
+      return formatAddress(position, coordinateFormat);
     }
-    deviceIds.forEach((deviceId) => query.append('deviceId', deviceId));
-    window.location.assign(`/api/positions/csv?${query.toString()}`);
+    if (value == null) {
+      return '';
+    }
+    switch (key) {
+      case 'fixTime':
+      case 'deviceTime':
+      case 'serverTime':
+        return formatTime(value, 'seconds');
+      case 'latitude':
+      case 'longitude':
+        return formatCoordinate(key, value, coordinateFormat);
+      case 'obdSpeed':
+        return formatSpeed(speedToKnots(value, 'kmh'), speedUnit, t);
+      case 'course':
+        return formatCourse(value);
+      case 'altitude':
+        return formatAltitude(value, altitudeUnit, t);
+      case 'fuelConsumption':
+        return formatConsumption(value, t);
+      case 'coolantTemp':
+        return formatTemperature(value);
+      case 'alarm':
+        return formatAlarm(value, t);
+      default:
+        switch (positionAttributes[key]?.dataType) {
+          case 'speed':
+            return formatSpeed(value, speedUnit, t);
+          case 'distance':
+            return formatDistance(value, distanceUnit, t);
+          case 'voltage':
+            return formatVoltage(value, t);
+          case 'percentage':
+            return formatPercentage(value);
+          case 'volume':
+            return formatVolume(value, volumeUnit, t);
+          case 'hours':
+            return formatNumericHours(value, t);
+          default:
+            if (typeof value === 'number') {
+              return formatNumber(value);
+            }
+            if (typeof value === 'boolean') {
+              return formatBoolean(value, t);
+            }
+            if (Array.isArray(value)) {
+              return value.join(', ');
+            }
+            if (typeof value === 'object') {
+              return JSON.stringify(value);
+            }
+            return value;
+        }
+    }
+  };
+
+  const onExport = useCatch(async () => {
+    const rows = items.slice(0, 4000).map((position) => {
+      const row = {};
+      columns.forEach((key) => {
+        row[positionAttributes[key]?.name || key] = formatExportValue(position, key);
+      });
+      return row;
+    });
+    if (!rows.length) {
+      return;
+    }
+    await exportExcel(
+      t('reportPositions'),
+      'positions.xlsx',
+      new Map([[t('reportPositions'), rows]]),
+      theme,
+    );
   });
 
   const onSchedule = useCatch(async (deviceIds, groupIds, report) => {

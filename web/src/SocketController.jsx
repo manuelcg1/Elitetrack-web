@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector, connect } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { Snackbar } from '@mui/material';
-import { devicesActions, sessionActions } from './store';
+import { alertEventsActions, devicesActions, sessionActions } from './store';
 import { useCatchCallback, useEffectAsync } from './reactHelper';
-import { snackBarDurationLongMs } from './common/util/duration';
 import alarm from './resources/alarm.mp3';
 import { eventsActions } from './store/events';
 import useFeatures from './common/util/useFeatures';
@@ -14,8 +12,41 @@ import {
   nativePostMessage,
 } from './common/components/NativeInterface';
 import fetchOrThrow from './common/util/fetchOrThrow';
+import AlertPopupStack from './common/components/AlertPopupStack';
 
 const logoutCode = 4000;
+const reconnectDelayMs = 3000;
+const maxPopups = 5;
+
+const eventTitles = {
+  speed: 'Exceso de velocidad',
+  deviceOverspeed: 'Exceso de velocidad',
+  geofenceEnter: 'Entrada a geocerca',
+  geofenceExit: 'Salida de geocerca',
+  hardCornering: 'Giro brusco',
+  hardBraking: 'Frenado brusco',
+  hardAcceleration: 'Aceleración brusca',
+  batteryLow: 'Voltaje bajo',
+  ignitionOn: 'Motor encendido',
+  ignitionOff: 'Motor apagado',
+  deviceMoving: 'Vehículo en movimiento',
+  deviceStopped: 'Vehículo detenido',
+  stoppedTooLong: 'Vehículo detenido',
+  deviceOffline: 'Desconexión GPS',
+  deviceOnline: 'Reconexión GPS',
+};
+
+const canonicalType = (type) =>
+  ({
+    deviceOverspeed: 'speed',
+    deviceStopped: 'stoppedTooLong',
+  })[type] || type;
+
+const titleFor = (type, fallback) =>
+  fallback ||
+  eventTitles[type] ||
+  type?.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (value) => value.toUpperCase()) ||
+  'Alerta';
 
 const SocketController = () => {
   const dispatch = useDispatch();
@@ -23,9 +54,14 @@ const SocketController = () => {
 
   const authenticated = useSelector((state) => Boolean(state.session.user));
   const includeLogs = useSelector((state) => state.session.includeLogs);
+  const devices = useSelector((state) => state.devices.items);
+  const positions = useSelector((state) => state.session.positions);
 
   const socketRef = useRef();
+  const connectSocketRef = useRef();
   const reconnectTimeoutRef = useRef();
+  const handleEventsRef = useRef();
+  const handleAlertEventsRef = useRef();
 
   const clearReconnectTimeout = () => {
     if (reconnectTimeoutRef.current) {
@@ -38,33 +74,126 @@ const SocketController = () => {
 
   const soundEvents = useAttributePreference('soundEvents', '');
   const soundAlarms = useAttributePreference('soundAlarms', 'sos');
+  const popupMode = useAttributePreference('alertPopupMode', 'all');
+  const popupEnabled = useAttributePreference('alertPopups', true);
+  const popupSound = useAttributePreference('alertPopupSound', true);
+  const popupAutoClose = useAttributePreference('alertPopupAutoClose', true);
+  const popupDuration = useAttributePreference('alertPopupDuration', 10);
+  const popupVolume = useAttributePreference('alertPopupVolume', 80);
+  const popupRepeatSound = useAttributePreference('alertPopupRepeatSound', false);
 
   const features = useFeatures();
+
+  const playPopupSound = useCallback(() => {
+    if (!popupSound) {
+      return;
+    }
+    const audio = new Audio(alarm);
+    audio.volume = Math.min(1, Math.max(0, Number(popupVolume) / 100));
+    audio.play().catch(() => {});
+    if (popupRepeatSound) {
+      audio.addEventListener(
+        'ended',
+        () => {
+          audio.currentTime = 0;
+          audio.play().catch(() => {});
+        },
+        { once: true },
+      );
+    }
+  }, [popupRepeatSound, popupSound, popupVolume]);
+
+  const addPopups = useCallback(
+    (items) => {
+      const visible = items.filter(
+        (item) => popupMode === 'all' || (popupMode === 'critical' && item.severity === 'critical'),
+      );
+      if (popupEnabled && popupMode !== 'none' && visible.length) {
+        setNotifications((current) => {
+          const dedupeKeys = new Set(
+            visible.map((item) => `${item.deviceId}-${canonicalType(item.type)}`),
+          );
+          return [
+            ...current.filter(
+              (item) => !dedupeKeys.has(`${item.deviceId}-${canonicalType(item.type)}`),
+            ),
+            ...visible,
+          ].slice(-maxPopups);
+        });
+      }
+    },
+    [popupEnabled, popupMode],
+  );
 
   const handleEvents = useCallback(
     (events) => {
       if (!features.disableEvents) {
         dispatch(eventsActions.add(events));
       }
-      if (
-        events.some(
-          (e) =>
-            soundEvents.includes(e.type) ||
-            (e.type === 'alarm' && soundAlarms.includes(e.attributes.alarm)),
-        )
-      ) {
-        new Audio(alarm).play();
+      const shouldPlay = events.some(
+        (e) =>
+          soundEvents.includes(e.type) ||
+          (e.type === 'alarm' && soundAlarms.includes(e.attributes?.alarm)),
+      );
+      if (shouldPlay) {
+        new Audio(alarm).play().catch(() => {});
       }
-      setNotifications(
+      addPopups(
+        events.map((event) => {
+          const position = positions[event.deviceId];
+          const type = event.type === 'alarm' ? event.attributes?.alarm || event.type : event.type;
+          return {
+            key: `event-${event.id}-${type}`,
+            type,
+            severity: event.attributes?.severity || (type === 'deviceOffline' ? 'high' : 'medium'),
+            title: titleFor(type),
+            message: event.attributes?.message,
+            deviceId: event.deviceId,
+            deviceName: devices[event.deviceId]?.name,
+            time: event.eventTime ? new Date(event.eventTime).toLocaleString() : null,
+            address: event.attributes?.address || position?.address,
+            latitude: position?.latitude,
+            longitude: position?.longitude,
+          };
+        }),
+      );
+    },
+    [addPopups, devices, dispatch, features, positions, soundAlarms, soundEvents],
+  );
+
+  const handleAlertEvents = useCallback(
+    (events) => {
+      dispatch(alertEventsActions.receive(events));
+      if (events.length) {
+        playPopupSound();
+      }
+      addPopups(
         events.map((event) => ({
-          id: event.id,
-          message: event.attributes.message,
-          show: true,
+          key: `alert-${event.id}`,
+          type: event.type,
+          severity: event.severity || 'medium',
+          title: titleFor(event.type, event.alertName),
+          message: event.message,
+          deviceId: event.deviceId,
+          deviceName: event.deviceName || devices[event.deviceId]?.name,
+          driverName: event.driverName,
+          valueText: event.value
+            ? `${event.type === 'speed' ? 'Velocidad' : 'Valor'}: ${event.value.toFixed?.(1) || event.value} ${event.unit || ''}`
+            : null,
+          time: event.eventTime ? new Date(event.eventTime).toLocaleString() : null,
+          address: event.address,
+          latitude: event.latitude,
+          longitude: event.longitude,
         })),
       );
     },
-    [features, dispatch, soundEvents, soundAlarms],
+    [addPopups, devices, dispatch, playPopupSound],
   );
+
+  useEffect(() => {
+    handleEventsRef.current = handleEvents;
+    handleAlertEventsRef.current = handleAlertEvents;
+  }, [handleAlertEvents, handleEvents]);
 
   const connectSocket = () => {
     clearReconnectTimeout();
@@ -100,8 +229,8 @@ const SocketController = () => {
         clearReconnectTimeout();
         reconnectTimeoutRef.current = setTimeout(() => {
           reconnectTimeoutRef.current = null;
-          connectSocket();
-        }, 60000);
+          connectSocketRef.current?.();
+        }, reconnectDelayMs);
       }
     };
 
@@ -114,13 +243,18 @@ const SocketController = () => {
         dispatch(sessionActions.updatePositions(data.positions));
       }
       if (data.events) {
-        handleEvents(data.events);
+        handleEventsRef.current?.(data.events);
+      }
+      if (data.alertEvents) {
+        handleAlertEventsRef.current?.(data.alertEvents);
       }
       if (data.logs) {
         dispatch(sessionActions.updateLogs(data.logs));
       }
     };
   };
+
+  connectSocketRef.current = connectSocket;
 
   useEffect(() => {
     socketRef.current?.send(JSON.stringify({ logs: includeLogs }));
@@ -131,7 +265,7 @@ const SocketController = () => {
       const response = await fetchOrThrow('/api/devices');
       dispatch(devicesActions.refresh(await response.json()));
       nativePostMessage('authenticated');
-      connectSocket();
+      connectSocketRef.current?.();
       return () => {
         clearReconnectTimeout();
         socketRef.current?.close(logoutCode);
@@ -168,7 +302,7 @@ const SocketController = () => {
     const reconnectIfNeeded = () => {
       const socket = socketRef.current;
       if (!socket || socket.readyState === WebSocket.CLOSED) {
-        connectSocket();
+        connectSocketRef.current?.();
       } else if (socket.readyState === WebSocket.OPEN) {
         try {
           socket.send('{}');
@@ -190,18 +324,40 @@ const SocketController = () => {
     };
   }, [authenticated]);
 
+  const handlePopupClose = useCallback((key) => {
+    setNotifications((current) => current.filter((item) => item.key !== key));
+  }, []);
+
+  const handlePopupLocation = useCallback(
+    (notification) => {
+      const hasLocation =
+        notification.latitude != null &&
+        notification.longitude != null &&
+        notification.latitude !== '' &&
+        notification.longitude !== '' &&
+        Number.isFinite(Number(notification.latitude)) &&
+        Number.isFinite(Number(notification.longitude));
+      dispatch(devicesActions.selectId(notification.deviceId));
+      navigate('/', {
+        state: {
+          notificationDeviceId: notification.deviceId,
+          notificationLocation: hasLocation
+            ? [Number(notification.longitude), Number(notification.latitude)]
+            : null,
+        },
+      });
+    },
+    [dispatch, navigate],
+  );
+
   return (
-    <>
-      {notifications.map((notification) => (
-        <Snackbar
-          key={notification.id}
-          open={notification.show}
-          message={notification.message}
-          autoHideDuration={snackBarDurationLongMs}
-          onClose={() => setNotifications(notifications.filter((e) => e.id !== notification.id))}
-        />
-      ))}
-    </>
+    <AlertPopupStack
+      notifications={notifications}
+      autoClose={popupAutoClose}
+      duration={Math.max(1, Number(popupDuration)) * 1000}
+      onClose={handlePopupClose}
+      onLocation={handlePopupLocation}
+    />
   );
 };
 

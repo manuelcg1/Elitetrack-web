@@ -48,7 +48,11 @@ public class AlertResource extends BaseResource {
             Alert.TYPE_BATTERY_LOW,
             Alert.TYPE_IGNITION_ON,
             Alert.TYPE_IGNITION_OFF,
-            Alert.TYPE_STOPPED_TOO_LONG);
+            Alert.TYPE_STOPPED_TOO_LONG,
+            Alert.TYPE_MOVEMENT,
+            Alert.TYPE_HARSH_ACCELERATION,
+            Alert.TYPE_HARSH_BRAKING,
+            Alert.TYPE_HARSH_CORNERING);
 
     private static final List<String> SEVERITIES = List.of(
             Alert.SEVERITY_LOW,

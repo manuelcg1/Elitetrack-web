@@ -15,6 +15,7 @@
  */
 package org.traccar.broadcast;
 
+import org.traccar.model.AlertEvent;
 import org.traccar.model.Device;
 import org.traccar.model.Event;
 import org.traccar.model.ObjectOperation;
@@ -60,6 +61,16 @@ public class BroadcastMessage {
 
     public void setEvent(Event event) {
         this.event = event;
+    }
+
+    private AlertEvent alertEvent;
+
+    public AlertEvent getAlertEvent() {
+        return alertEvent;
+    }
+
+    public void setAlertEvent(AlertEvent alertEvent) {
+        this.alertEvent = alertEvent;
     }
 
     private Long commandDeviceId;

@@ -17,6 +17,10 @@ public class Alert extends ExtendedModel {
     public static final String TYPE_IGNITION_ON = "ignitionOn";
     public static final String TYPE_IGNITION_OFF = "ignitionOff";
     public static final String TYPE_STOPPED_TOO_LONG = "stoppedTooLong";
+    public static final String TYPE_MOVEMENT = "deviceMoving";
+    public static final String TYPE_HARSH_ACCELERATION = "hardAcceleration";
+    public static final String TYPE_HARSH_BRAKING = "hardBraking";
+    public static final String TYPE_HARSH_CORNERING = "hardCornering";
 
     public static final String SEVERITY_LOW = "low";
     public static final String SEVERITY_MEDIUM = "medium";

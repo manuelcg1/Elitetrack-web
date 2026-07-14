@@ -27,9 +27,11 @@ import org.traccar.config.Config;
 import org.traccar.config.Keys;
 import org.traccar.database.DeviceLookupService;
 import org.traccar.database.NotificationManager;
+import org.traccar.model.AlertEvent;
 import org.traccar.model.BaseModel;
 import org.traccar.model.Device;
 import org.traccar.model.Event;
+import org.traccar.model.Geofence;
 import org.traccar.model.LogRecord;
 import org.traccar.model.Position;
 import org.traccar.model.User;
@@ -80,6 +82,7 @@ public class ConnectionManager implements BroadcastInterface {
     private final Map<Long, Set<UpdateListener>> listeners = new HashMap<>();
     private final Map<Long, Set<Long>> userDevices = new HashMap<>();
     private final Map<Long, Set<Long>> deviceUsers = new HashMap<>();
+    private final Map<Long, Set<Long>> userGeofences = new HashMap<>();
 
     private final Map<Long, Timeout> timeouts = new ConcurrentHashMap<>();
 
@@ -331,6 +334,22 @@ public class ConnectionManager implements BroadcastInterface {
     }
 
     @Override
+    public synchronized void updateAlertEvent(boolean local, AlertEvent event) {
+        if (local) {
+            broadcastService.updateAlertEvent(true, event);
+        }
+        for (long userId : deviceUsers.getOrDefault(event.getDeviceId(), Collections.emptySet())) {
+            if (event.getGeofenceId() > 0
+                    && !userGeofences.getOrDefault(userId, Collections.emptySet()).contains(event.getGeofenceId())) {
+                continue;
+            }
+            for (UpdateListener listener : listeners.getOrDefault(userId, Collections.emptySet())) {
+                listener.onUpdateAlertEvent(event);
+            }
+        }
+    }
+
+    @Override
     public synchronized <T1 extends BaseModel, T2 extends BaseModel> void invalidatePermission(
             boolean local, Class<T1> clazz1, long id1, Class<T2> clazz2, long id2, boolean link) {
         if (link && clazz1.equals(User.class) && clazz2.equals(Device.class)) {
@@ -368,6 +387,7 @@ public class ConnectionManager implements BroadcastInterface {
         void onUpdateDevice(Device device);
         void onUpdatePosition(Position position);
         void onUpdateEvent(Event event);
+        void onUpdateAlertEvent(AlertEvent event);
         void onUpdateLog(LogRecord record);
     }
 
@@ -381,6 +401,9 @@ public class ConnectionManager implements BroadcastInterface {
                     new Columns.Include("id"), new Condition.Permission(User.class, userId, Device.class)));
             userDevices.put(userId, devices.stream().map(BaseModel::getId).collect(Collectors.toSet()));
             devices.forEach(device -> deviceUsers.computeIfAbsent(device.getId(), id -> new HashSet<>()).add(userId));
+            var geofences = storage.getObjects(Geofence.class, new Request(
+                    new Columns.Include("id"), new Condition.Permission(User.class, userId, Geofence.class)));
+            userGeofences.put(userId, geofences.stream().map(BaseModel::getId).collect(Collectors.toSet()));
         }
         set.add(listener);
     }
@@ -395,6 +418,7 @@ public class ConnectionManager implements BroadcastInterface {
                 userIds.remove(userId);
                 return userIds.isEmpty() ? null : userIds;
             }));
+            userGeofences.remove(userId);
         }
     }
 

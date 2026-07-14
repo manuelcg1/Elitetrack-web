@@ -1,8 +1,8 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useDispatch, useSelector } from 'react-redux';
-import MapView from '../map/core/MapView';
+import MapView, { map } from '../map/core/MapView';
 import MapSelectedDevice from '../map/main/MapSelectedDevice';
 import MapAccuracy from '../map/main/MapAccuracy';
 import MapGeofence from '../map/MapGeofence';
@@ -19,7 +19,13 @@ import MapScale from '../map/MapScale';
 import MapNotification from '../map/notification/MapNotification';
 import useFeatures from '../common/util/useFeatures';
 
-const MainMap = ({ filteredPositions, selectedPosition, onEventsClick, desktopPadding }) => {
+const MainMap = ({
+  filteredPositions,
+  selectedPosition,
+  onEventsClick,
+  desktopPadding,
+  notificationLocation,
+}) => {
   const theme = useTheme();
   const dispatch = useDispatch();
 
@@ -28,6 +34,15 @@ const MainMap = ({ filteredPositions, selectedPosition, onEventsClick, desktopPa
   const eventsAvailable = useSelector((state) => !!state.events.items.length);
 
   const features = useFeatures();
+
+  useEffect(() => {
+    if (notificationLocation) {
+      map.easeTo({
+        center: notificationLocation,
+        zoom: Math.max(map.getZoom(), 15),
+      });
+    }
+  }, [notificationLocation]);
 
   const onMarkerClick = useCallback(
     (_, deviceId) => {

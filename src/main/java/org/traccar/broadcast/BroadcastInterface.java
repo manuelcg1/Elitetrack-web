@@ -15,6 +15,7 @@
  */
 package org.traccar.broadcast;
 
+import org.traccar.model.AlertEvent;
 import org.traccar.model.BaseModel;
 import org.traccar.model.Device;
 import org.traccar.model.Event;
@@ -30,6 +31,9 @@ public interface BroadcastInterface {
     }
 
     default void updateEvent(boolean local, long userId, Event event) {
+    }
+
+    default void updateAlertEvent(boolean local, AlertEvent event) {
     }
 
     default void updateCommand(boolean local, long deviceId) {

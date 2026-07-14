@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSelector } from 'react-redux';
 import {
   Alert,
   Autocomplete,
@@ -8,6 +9,7 @@ import {
   Checkbox,
   Chip,
   CircularProgress,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -40,6 +42,7 @@ import {
   Tooltip,
   Typography,
   useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -47,8 +50,11 @@ import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+import DownloadIcon from '@mui/icons-material/Download';
 import EditIcon from '@mui/icons-material/Edit';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineOutlined';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FilterAltIcon from '@mui/icons-material/FilterAlt';
 import MapIcon from '@mui/icons-material/Map';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
@@ -60,6 +66,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 
 import PageLayout from '../common/components/PageLayout';
 import MonitoringMenu from './MonitoringMenu';
+import exportExcel from '../common/util/exportExcel';
 import fetchOrThrow from '../common/util/fetchOrThrow';
 
 const eliteGreen = '#00c853';
@@ -72,6 +79,10 @@ const alertTypes = [
   { value: 'ignitionOn', label: 'Ignicion encendida' },
   { value: 'ignitionOff', label: 'Ignicion apagada' },
   { value: 'stoppedTooLong', label: 'Detenido demasiado tiempo' },
+  { value: 'deviceMoving', label: 'Movimiento detectado' },
+  { value: 'hardAcceleration', label: 'Aceleracion brusca' },
+  { value: 'hardBraking', label: 'Frenado brusco' },
+  { value: 'hardCornering', label: 'Giro brusco' },
 ];
 
 const severities = [
@@ -98,6 +109,20 @@ const notificationChannels = [
 const steps = ['Informacion', 'Condicion', 'Destinos', 'Notificaciones', 'Resumen'];
 const eventPollInterval = 30000;
 const eventPageSize = 200;
+const filterControlHeight = 48;
+const filterControlStyles = {
+  alignItems: 'start',
+  '& .MuiFormControl-root': {
+    minWidth: 0,
+  },
+  '& .MuiOutlinedInput-root': {
+    height: filterControlHeight,
+  },
+  '& .MuiAutocomplete-inputRoot': {
+    height: `${filterControlHeight}px !important`,
+    flexWrap: 'nowrap',
+  },
+};
 
 const emptyAlert = {
   name: '',
@@ -126,8 +151,10 @@ const emptyAlert = {
 
 const optionKey = (option) => `${option.kind}:${option.id}`;
 
-const getTypeLabel = (value) => alertTypes.find((type) => type.value === value)?.label || value || '-';
-const getSeverity = (value) => severities.find((severity) => severity.value === value) || severities[1];
+const getTypeLabel = (value) =>
+  alertTypes.find((type) => type.value === value)?.label || value || '-';
+const getSeverity = (value) =>
+  severities.find((severity) => severity.value === value) || severities[1];
 const statusLabels = {
   open: 'Abierta',
   acknowledged: 'Atendida',
@@ -163,11 +190,19 @@ const relativeTime = (value) => {
   return `Hace ${Math.floor(hours / 24)} d`;
 };
 
+const hasEventLocation = (event) =>
+  event.latitude != null &&
+  event.longitude != null &&
+  event.latitude !== '' &&
+  event.longitude !== '' &&
+  Number.isFinite(Number(event.latitude)) &&
+  Number.isFinite(Number(event.longitude));
+
 const eventLocation = (event) => {
   if (event.address) {
     return event.address;
   }
-  if (event.latitude && event.longitude) {
+  if (hasEventLocation(event)) {
     return `${Number(event.latitude).toFixed(5)}, ${Number(event.longitude).toFixed(5)}`;
   }
   return 'Sin ubicacion';
@@ -224,7 +259,9 @@ const loadJson = async (urls, retryWhenEmpty = false) => {
 const mergeById = (current, incoming) => {
   const result = new Map(current.map((event) => [event.id, event]));
   incoming.forEach((event) => result.set(event.id, event));
-  return [...result.values()].sort((first, second) => new Date(second.eventTime || 0) - new Date(first.eventTime || 0));
+  return [...result.values()].sort(
+    (first, second) => new Date(second.eventTime || 0) - new Date(first.eventTime || 0),
+  );
 };
 
 const buildEventQuery = (filters = {}, options = {}) => {
@@ -252,7 +289,10 @@ const buildEventQuery = (filters = {}, options = {}) => {
   if (filters.from) {
     query.set('dateFrom', new Date(`${filters.from}T00:00:00`).toISOString());
   } else if (options.defaultDays) {
-    query.set('dateFrom', new Date(Date.now() - options.defaultDays * 24 * 60 * 60 * 1000).toISOString());
+    query.set(
+      'dateFrom',
+      new Date(Date.now() - options.defaultDays * 24 * 60 * 60 * 1000).toISOString(),
+    );
   }
   if (filters.to) {
     query.set('dateTo', new Date(`${filters.to}T23:59:59`).toISOString());
@@ -287,8 +327,31 @@ const KpiCard = ({ title, value, icon, color = eliteGreen }) => (
   </Paper>
 );
 
+const FormStepPanel = ({ title, description, children }) => (
+  <Paper
+    variant="outlined"
+    sx={{
+      p: { xs: 2, sm: 2.5 },
+      borderRadius: 2.5,
+      bgcolor: 'background.paper',
+    }}
+  >
+    <Box sx={{ mb: 2.5 }}>
+      <Typography variant="h6" sx={{ fontWeight: 900 }}>
+        {title}
+      </Typography>
+      <Typography variant="body2" color="text.secondary">
+        {description}
+      </Typography>
+    </Box>
+    {children}
+  </Paper>
+);
+
 const MonitoringAlertsPage = () => {
+  const theme = useTheme();
   const compactDetail = useMediaQuery('(max-width:1199px)');
+  const realtimeAlertEvents = useSelector((state) => state.alertEvents.items);
   const [alerts, setAlerts] = useState([]);
   const [events, setEvents] = useState([]);
   const [devices, setDevices] = useState([]);
@@ -329,6 +392,8 @@ const MonitoringAlertsPage = () => {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [alertToDelete, setAlertToDelete] = useState(null);
   const [deletingAlert, setDeletingAlert] = useState(false);
+  const [historyFiltersExpanded, setHistoryFiltersExpanded] = useState(true);
+  const [exportingHistory, setExportingHistory] = useState(false);
 
   const vehicleOptions = useMemo(
     () => [
@@ -386,7 +451,10 @@ const MonitoringAlertsPage = () => {
     [item.geofenceIds, item.geofenceGroupIds, geofenceOptions],
   );
 
-  const targetOptions = useMemo(() => [{ id: 0, kind: 'all', label: 'Todos' }, ...vehicleOptions], [vehicleOptions]);
+  const targetOptions = useMemo(
+    () => [{ id: 0, kind: 'all', label: 'Todos' }, ...vehicleOptions],
+    [vehicleOptions],
+  );
 
   const deviceMap = useMemo(() => new Map(devices.map((device) => [device.id, device])), [devices]);
   const groupMap = useMemo(() => new Map(groups.map((group) => [group.id, group])), [groups]);
@@ -397,7 +465,11 @@ const MonitoringAlertsPage = () => {
       events.map((event) => {
         const device = deviceMap.get(event.deviceId);
         const alert = alertMap.get(event.alertId);
-        const group = event.groupId ? groupMap.get(event.groupId) : device ? groupMap.get(device.groupId) : null;
+        const group = event.groupId
+          ? groupMap.get(event.groupId)
+          : device
+            ? groupMap.get(device.groupId)
+            : null;
         return {
           ...event,
           alertName: alert?.name || event.message || `Alerta ${event.alertId || ''}`,
@@ -441,7 +513,8 @@ const MonitoringAlertsPage = () => {
       critical: enrichedEvents.filter((event) => event.severity === 'critical').length,
       acknowledged: enrichedEvents.filter((event) => event.status === 'acknowledged').length,
       resolvedToday: enrichedEvents.filter(
-        (event) => event.status === 'resolved' && event.resolvedAt && new Date(event.resolvedAt) >= today,
+        (event) =>
+          event.status === 'resolved' && event.resolvedAt && new Date(event.resolvedAt) >= today,
       ).length,
       unattended: enrichedEvents.filter((event) => event.status === 'open').length,
     };
@@ -453,8 +526,10 @@ const MonitoringAlertsPage = () => {
         `${event.alertName || ''} ${event.deviceName || ''} ${event.driverName || ''}`.toLowerCase();
       const matchesSearch = text.includes((currentFilters.search || '').toLowerCase());
       const matchesType = currentFilters.type === 'all' || event.type === currentFilters.type;
-      const matchesStatus = currentFilters.status === 'all' || event.status === currentFilters.status;
-      const matchesSeverity = currentFilters.severity === 'all' || event.severity === currentFilters.severity;
+      const matchesStatus =
+        currentFilters.status === 'all' || event.status === currentFilters.status;
+      const matchesSeverity =
+        currentFilters.severity === 'all' || event.severity === currentFilters.severity;
       const matchesTarget =
         !currentFilters.target ||
         currentFilters.target.kind === 'all' ||
@@ -462,9 +537,11 @@ const MonitoringAlertsPage = () => {
         (currentFilters.target.kind === 'group' && event.groupId === currentFilters.target.id);
       const matchesDate =
         !currentFilters.date ||
-        (event.eventTime && new Date(event.eventTime).toISOString().slice(0, 10) === currentFilters.date);
+        (event.eventTime &&
+          new Date(event.eventTime).toISOString().slice(0, 10) === currentFilters.date);
       const matchesFrom =
-        !currentFilters.from || (event.eventTime && new Date(event.eventTime) >= new Date(currentFilters.from));
+        !currentFilters.from ||
+        (event.eventTime && new Date(event.eventTime) >= new Date(currentFilters.from));
       const matchesTo =
         !currentFilters.to ||
         (event.eventTime && new Date(event.eventTime) <= new Date(`${currentFilters.to}T23:59:59`));
@@ -483,11 +560,17 @@ const MonitoringAlertsPage = () => {
 
     return currentFilters.recent === false
       ? filtered
-      : [...filtered].sort((first, second) => new Date(second.eventTime || 0) - new Date(first.eventTime || 0));
+      : [...filtered].sort(
+          (first, second) => new Date(second.eventTime || 0) - new Date(first.eventTime || 0),
+        );
   };
 
   const realtimeEvents = useMemo(
-    () => filterEvents(enrichedEvents.filter((event) => ['open', 'acknowledged'].includes(event.status)), eventFilters),
+    () =>
+      filterEvents(
+        enrichedEvents.filter((event) => ['open', 'acknowledged'].includes(event.status)),
+        eventFilters,
+      ),
     [enrichedEvents, eventFilters],
   );
 
@@ -548,33 +631,51 @@ const MonitoringAlertsPage = () => {
     setGeofenceFolders(foldersData);
   };
 
-  const loadEvents = async () => {
+  const loadEvents = useCallback(async () => {
     const [openEvents, acknowledgedEvents] = await Promise.all([
       loadJson(buildEventQuery(eventFilters, { status: 'open', limit: eventPageSize })),
       loadJson(buildEventQuery(eventFilters, { status: 'acknowledged', limit: eventPageSize })),
     ]);
-    setEvents((current) => mergeById(current, [...openEvents, ...acknowledgedEvents]));
-  };
+    const activeEvents = [...openEvents, ...acknowledgedEvents];
+    const activeEventIds = new Set(activeEvents.map((event) => event.id));
+    setEvents((current) =>
+      mergeById(
+        current.filter(
+          (event) =>
+            !['open', 'acknowledged'].includes(event.status) || activeEventIds.has(event.id),
+        ),
+        activeEvents,
+      ),
+    );
+  }, [eventFilters]);
 
-  const loadHistoryEvents = async () => {
-    const historyData = await loadJson(buildEventQuery(historyFilters, { limit: eventPageSize, defaultDays: 7 }));
+  const loadHistoryEvents = useCallback(async () => {
+    const historyData = await loadJson(
+      buildEventQuery(historyFilters, { limit: eventPageSize, defaultDays: 7 }),
+    );
     setEvents((current) => mergeById(current, historyData));
-  };
+  }, [historyFilters]);
 
   useEffect(() => {
     loadData();
   }, []);
 
   useEffect(() => {
+    if (realtimeAlertEvents.length) {
+      setEvents((current) => mergeById(current, realtimeAlertEvents));
+    }
+  }, [realtimeAlertEvents]);
+
+  useEffect(() => {
     const interval = setInterval(loadEvents, eventPollInterval);
     return () => clearInterval(interval);
-  }, [eventFilters]);
+  }, [loadEvents]);
 
   useEffect(() => {
     if (activeTab === 1) {
       loadHistoryEvents();
     }
-  }, [activeTab, historyFilters]);
+  }, [activeTab, loadHistoryEvents]);
 
   const openNew = () => {
     setItem(emptyAlert);
@@ -657,7 +758,9 @@ const MonitoringAlertsPage = () => {
         body: JSON.stringify(payload),
       });
       const saved = normalizeAlert(await response.json());
-      setAlerts((current) => current.map((currentAlert) => (currentAlert.id === saved.id ? saved : currentAlert)));
+      setAlerts((current) =>
+        current.map((currentAlert) => (currentAlert.id === saved.id ? saved : currentAlert)),
+      );
     } catch (error) {
       setSaveError(error.message || 'No se pudo actualizar la alerta');
     }
@@ -684,19 +787,32 @@ const MonitoringAlertsPage = () => {
   const handleEventAction = async (event, action) => {
     try {
       await fetchOrThrow(`/api/alert-events/${event.id}/${action}`, { method: 'PUT' });
-      await loadEvents();
-      setSelectedEvent((current) =>
-        current?.id === event.id
-          ? enrichedEvents.find((currentEvent) => currentEvent.id === event.id) || current
-          : current,
+      const now = new Date().toISOString();
+      const updatedEvent = {
+        ...event,
+        status: {
+          acknowledge: 'acknowledged',
+          resolve: 'resolved',
+          dismiss: 'dismissed',
+        }[action],
+        ...(action === 'acknowledge' && { acknowledgedAt: now }),
+        ...(action === 'resolve' && { resolvedAt: now }),
+        ...(action === 'dismiss' && { dismissedAt: now }),
+      };
+      setEvents((current) =>
+        current.map((currentEvent) =>
+          currentEvent.id === updatedEvent.id ? updatedEvent : currentEvent,
+        ),
       );
+      setSelectedEvent((current) => (current?.id === updatedEvent.id ? updatedEvent : current));
+      await loadEvents();
     } catch (error) {
       setSaveError(error.message || 'No se pudo actualizar el evento');
     }
   };
 
   const openEventMap = (event) => {
-    if (event.latitude && event.longitude) {
+    if (hasEventLocation(event)) {
       window.open(
         `https://www.google.com/maps/search/?api=1&query=${event.latitude}%2C${event.longitude}`,
         '_blank',
@@ -716,13 +832,17 @@ const MonitoringAlertsPage = () => {
   const handleGeofenceChange = (_, selected) => {
     setItem((current) => ({
       ...current,
-      geofenceIds: selected.filter((option) => option.kind === 'geofence').map((option) => option.id),
-      geofenceGroupIds: selected.filter((option) => option.kind === 'folder').map((option) => option.id),
+      geofenceIds: selected
+        .filter((option) => option.kind === 'geofence')
+        .map((option) => option.id),
+      geofenceGroupIds: selected
+        .filter((option) => option.kind === 'folder')
+        .map((option) => option.id),
     }));
   };
 
   const renderOption = (props, option, { selected }) => (
-    <li {...props} key={optionKey(option)}>
+    <li key={optionKey(option)} {...props}>
       <Checkbox size="small" checked={selected} sx={{ mr: 1 }} />
       <Box>
         <Typography variant="body2">{option.label}</Typography>
@@ -747,37 +867,52 @@ const MonitoringAlertsPage = () => {
     switch (activeStep) {
       case 0:
         return (
-          <Stack spacing={2}>
-            <TextField
-              fullWidth
-              label="Nombre"
-              value={item.name}
-              error={!item.name.trim()}
-              onChange={(event) => setItem({ ...item, name: event.target.value })}
-            />
-            <FormControl fullWidth>
-              <InputLabel>Tipo de alerta</InputLabel>
-              <Select
-                label="Tipo de alerta"
-                value={item.type}
-                onChange={(event) => setItem({ ...item, type: event.target.value })}
-              >
-                {alertTypes.map((type) => (
-                  <MenuItem key={type.value} value={type.value}>
-                    {type.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField
-              fullWidth
-              multiline
-              minRows={3}
-              label="Descripcion"
-              value={item.description}
-              onChange={(event) => setItem({ ...item, description: event.target.value })}
-            />
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+          <FormStepPanel
+            title="Informacion general"
+            description="Identifica la alerta y define su importancia operativa."
+          >
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+                gap: 2,
+              }}
+            >
+              <TextField
+                fullWidth
+                label="Nombre"
+                value={item.name}
+                error={!item.name.trim()}
+                helperText={
+                  !item.name.trim()
+                    ? 'Ingresa un nombre para continuar'
+                    : 'Nombre visible para los operadores'
+                }
+                onChange={(event) => setItem({ ...item, name: event.target.value })}
+              />
+              <FormControl fullWidth>
+                <InputLabel>Tipo de alerta</InputLabel>
+                <Select
+                  label="Tipo de alerta"
+                  value={item.type}
+                  onChange={(event) => setItem({ ...item, type: event.target.value })}
+                >
+                  {alertTypes.map((type) => (
+                    <MenuItem key={type.value} value={type.value}>
+                      {type.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <TextField
+                fullWidth
+                multiline
+                minRows={3}
+                label="Descripcion"
+                value={item.description}
+                onChange={(event) => setItem({ ...item, description: event.target.value })}
+                sx={{ gridColumn: '1 / -1' }}
+              />
               <FormControl fullWidth>
                 <InputLabel>Severidad</InputLabel>
                 <Select
@@ -792,38 +927,68 @@ const MonitoringAlertsPage = () => {
                   ))}
                 </Select>
               </FormControl>
-              <FormControlLabel
-                sx={{ minWidth: 180 }}
-                control={
-                  <Switch
-                    checked={item.active}
-                    onChange={(event) => setItem({ ...item, active: event.target.checked })}
-                  />
-                }
-                label={item.active ? 'Activa' : 'Inactiva'}
-              />
-            </Stack>
-          </Stack>
+              <Paper
+                variant="outlined"
+                sx={{
+                  px: 1.5,
+                  minHeight: 56,
+                  display: 'flex',
+                  alignItems: 'center',
+                  borderRadius: 1,
+                }}
+              >
+                <FormControlLabel
+                  sx={{ m: 0, width: '100%', justifyContent: 'space-between' }}
+                  labelPlacement="start"
+                  control={
+                    <Switch
+                      checked={item.active}
+                      onChange={(event) => setItem({ ...item, active: event.target.checked })}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                        {item.active ? 'Alerta activa' : 'Alerta inactiva'}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Disponible para generar eventos
+                      </Typography>
+                    </Box>
+                  }
+                />
+              </Paper>
+            </Box>
+          </FormStepPanel>
         );
       case 1:
         return (
-          <Stack spacing={2}>
-            <FormControl fullWidth>
-              <InputLabel>Operador</InputLabel>
-              <Select
-                label="Operador"
-                value={item.operator}
-                onChange={(event) => setItem({ ...item, operator: event.target.value })}
-                disabled={item.type !== 'speed'}
-              >
-                {operators.map((operator) => (
-                  <MenuItem key={operator.value} value={operator.value}>
-                    {operator.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+          <FormStepPanel
+            title="Condicion de activacion"
+            description="Define el criterio que debe cumplirse para generar el evento."
+          >
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+                gap: 2,
+              }}
+            >
+              <FormControl fullWidth sx={{ gridColumn: { sm: '1 / -1' } }}>
+                <InputLabel>Operador</InputLabel>
+                <Select
+                  label="Operador"
+                  value={item.operator}
+                  onChange={(event) => setItem({ ...item, operator: event.target.value })}
+                  disabled={item.type !== 'speed'}
+                >
+                  {operators.map((operator) => (
+                    <MenuItem key={operator.value} value={operator.value}>
+                      {operator.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
               <TextField
                 fullWidth
                 type="number"
@@ -834,8 +999,6 @@ const MonitoringAlertsPage = () => {
                 disabled={item.type !== 'speed'}
               />
               <TextField fullWidth label="Unidad" value="km/h" disabled />
-            </Stack>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               <TextField
                 fullWidth
                 type="number"
@@ -852,94 +1015,224 @@ const MonitoringAlertsPage = () => {
                 onChange={(event) => updateAttributes({ resolveThreshold: event.target.value })}
                 InputProps={{ endAdornment: <InputAdornment position="end">km/h</InputAdornment> }}
               />
-            </Stack>
-          </Stack>
+            </Box>
+          </FormStepPanel>
         );
       case 2:
         return (
-          <Stack spacing={2}>
-            {!vehicleOptions.length && (
-              <Alert severity="warning">
-                No tienes vehiculos asignados. Solicita al administrador que te asigne recursos.
-              </Alert>
-            )}
-            <Autocomplete
-              multiple
-              disableCloseOnSelect
-              options={vehicleOptions}
-              groupBy={(option) => option.group}
-              value={selectedVehicleOptions}
-              isOptionEqualToValue={(option, value) => optionKey(option) === optionKey(value)}
-              getOptionLabel={(option) => option.label}
-              renderOption={renderOption}
-              onChange={handleVehicleChange}
-              renderInput={(params) => <TextField {...params} label="Vehiculos y flotas" />}
-            />
-            {!selectedVehicleOptions.length && (
-              <Alert severity="info">La alerta aplicara a todos los vehiculos permitidos para tu usuario</Alert>
-            )}
-            {!geofenceOptions.length && (
-              <Alert severity="warning">
-                No tienes geocercas asignadas. Solicita al administrador que te asigne recursos.
-              </Alert>
-            )}
-            <Autocomplete
-              multiple
-              disableCloseOnSelect
-              options={geofenceOptions}
-              groupBy={(option) => option.group}
-              value={selectedGeofenceOptions}
-              isOptionEqualToValue={(option, value) => optionKey(option) === optionKey(value)}
-              getOptionLabel={(option) => option.label}
-              renderOption={renderOption}
-              onChange={handleGeofenceChange}
-              renderInput={(params) => <TextField {...params} label="Geocercas y grupos" />}
-            />
-          </Stack>
+          <FormStepPanel
+            title="Destinos y alcance"
+            description="Selecciona los recursos a los que se aplicara esta alerta."
+          >
+            <Stack spacing={2.5}>
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 900, mb: 1 }}>
+                  Vehiculos y flotas
+                </Typography>
+                {!vehicleOptions.length && (
+                  <Alert severity="warning" sx={{ mb: 1.5 }}>
+                    No tienes vehiculos asignados. Solicita al administrador que te asigne recursos.
+                  </Alert>
+                )}
+                <Autocomplete
+                  multiple
+                  disableCloseOnSelect
+                  options={vehicleOptions}
+                  groupBy={(option) => option.group}
+                  value={selectedVehicleOptions}
+                  isOptionEqualToValue={(option, value) => optionKey(option) === optionKey(value)}
+                  getOptionLabel={(option) => option.label}
+                  renderOption={renderOption}
+                  onChange={handleVehicleChange}
+                  renderInput={(params) => (
+                    <TextField {...params} label="Seleccionar vehiculos y flotas" />
+                  )}
+                />
+                {!selectedVehicleOptions.length && (
+                  <Alert severity="info" sx={{ mt: 1.5 }}>
+                    La alerta aplicara a todos los vehiculos permitidos para tu usuario
+                  </Alert>
+                )}
+              </Box>
+              <Divider />
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 900, mb: 1 }}>
+                  Geocercas y grupos
+                </Typography>
+                {!geofenceOptions.length && (
+                  <Alert severity="warning" sx={{ mb: 1.5 }}>
+                    No tienes geocercas asignadas. Solicita al administrador que te asigne recursos.
+                  </Alert>
+                )}
+                <Autocomplete
+                  multiple
+                  disableCloseOnSelect
+                  options={geofenceOptions}
+                  groupBy={(option) => option.group}
+                  value={selectedGeofenceOptions}
+                  isOptionEqualToValue={(option, value) => optionKey(option) === optionKey(value)}
+                  getOptionLabel={(option) => option.label}
+                  renderOption={renderOption}
+                  onChange={handleGeofenceChange}
+                  renderInput={(params) => (
+                    <TextField {...params} label="Seleccionar geocercas y grupos" />
+                  )}
+                />
+              </Box>
+            </Stack>
+          </FormStepPanel>
         );
       case 3:
         return (
-          <Stack spacing={1}>
-            {notificationChannels.map((channel) => (
-              <FormControlLabel
-                key={channel.key}
-                control={
-                  <Switch
-                    checked={Boolean(item.attributes.notifications?.[channel.key])}
-                    onChange={(event) =>
-                      updateAttributes({
-                        notifications: {
-                          ...item.attributes.notifications,
-                          [channel.key]: event.target.checked,
-                        },
-                      })
+          <FormStepPanel
+            title="Canales de notificacion"
+            description="Elige por donde se informara a los usuarios cuando ocurra el evento."
+          >
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+                gap: 1.5,
+              }}
+            >
+              {notificationChannels.map((channel) => (
+                <Paper
+                  key={channel.key}
+                  variant="outlined"
+                  sx={{ px: 1.5, py: 1, borderRadius: 1.5 }}
+                >
+                  <FormControlLabel
+                    sx={{ m: 0, width: '100%', justifyContent: 'space-between' }}
+                    labelPlacement="start"
+                    control={
+                      <Switch
+                        checked={Boolean(item.attributes.notifications?.[channel.key])}
+                        onChange={(event) =>
+                          updateAttributes({
+                            notifications: {
+                              ...item.attributes.notifications,
+                              [channel.key]: event.target.checked,
+                            },
+                          })
+                        }
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                          {channel.label}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {item.attributes.notifications?.[channel.key]
+                            ? 'Canal habilitado'
+                            : 'Canal deshabilitado'}
+                        </Typography>
+                      </Box>
                     }
                   />
-                }
-                label={channel.label}
-              />
-            ))}
-          </Stack>
+                </Paper>
+              ))}
+            </Box>
+          </FormStepPanel>
         );
       default:
         return (
-          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-            <Stack spacing={1.5}>
-              <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                {item.name || 'Alerta sin nombre'}
-              </Typography>
-              <Typography color="text.secondary">{getTypeLabel(item.type)}</Typography>
-              <Typography>
-                {operators.find((operator) => operator.value === item.operator)?.label || item.operator}{' '}
-                {item.limitValue} km/h
-              </Typography>
-              <Stack direction="row" spacing={1} flexWrap="wrap">
-                <Chip size="small" label={item.active ? 'Activa' : 'Inactiva'} color={item.active ? 'success' : 'default'} />
-                <Chip size="small" label={getSeverity(item.severity).label} color={getSeverity(item.severity).color} />
-                <Chip size="small" label={`${selectedVehicleOptions.length || 'Todos'} destino(s)`} />
-              </Stack>
+          <FormStepPanel
+            title="Resumen de configuracion"
+            description="Verifica la informacion antes de guardar la alerta."
+          >
+            <Stack spacing={2}>
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: `${eliteGreen}10`,
+                  border: '1px solid',
+                  borderColor: `${eliteGreen}35`,
+                }}
+              >
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={1.5}
+                  alignItems={{ sm: 'center' }}
+                >
+                  <Avatar sx={{ bgcolor: eliteGreen, color: '#fff' }}>
+                    {eventIcon(item.type)}
+                  </Avatar>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                      {item.name || 'Alerta sin nombre'}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {getTypeLabel(item.type)}
+                    </Typography>
+                  </Box>
+                  <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+                    <Chip
+                      size="small"
+                      label={item.active ? 'Activa' : 'Inactiva'}
+                      color={item.active ? 'success' : 'default'}
+                    />
+                    <Chip
+                      size="small"
+                      label={getSeverity(item.severity).label}
+                      color={getSeverity(item.severity).color}
+                    />
+                  </Stack>
+                </Stack>
+              </Box>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+                  gap: 1.5,
+                }}
+              >
+                {[
+                  [
+                    'Condicion',
+                    `${operators.find((operator) => operator.value === item.operator)?.label || item.operator} ${item.limitValue} km/h`,
+                  ],
+                  [
+                    'Vehiculos / flotas',
+                    selectedVehicleOptions.length
+                      ? `${selectedVehicleOptions.length} seleccionados`
+                      : 'Todos los permitidos',
+                  ],
+                  [
+                    'Geocercas',
+                    selectedGeofenceOptions.length
+                      ? `${selectedGeofenceOptions.length} seleccionadas`
+                      : 'Sin restriccion',
+                  ],
+                  [
+                    'Canales activos',
+                    notificationChannels
+                      .filter((channel) => item.attributes.notifications?.[channel.key])
+                      .map((channel) => channel.label)
+                      .join(', ') || 'Ninguno',
+                  ],
+                ].map(([label, value]) => (
+                  <Paper key={label} variant="outlined" sx={{ p: 1.5, borderRadius: 1.5 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      {label}
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                      {value}
+                    </Typography>
+                  </Paper>
+                ))}
+              </Box>
+              {item.description && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Descripcion
+                  </Typography>
+                  <Typography variant="body2">{item.description}</Typography>
+                </Box>
+              )}
             </Stack>
-          </Paper>
+          </FormStepPanel>
         );
     }
   };
@@ -948,7 +1241,8 @@ const MonitoringAlertsPage = () => {
     if (alert.type !== 'speed') {
       return '-';
     }
-    const operator = operators.find((itemOperator) => itemOperator.value === alert.operator)?.label || 'Mayor que';
+    const operator =
+      operators.find((itemOperator) => itemOperator.value === alert.operator)?.label || 'Mayor que';
     return `${operator} ${alert.limitValue} km/h`;
   };
 
@@ -1015,130 +1309,210 @@ const MonitoringAlertsPage = () => {
     </Stack>
   );
 
-  const renderEventFilters = (currentFilters, setCurrentFilters, includeDateRange = false) => (
-    <Paper elevation={0} sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+  const renderEventFilters = (
+    currentFilters,
+    setCurrentFilters,
+    includeDateRange = false,
+    expanded = true,
+    onToggle,
+  ) => (
+    <Paper
+      elevation={0}
+      sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}
+    >
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: expanded ? 2 : 0 }}>
         <FilterAltIcon color="action" />
-        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+        <Typography variant="subtitle1" sx={{ flex: 1, fontWeight: 800 }}>
           Filtros
         </Typography>
+        {onToggle && (
+          <Tooltip title={expanded ? 'Contraer filtros' : 'Expandir filtros'}>
+            <IconButton
+              size="small"
+              onClick={onToggle}
+              aria-label={expanded ? 'Contraer filtros' : 'Expandir filtros'}
+            >
+              {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            </IconButton>
+          </Tooltip>
+        )}
       </Stack>
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: includeDateRange ? 'repeat(4, 1fr)' : '2fr repeat(5, 1fr)' },
-          gap: 1.5,
-        }}
-      >
-        {!includeDateRange && (
-          <TextField
-            label="Buscar vehiculo, conductor o alerta"
-            value={currentFilters.search}
-            onChange={(event) => setCurrentFilters((current) => ({ ...current, search: event.target.value }))}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-            }}
-          />
-        )}
-        {includeDateRange && (
-          <>
+      <Collapse in={expanded} timeout="auto" unmountOnExit>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              md: includeDateRange ? 'repeat(4, 1fr)' : '2fr repeat(5, 1fr)',
+            },
+            gap: 1.5,
+            ...filterControlStyles,
+          }}
+        >
+          {!includeDateRange && (
             <TextField
-              type="date"
-              label="Desde"
-              value={currentFilters.from}
-              onChange={(event) => setCurrentFilters((current) => ({ ...current, from: event.target.value }))}
-              InputLabelProps={{ shrink: true }}
+              label="Buscar vehiculo, conductor o alerta"
+              value={currentFilters.search}
+              onChange={(event) =>
+                setCurrentFilters((current) => ({ ...current, search: event.target.value }))
+              }
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon />
+                  </InputAdornment>
+                ),
+              }}
             />
-            <TextField
-              type="date"
-              label="Hasta"
-              value={currentFilters.to}
-              onChange={(event) => setCurrentFilters((current) => ({ ...current, to: event.target.value }))}
-              InputLabelProps={{ shrink: true }}
-            />
-          </>
-        )}
-        <FormControl>
-          <InputLabel>Tipo</InputLabel>
-          <Select
-            label="Tipo"
-            value={currentFilters.type}
-            onChange={(event) => setCurrentFilters((current) => ({ ...current, type: event.target.value }))}
-          >
-            <MenuItem value="all">Todos</MenuItem>
-            {alertTypes.map((type) => (
-              <MenuItem key={type.value} value={type.value}>
-                {type.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <FormControl>
-          <InputLabel>Severidad</InputLabel>
-          <Select
-            label="Severidad"
-            value={currentFilters.severity}
-            onChange={(event) => setCurrentFilters((current) => ({ ...current, severity: event.target.value }))}
-          >
-            <MenuItem value="all">Todas</MenuItem>
-            {severities.map((severity) => (
-              <MenuItem key={severity.value} value={severity.value}>
-                {severity.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <FormControl>
-          <InputLabel>Estado</InputLabel>
-          <Select
-            label="Estado"
-            value={currentFilters.status}
-            onChange={(event) => setCurrentFilters((current) => ({ ...current, status: event.target.value }))}
-          >
-            <MenuItem value="all">Todos</MenuItem>
-            {Object.entries(statusLabels).map(([value, label]) => (
-              <MenuItem key={value} value={value}>
-                {label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <Autocomplete
-          options={targetOptions}
-          value={currentFilters.target}
-          isOptionEqualToValue={(option, value) => optionKey(option) === optionKey(value)}
-          getOptionLabel={(option) => option?.label || ''}
-          onChange={(_, selected) => setCurrentFilters((current) => ({ ...current, target: selected }))}
-          renderInput={(params) => <TextField {...params} label="Flota / vehiculo" />}
-        />
-        {!includeDateRange && (
-          <TextField
-            type="date"
-            label="Fecha"
-            value={currentFilters.date}
-            onChange={(event) => setCurrentFilters((current) => ({ ...current, date: event.target.value }))}
-            InputLabelProps={{ shrink: true }}
-          />
-        )}
-        {!includeDateRange && (
-          <FormControlLabel
-            sx={{ m: 0, minHeight: 56 }}
-            control={
-              <Switch
-                checked={currentFilters.recent}
-                onChange={(event) => setCurrentFilters((current) => ({ ...current, recent: event.target.checked }))}
+          )}
+          {includeDateRange && (
+            <>
+              <TextField
+                type="date"
+                label="Desde"
+                value={currentFilters.from}
+                onChange={(event) =>
+                  setCurrentFilters((current) => ({ ...current, from: event.target.value }))
+                }
+                InputLabelProps={{ shrink: true }}
               />
+              <TextField
+                type="date"
+                label="Hasta"
+                value={currentFilters.to}
+                onChange={(event) =>
+                  setCurrentFilters((current) => ({ ...current, to: event.target.value }))
+                }
+                InputLabelProps={{ shrink: true }}
+              />
+            </>
+          )}
+          <FormControl>
+            <InputLabel>Tipo</InputLabel>
+            <Select
+              label="Tipo"
+              value={currentFilters.type}
+              onChange={(event) =>
+                setCurrentFilters((current) => ({ ...current, type: event.target.value }))
+              }
+            >
+              <MenuItem value="all">Todos</MenuItem>
+              {alertTypes.map((type) => (
+                <MenuItem key={type.value} value={type.value}>
+                  {type.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl>
+            <InputLabel>Severidad</InputLabel>
+            <Select
+              label="Severidad"
+              value={currentFilters.severity}
+              onChange={(event) =>
+                setCurrentFilters((current) => ({ ...current, severity: event.target.value }))
+              }
+            >
+              <MenuItem value="all">Todas</MenuItem>
+              {severities.map((severity) => (
+                <MenuItem key={severity.value} value={severity.value}>
+                  {severity.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl>
+            <InputLabel>Estado</InputLabel>
+            <Select
+              label="Estado"
+              value={currentFilters.status}
+              onChange={(event) =>
+                setCurrentFilters((current) => ({ ...current, status: event.target.value }))
+              }
+            >
+              <MenuItem value="all">Todos</MenuItem>
+              {Object.entries(statusLabels).map(([value, label]) => (
+                <MenuItem key={value} value={value}>
+                  {label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Autocomplete
+            options={targetOptions}
+            value={currentFilters.target}
+            isOptionEqualToValue={(option, value) => optionKey(option) === optionKey(value)}
+            getOptionLabel={(option) => option?.label || ''}
+            onChange={(_, selected) =>
+              setCurrentFilters((current) => ({ ...current, target: selected }))
             }
-            label="Mas reciente"
+            renderInput={(params) => <TextField {...params} label="Flota / vehiculo" />}
           />
-        )}
-      </Box>
+          {!includeDateRange && (
+            <TextField
+              type="date"
+              label="Fecha"
+              value={currentFilters.date}
+              onChange={(event) =>
+                setCurrentFilters((current) => ({ ...current, date: event.target.value }))
+              }
+              InputLabelProps={{ shrink: true }}
+            />
+          )}
+          {!includeDateRange && (
+            <FormControlLabel
+              sx={{ m: 0, minHeight: 56 }}
+              control={
+                <Switch
+                  checked={currentFilters.recent}
+                  onChange={(event) =>
+                    setCurrentFilters((current) => ({ ...current, recent: event.target.checked }))
+                  }
+                />
+              }
+              label="Mas reciente"
+            />
+          )}
+        </Box>
+      </Collapse>
     </Paper>
   );
+
+  const exportHistory = async () => {
+    if (!historyEvents.length) {
+      return;
+    }
+    setExportingHistory(true);
+    try {
+      const rows = historyEvents.map((event) => ({
+        Fecha: formatDateTime(event.eventTime),
+        Estado: statusLabels[event.status] || event.status,
+        Severidad: getSeverity(event.severity).label,
+        Alerta: event.alertName || '',
+        Vehiculo: event.deviceName || '',
+        Conductor: event.driverName || '',
+        Tipo: getTypeLabel(event.type),
+        Valor: Number(event.value || 0),
+        Limite: Number(event.threshold || 0),
+        Unidad: event.unit || '',
+        Ubicacion: eventLocation(event),
+        'Atendido por': event.acknowledgedBy || '',
+        'Fecha de atencion': formatDateTime(event.acknowledgedAt),
+        'Fecha de resolucion': formatDateTime(event.resolvedAt),
+        'Fecha de descarte': formatDateTime(event.dismissedAt),
+      }));
+      await exportExcel(
+        'Historial de eventos de alerta',
+        `historial-alertas-${new Date().toISOString().slice(0, 10)}.xlsx`,
+        new Map([['Eventos', rows]]),
+        theme,
+      );
+    } catch (error) {
+      setSaveError(error.message || 'No se pudo descargar el historial');
+    } finally {
+      setExportingHistory(false);
+    }
+  };
 
   const renderEventCards = () => (
     <Box
@@ -1164,15 +1538,29 @@ const MonitoringAlertsPage = () => {
               bgcolor: 'background.paper',
             }}
           >
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }}>
-              <Avatar sx={{ bgcolor: `${eliteGreen}18`, color: eliteGreen }}>{eventIcon(event.type)}</Avatar>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={2}
+              alignItems={{ sm: 'center' }}
+            >
+              <Avatar sx={{ bgcolor: `${eliteGreen}18`, color: eliteGreen }}>
+                {eventIcon(event.type)}
+              </Avatar>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                   <Typography variant="subtitle1" sx={{ fontWeight: 900 }}>
                     {event.alertName}
                   </Typography>
-                  <Chip size="small" label={getSeverity(event.severity).label} color={getSeverity(event.severity).color} />
-                  <Chip size="small" label={statusLabels[event.status] || event.status} color={statusColors[event.status]} />
+                  <Chip
+                    size="small"
+                    label={getSeverity(event.severity).label}
+                    color={getSeverity(event.severity).color}
+                  />
+                  <Chip
+                    size="small"
+                    label={statusLabels[event.status] || event.status}
+                    color={statusColors[event.status]}
+                  />
                 </Stack>
                 <Typography variant="body2" color="text.secondary">
                   {event.deviceName} · Conductor: {event.driverName}
@@ -1190,7 +1578,16 @@ const MonitoringAlertsPage = () => {
           </Paper>
         ))}
         {!realtimeEvents.length && (
-          <Paper elevation={0} sx={{ p: 5, textAlign: 'center', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+          <Paper
+            elevation={0}
+            sx={{
+              p: 5,
+              textAlign: 'center',
+              borderRadius: 2,
+              border: '1px solid',
+              borderColor: 'divider',
+            }}
+          >
             <NotificationsActiveIcon sx={{ fontSize: 44, color: 'text.disabled', mb: 1 }} />
             <Typography color="text.secondary">
               {events.some((event) => event.status === 'open')
@@ -1220,11 +1617,27 @@ const MonitoringAlertsPage = () => {
   );
 
   const renderHistory = () => (
-    <Paper elevation={0} sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }} sx={{ mb: 2 }}>
+    <Paper
+      elevation={0}
+      sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}
+    >
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1}
+        alignItems={{ sm: 'center' }}
+        sx={{ mb: 2 }}
+      >
         <Typography variant="h6" sx={{ flex: 1, fontWeight: 900 }}>
           Historial de eventos
         </Typography>
+        <Button
+          variant="outlined"
+          startIcon={exportingHistory ? <CircularProgress size={16} /> : <DownloadIcon />}
+          disabled={!historyEvents.length || exportingHistory}
+          onClick={exportHistory}
+        >
+          Descargar registros
+        </Button>
       </Stack>
       <TableContainer>
         <Table size="small">
@@ -1245,13 +1658,27 @@ const MonitoringAlertsPage = () => {
           </TableHead>
           <TableBody>
             {historyEvents.map((event) => (
-              <TableRow key={event.id} hover onClick={() => setSelectedEvent(event)} sx={{ cursor: 'pointer' }}>
+              <TableRow
+                key={event.id}
+                hover
+                onClick={() => setSelectedEvent(event)}
+                sx={{ cursor: 'pointer' }}
+              >
                 <TableCell>{formatDateTime(event.eventTime)}</TableCell>
                 <TableCell>
-                  <Chip size="small" label={statusLabels[event.status] || event.status} color={statusColors[event.status]} />
+                  <Chip
+                    size="small"
+                    label={statusLabels[event.status] || event.status}
+                    color={statusColors[event.status]}
+                  />
                 </TableCell>
                 <TableCell>
-                  <Chip size="small" label={getSeverity(event.severity).label} color={getSeverity(event.severity).color} variant="outlined" />
+                  <Chip
+                    size="small"
+                    label={getSeverity(event.severity).label}
+                    color={getSeverity(event.severity).color}
+                    variant="outlined"
+                  />
                 </TableCell>
                 <TableCell>{event.alertName}</TableCell>
                 <TableCell>{event.deviceName}</TableCell>
@@ -1283,103 +1710,200 @@ const MonitoringAlertsPage = () => {
   );
 
   const renderEventDetail = (event, showClose = true) => (
-    <Stack spacing={2}>
-      <Stack direction="row" spacing={1} alignItems="flex-start">
-        <Avatar sx={{ bgcolor: `${eliteGreen}18`, color: eliteGreen }}>{eventIcon(event.type)}</Avatar>
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="h6" sx={{ fontWeight: 900 }}>
-            {event.alertName}
-          </Typography>
-          <Stack direction="row" spacing={1} flexWrap="wrap">
-            <Chip size="small" label={statusLabels[event.status] || event.status} color={statusColors[event.status]} />
-            <Chip size="small" label={getSeverity(event.severity).label} color={getSeverity(event.severity).color} />
-          </Stack>
-        </Box>
-        {showClose && (
-          <IconButton onClick={() => setSelectedEvent(null)}>
-            <CloseIcon />
-          </IconButton>
-        )}
-      </Stack>
-      <Divider />
-      {[
-        ['Vehiculo', event.deviceName],
-        ['Conductor', event.driverName],
-        ['Flota', event.groupName],
-        ['Fecha y hora', formatDateTime(event.eventTime)],
-        ['Valor detectado', `${Number(event.value || 0).toFixed(1)} ${event.unit}`],
-        ['Limite', `${Number(event.threshold || 0).toFixed(1)} ${event.unit}`],
-        ['Direccion', eventLocation(event)],
-        ['Coordenadas', event.latitude && event.longitude ? `${event.latitude}, ${event.longitude}` : '-'],
-        ['Tipo de alerta', getTypeLabel(event.type)],
-        ['Alerta configurada', event.alertConfig?.name || '-'],
-      ].map(([label, value]) => (
-        <Box key={label}>
-          <Typography variant="caption" color="text.secondary">
-            {label}
-          </Typography>
-          <Typography variant="body2" sx={{ fontWeight: 700 }}>
-            {value}
-          </Typography>
-        </Box>
-      ))}
-      <Box>
-        <Typography variant="caption" color="text.secondary">
-          Canales notificados
-        </Typography>
-        <Stack direction="row" spacing={0.75} flexWrap="wrap" sx={{ mt: 0.5 }}>
-          {notificationChannels
-            .filter((channel) => event.alertConfig?.attributes?.notifications?.[channel.key])
-            .map((channel) => (
-              <Chip key={channel.key} size="small" label={channel.label} />
-            ))}
-          {!notificationChannels.some((channel) => event.alertConfig?.attributes?.notifications?.[channel.key]) && (
-            <Typography variant="body2">-</Typography>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      <Box
+        sx={{
+          p: 2.5,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          background: `linear-gradient(135deg, ${eliteGreen}18 0%, transparent 72%)`,
+        }}
+      >
+        <Stack direction="row" spacing={1.5} alignItems="flex-start">
+          <Avatar sx={{ width: 44, height: 44, bgcolor: `${eliteGreen}20`, color: eliteGreen }}>
+            {eventIcon(event.type)}
+          </Avatar>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography
+              variant="h6"
+              noWrap
+              title={event.alertName}
+              sx={{ fontWeight: 900, lineHeight: 1.25 }}
+            >
+              {event.alertName}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              {getTypeLabel(event.type)} · {formatDateTime(event.eventTime)}
+            </Typography>
+            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+              <Chip
+                size="small"
+                label={statusLabels[event.status] || event.status}
+                color={statusColors[event.status]}
+              />
+              <Chip
+                size="small"
+                variant="outlined"
+                label={`Severidad ${getSeverity(event.severity).label}`}
+                color={getSeverity(event.severity).color}
+              />
+            </Stack>
+          </Box>
+          {showClose && (
+            <IconButton aria-label="Cerrar detalle" onClick={() => setSelectedEvent(null)}>
+              <CloseIcon />
+            </IconButton>
           )}
         </Stack>
       </Box>
-      {event.latitude && event.longitude && (
-        <Box
-          sx={{
-            height: 150,
-            borderRadius: 2,
-            border: '1px solid',
-            borderColor: 'divider',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            bgcolor: '#ecfdf3',
-            color: eliteGreen,
-            fontWeight: 900,
-          }}
-        >
-          <Stack alignItems="center" spacing={0.5}>
-            <MapIcon />
-            <Typography variant="body2">{Number(event.latitude).toFixed(5)}, {Number(event.longitude).toFixed(5)}</Typography>
-          </Stack>
-        </Box>
-      )}
-      <Box>
-        <Typography variant="subtitle2" sx={{ fontWeight: 900, mb: 1 }}>
-          Linea de tiempo
-        </Typography>
-        {[
-          ['Evento generado', event.eventTime],
-          ['Notificacion enviada', event.attributes?.notificationTime],
-          ['Atendido por usuario', event.acknowledgedAt],
-          [event.status === 'dismissed' ? 'Descartado' : 'Resuelto', event.resolvedAt || event.dismissedAt],
-        ].map(([label, value]) => (
-          <Stack key={label} direction="row" spacing={1} sx={{ py: 0.5 }}>
-            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: value ? eliteGreen : 'divider', mt: 0.75 }} />
-            <Box>
-              <Typography variant="body2" sx={{ fontWeight: 700 }}>{label}</Typography>
-              <Typography variant="caption" color="text.secondary">{formatDateTime(value)}</Typography>
+
+      <Box sx={{ flex: 1, overflowY: 'auto', p: 2.5 }}>
+        <Stack spacing={2}>
+          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 800 }}>
+              Vehiculo
+            </Typography>
+            <Typography variant="h6" sx={{ fontWeight: 900, mb: 1.5 }}>
+              {event.deviceName || 'Sin identificar'}
+            </Typography>
+            <Box
+              sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1.5 }}
+            >
+              {[
+                ['Conductor', event.driverName || '-'],
+                ['Flota', event.groupName || '-'],
+              ].map(([label, value]) => (
+                <Box key={label} sx={{ minWidth: 0 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    {label}
+                  </Typography>
+                  <Typography variant="body2" noWrap title={value} sx={{ fontWeight: 700 }}>
+                    {value}
+                  </Typography>
+                </Box>
+              ))}
             </Box>
-          </Stack>
-        ))}
+          </Paper>
+
+          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 900, mb: 1.5 }}>
+              Condicion detectada
+            </Typography>
+            <Box
+              sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1.25 }}
+            >
+              <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: `${eliteGreen}12` }}>
+                <Typography variant="caption" color="text.secondary">
+                  Valor detectado
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                  {Number(event.value || 0).toFixed(1)} {event.unit}
+                </Typography>
+              </Box>
+              <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: 'action.hover' }}>
+                <Typography variant="caption" color="text.secondary">
+                  Limite configurado
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                  {Number(event.threshold || 0).toFixed(1)} {event.unit}
+                </Typography>
+              </Box>
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5 }}>
+              Alerta configurada
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+              {event.alertConfig?.name || event.alertName || '-'}
+            </Typography>
+          </Paper>
+
+          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+              <MapIcon sx={{ color: eliteGreen }} />
+              <Typography variant="subtitle2" sx={{ fontWeight: 900 }}>
+                Ubicacion
+              </Typography>
+            </Stack>
+            <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
+              {eventLocation(event)}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {hasEventLocation(event)
+                ? `${Number(event.latitude).toFixed(5)}, ${Number(event.longitude).toFixed(5)}`
+                : 'Coordenadas no disponibles'}
+            </Typography>
+          </Paper>
+
+          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 900, mb: 1 }}>
+              Canales notificados
+            </Typography>
+            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+              {notificationChannels
+                .filter((channel) => event.alertConfig?.attributes?.notifications?.[channel.key])
+                .map((channel) => (
+                  <Chip key={channel.key} size="small" label={channel.label} />
+                ))}
+              {!notificationChannels.some(
+                (channel) => event.alertConfig?.attributes?.notifications?.[channel.key],
+              ) && (
+                <Typography variant="body2" color="text.secondary">
+                  Sin canales registrados
+                </Typography>
+              )}
+            </Stack>
+          </Paper>
+
+          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 900, mb: 1.25 }}>
+              Linea de tiempo
+            </Typography>
+            {[
+              ['Evento generado', event.eventTime],
+              ['Notificacion enviada', event.attributes?.notificationTime],
+              ['Atendido por usuario', event.acknowledgedAt],
+              [
+                event.status === 'dismissed' ? 'Descartado' : 'Resuelto',
+                event.resolvedAt || event.dismissedAt,
+              ],
+            ].map(([label, value], index, timeline) => (
+              <Stack key={label} direction="row" spacing={1.25} sx={{ minHeight: 48 }}>
+                <Stack alignItems="center" sx={{ width: 12 }}>
+                  <Box
+                    sx={{
+                      width: 10,
+                      height: 10,
+                      mt: 0.5,
+                      borderRadius: '50%',
+                      bgcolor: value ? eliteGreen : 'divider',
+                    }}
+                  />
+                  {index < timeline.length - 1 && (
+                    <Box sx={{ width: 2, flex: 1, bgcolor: 'divider' }} />
+                  )}
+                </Stack>
+                <Box sx={{ pb: 1 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                    {label}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {value ? formatDateTime(value) : 'Pendiente'}
+                  </Typography>
+                </Box>
+              </Stack>
+            ))}
+          </Paper>
+        </Stack>
       </Box>
-      {renderEventActions(event)}
-    </Stack>
+
+      <Box
+        sx={{ p: 1.5, borderTop: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}
+      >
+        <Stack direction="row" justifyContent="flex-end">
+          {renderEventActions(event)}
+        </Stack>
+      </Box>
+    </Box>
   );
 
   return (
@@ -1405,22 +1929,32 @@ const MonitoringAlertsPage = () => {
         <Paper
           elevation={0}
           sx={{
-            p: { xs: 2, md: 2.5 },
+            px: { xs: 1.5, md: 2 },
+            py: { xs: 1.25, md: 1.5 },
             borderRadius: 2,
             border: '1px solid',
             borderColor: 'divider',
           }}
         >
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            spacing={1.25}
+            alignItems={{ md: 'center' }}
+          >
             <Box sx={{ flex: 1 }}>
-              <Typography variant="h4" sx={{ fontWeight: 900 }}>
+              <Typography variant="h5" sx={{ fontWeight: 900, lineHeight: 1.15 }}>
                 Alertas
               </Typography>
-              <Typography color="text.secondary">
+              <Typography variant="body2" color="text.secondary">
                 Configura reglas para detectar eventos importantes de tu flota.
               </Typography>
             </Box>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={openNew} sx={{ bgcolor: eliteGreen }}>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={openNew}
+              sx={{ minHeight: 40, bgcolor: eliteGreen }}
+            >
               Nueva alerta
             </Button>
           </Stack>
@@ -1449,11 +1983,31 @@ const MonitoringAlertsPage = () => {
                 gap: 2,
               }}
             >
-              <KpiCard title="Alertas abiertas" value={eventKpis.open} icon={<ErrorOutlineIcon />} color="#f59e0b" />
-              <KpiCard title="Criticas" value={eventKpis.critical} icon={<WarningAmberIcon />} color="#dc2626" />
-              <KpiCard title="Atendidas" value={eventKpis.acknowledged} icon={<CheckCircleIcon />} color="#0284c7" />
+              <KpiCard
+                title="Alertas abiertas"
+                value={eventKpis.open}
+                icon={<ErrorOutlineIcon />}
+                color="#f59e0b"
+              />
+              <KpiCard
+                title="Criticas"
+                value={eventKpis.critical}
+                icon={<WarningAmberIcon />}
+                color="#dc2626"
+              />
+              <KpiCard
+                title="Atendidas"
+                value={eventKpis.acknowledged}
+                icon={<CheckCircleIcon />}
+                color="#0284c7"
+              />
               <KpiCard title="Resueltas hoy" value={eventKpis.resolvedToday} icon={<SaveIcon />} />
-              <KpiCard title="Sin atender" value={eventKpis.unattended} icon={<NotificationsActiveIcon />} color="#f59e0b" />
+              <KpiCard
+                title="Sin atender"
+                value={eventKpis.unattended}
+                icon={<NotificationsActiveIcon />}
+                color="#f59e0b"
+              />
             </Box>
             {renderEventFilters(eventFilters, setEventFilters)}
             {renderEventCards()}
@@ -1462,210 +2016,264 @@ const MonitoringAlertsPage = () => {
 
         {activeTab === 1 && (
           <>
-            {renderEventFilters(historyFilters, setHistoryFilters, true)}
+            {renderEventFilters(
+              historyFilters,
+              setHistoryFilters,
+              true,
+              historyFiltersExpanded,
+              () => setHistoryFiltersExpanded((current) => !current),
+            )}
             {renderHistory()}
           </>
         )}
 
         {activeTab === 2 && (
           <>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(5, 1fr)' },
-            gap: 2,
-          }}
-        >
-          <KpiCard title="Alertas activas" value={kpis.active} icon={<CheckCircleIcon />} />
-          <KpiCard title="Alertas inactivas" value={kpis.inactive} icon={<PowerSettingsNewIcon />} color="#64748b" />
-          <KpiCard title="Eventos hoy" value={kpis.today} icon={<NotificationsActiveIcon />} color="#0284c7" />
-          <KpiCard title="Criticas" value={kpis.critical} icon={<WarningAmberIcon />} color="#dc2626" />
-          <KpiCard title="Sin atender" value={kpis.open} icon={<ErrorOutlineIcon />} color="#f59e0b" />
-        </Box>
-
-        <Paper elevation={0} sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-            <FilterAltIcon color="action" />
-            <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-              Filtros
-            </Typography>
-          </Stack>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: '2fr repeat(4, 1fr)' },
-              gap: 1.5,
-            }}
-          >
-            <TextField
-              label="Buscar por nombre"
-              value={filters.search}
-              onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon />
-                  </InputAdornment>
-                ),
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(5, 1fr)' },
+                gap: 2,
               }}
-            />
-            <FormControl>
-              <InputLabel>Tipo</InputLabel>
-              <Select
-                label="Tipo"
-                value={filters.type}
-                onChange={(event) => setFilters((current) => ({ ...current, type: event.target.value }))}
-              >
-                <MenuItem value="all">Todos</MenuItem>
-                {alertTypes.map((type) => (
-                  <MenuItem key={type.value} value={type.value}>
-                    {type.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl>
-              <InputLabel>Estado</InputLabel>
-              <Select
-                label="Estado"
-                value={filters.status}
-                onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
-              >
-                <MenuItem value="all">Todos</MenuItem>
-                <MenuItem value="active">Activa</MenuItem>
-                <MenuItem value="inactive">Inactiva</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl>
-              <InputLabel>Severidad</InputLabel>
-              <Select
-                label="Severidad"
-                value={filters.severity}
-                onChange={(event) => setFilters((current) => ({ ...current, severity: event.target.value }))}
-              >
-                <MenuItem value="all">Todas</MenuItem>
-                {severities.map((severity) => (
-                  <MenuItem key={severity.value} value={severity.value}>
-                    {severity.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Autocomplete
-              options={targetOptions}
-              value={filters.target}
-              isOptionEqualToValue={(option, value) => optionKey(option) === optionKey(value)}
-              getOptionLabel={(option) => option?.label || ''}
-              onChange={(_, selected) => setFilters((current) => ({ ...current, target: selected }))}
-              renderInput={(params) => <TextField {...params} label="Vehiculo / flota" />}
-            />
-          </Box>
-        </Paper>
+            >
+              <KpiCard title="Alertas activas" value={kpis.active} icon={<CheckCircleIcon />} />
+              <KpiCard
+                title="Alertas inactivas"
+                value={kpis.inactive}
+                icon={<PowerSettingsNewIcon />}
+                color="#64748b"
+              />
+              <KpiCard
+                title="Eventos hoy"
+                value={kpis.today}
+                icon={<NotificationsActiveIcon />}
+                color="#0284c7"
+              />
+              <KpiCard
+                title="Criticas"
+                value={kpis.critical}
+                icon={<WarningAmberIcon />}
+                color="#dc2626"
+              />
+              <KpiCard
+                title="Sin atender"
+                value={kpis.open}
+                icon={<ErrorOutlineIcon />}
+                color="#f59e0b"
+              />
+            </Box>
 
-        <Paper elevation={0} sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
-          <Typography variant="h6" sx={{ mb: 2, fontWeight: 900 }}>
-            Alertas configuradas
-          </Typography>
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow
-                  sx={{
-                    '& th': {
-                      bgcolor: '#ecfdf3',
-                      color: '#009624',
-                      fontWeight: 900,
-                      textTransform: 'uppercase',
-                      letterSpacing: 0,
-                      fontSize: 12,
-                    },
+            <Paper
+              elevation={0}
+              sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}
+            >
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                <FilterAltIcon color="action" />
+                <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+                  Filtros
+                </Typography>
+              </Stack>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', md: '2fr repeat(4, 1fr)' },
+                  gap: 1.5,
+                  ...filterControlStyles,
+                }}
+              >
+                <TextField
+                  label="Buscar por nombre"
+                  value={filters.search}
+                  onChange={(event) =>
+                    setFilters((current) => ({ ...current, search: event.target.value }))
+                  }
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon />
+                      </InputAdornment>
+                    ),
                   }}
-                >
-                  <TableCell>Estado</TableCell>
-                  <TableCell>Nombre</TableCell>
-                  <TableCell>Tipo</TableCell>
-                  <TableCell>Condicion</TableCell>
-                  <TableCell>Severidad</TableCell>
-                  <TableCell>Vehiculos / flotas</TableCell>
-                  <TableCell>Geocercas / grupos</TableCell>
-                  <TableCell>Ultima actualizacion</TableCell>
-                  <TableCell align="right">Acciones</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredAlerts.map((alert) => (
-                  <TableRow key={alert.id} hover>
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        label={alert.active ? 'Activa' : 'Inactiva'}
-                        color={alert.active ? 'success' : 'default'}
-                        sx={{ fontWeight: 800 }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 800 }}>
-                        {alert.name}
-                      </Typography>
-                      {alert.description && (
-                        <Typography variant="caption" color="text.secondary">
-                          {alert.description}
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>{getTypeLabel(alert.type)}</TableCell>
-                    <TableCell>{conditionText(alert)}</TableCell>
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        label={getSeverity(alert.severity).label}
-                        color={getSeverity(alert.severity).color}
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>{(alert.deviceIds.length || 0) + (alert.groupIds.length || 0) || 'Todos'}</TableCell>
-                    <TableCell>{(alert.geofenceIds.length || 0) + (alert.geofenceGroupIds.length || 0) || '-'}</TableCell>
-                    <TableCell>
-                      {alert.updatedAt ? new Date(alert.updatedAt).toLocaleString() : '-'}
-                    </TableCell>
-                    <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                      <Tooltip title="Editar">
-                        <IconButton size="small" onClick={() => openEdit(alert)}>
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Duplicar">
-                        <IconButton size="small" onClick={() => handleDuplicate(alert)}>
-                          <ContentCopyIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title={alert.active ? 'Inactivar' : 'Activar'}>
-                        <IconButton size="small" onClick={() => handleToggleActive(alert)}>
-                          <PowerSettingsNewIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Eliminar">
-                        <IconButton size="small" color="error" onClick={() => setAlertToDelete(alert)}>
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {!filteredAlerts.length && (
-                  <TableRow>
-                    <TableCell colSpan={9}>
-                      <Box sx={{ py: 5, textAlign: 'center' }}>
-                        <SpeedIcon sx={{ color: 'text.disabled', fontSize: 42, mb: 1 }} />
-                        <Typography color="text.secondary">No hay alertas para los filtros seleccionados</Typography>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Paper>
+                />
+                <FormControl>
+                  <InputLabel>Tipo</InputLabel>
+                  <Select
+                    label="Tipo"
+                    value={filters.type}
+                    onChange={(event) =>
+                      setFilters((current) => ({ ...current, type: event.target.value }))
+                    }
+                  >
+                    <MenuItem value="all">Todos</MenuItem>
+                    {alertTypes.map((type) => (
+                      <MenuItem key={type.value} value={type.value}>
+                        {type.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl>
+                  <InputLabel>Estado</InputLabel>
+                  <Select
+                    label="Estado"
+                    value={filters.status}
+                    onChange={(event) =>
+                      setFilters((current) => ({ ...current, status: event.target.value }))
+                    }
+                  >
+                    <MenuItem value="all">Todos</MenuItem>
+                    <MenuItem value="active">Activa</MenuItem>
+                    <MenuItem value="inactive">Inactiva</MenuItem>
+                  </Select>
+                </FormControl>
+                <FormControl>
+                  <InputLabel>Severidad</InputLabel>
+                  <Select
+                    label="Severidad"
+                    value={filters.severity}
+                    onChange={(event) =>
+                      setFilters((current) => ({ ...current, severity: event.target.value }))
+                    }
+                  >
+                    <MenuItem value="all">Todas</MenuItem>
+                    {severities.map((severity) => (
+                      <MenuItem key={severity.value} value={severity.value}>
+                        {severity.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <Autocomplete
+                  options={targetOptions}
+                  value={filters.target}
+                  isOptionEqualToValue={(option, value) => optionKey(option) === optionKey(value)}
+                  getOptionLabel={(option) => option?.label || ''}
+                  onChange={(_, selected) =>
+                    setFilters((current) => ({ ...current, target: selected }))
+                  }
+                  renderInput={(params) => <TextField {...params} label="Vehiculo / flota" />}
+                />
+              </Box>
+            </Paper>
+
+            <Paper
+              elevation={0}
+              sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}
+            >
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 900 }}>
+                Alertas configuradas
+              </Typography>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow
+                      sx={{
+                        '& th': {
+                          bgcolor: '#ecfdf3',
+                          color: '#009624',
+                          fontWeight: 900,
+                          textTransform: 'uppercase',
+                          letterSpacing: 0,
+                          fontSize: 12,
+                        },
+                      }}
+                    >
+                      <TableCell>Estado</TableCell>
+                      <TableCell>Nombre</TableCell>
+                      <TableCell>Tipo</TableCell>
+                      <TableCell>Condicion</TableCell>
+                      <TableCell>Severidad</TableCell>
+                      <TableCell>Vehiculos / flotas</TableCell>
+                      <TableCell>Geocercas / grupos</TableCell>
+                      <TableCell>Ultima actualizacion</TableCell>
+                      <TableCell align="right">Acciones</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filteredAlerts.map((alert) => (
+                      <TableRow key={alert.id} hover>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            label={alert.active ? 'Activa' : 'Inactiva'}
+                            color={alert.active ? 'success' : 'default'}
+                            sx={{ fontWeight: 800 }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                            {alert.name}
+                          </Typography>
+                          {alert.description && (
+                            <Typography variant="caption" color="text.secondary">
+                              {alert.description}
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>{getTypeLabel(alert.type)}</TableCell>
+                        <TableCell>{conditionText(alert)}</TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            label={getSeverity(alert.severity).label}
+                            color={getSeverity(alert.severity).color}
+                            variant="outlined"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {(alert.deviceIds.length || 0) + (alert.groupIds.length || 0) || 'Todos'}
+                        </TableCell>
+                        <TableCell>
+                          {(alert.geofenceIds.length || 0) + (alert.geofenceGroupIds.length || 0) ||
+                            '-'}
+                        </TableCell>
+                        <TableCell>
+                          {alert.updatedAt ? new Date(alert.updatedAt).toLocaleString() : '-'}
+                        </TableCell>
+                        <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                          <Tooltip title="Editar">
+                            <IconButton size="small" onClick={() => openEdit(alert)}>
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Duplicar">
+                            <IconButton size="small" onClick={() => handleDuplicate(alert)}>
+                              <ContentCopyIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title={alert.active ? 'Inactivar' : 'Activar'}>
+                            <IconButton size="small" onClick={() => handleToggleActive(alert)}>
+                              <PowerSettingsNewIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Eliminar">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => setAlertToDelete(alert)}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {!filteredAlerts.length && (
+                      <TableRow>
+                        <TableCell colSpan={9}>
+                          <Box sx={{ py: 5, textAlign: 'center' }}>
+                            <SpeedIcon sx={{ color: 'text.disabled', fontSize: 42, mb: 1 }} />
+                            <Typography color="text.secondary">
+                              No hay alertas para los filtros seleccionados
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
           </>
         )}
 
@@ -1673,66 +2281,139 @@ const MonitoringAlertsPage = () => {
           anchor="right"
           open={drawerOpen}
           onClose={saving ? undefined : () => setDrawerOpen(false)}
-          PaperProps={{ sx: { width: { xs: '100%', sm: 620 }, maxWidth: '100%' } }}
+          PaperProps={{
+            sx: { width: { xs: '100%', sm: 700 }, maxWidth: '100%', overflow: 'hidden' },
+          }}
         >
-          <Box sx={{ p: 2.5, display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              height: '100%',
+              bgcolor: 'background.default',
+            }}
+          >
+            <Stack
+              direction="row"
+              spacing={1.5}
+              alignItems="center"
+              sx={{
+                px: { xs: 2, sm: 3 },
+                py: 2,
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+                bgcolor: 'background.paper',
+              }}
+            >
+              <Avatar sx={{ bgcolor: `${eliteGreen}18`, color: eliteGreen }}>
+                {eventIcon(item.type)}
+              </Avatar>
               <Box sx={{ flex: 1 }}>
-                <Typography variant="h5" sx={{ fontWeight: 900 }}>
+                <Typography variant="h5" sx={{ fontWeight: 900, lineHeight: 1.2 }}>
                   {item.id ? 'Editar alerta' : 'Nueva alerta'}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {getTypeLabel(item.type)}
+                  {getTypeLabel(item.type)} · Paso {activeStep + 1} de {steps.length}
                 </Typography>
               </Box>
-              <IconButton onClick={() => setDrawerOpen(false)} disabled={saving}>
+              <IconButton
+                aria-label="Cerrar formulario"
+                onClick={() => setDrawerOpen(false)}
+                disabled={saving}
+              >
                 <CloseIcon />
               </IconButton>
             </Stack>
-            {saveError && (
-              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setSaveError('')}>
-                {saveError}
-              </Alert>
-            )}
-            <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 3 }}>
-              {steps.map((step) => (
-                <Step key={step}>
-                  <StepLabel>{step}</StepLabel>
-                </Step>
-              ))}
-            </Stepper>
-            <Box sx={{ flex: 1, overflowY: 'auto', pr: 0.5 }}>{renderFormStep()}</Box>
-            <Divider sx={{ my: 2 }} />
-            <Stack direction="row" spacing={1} justifyContent="space-between">
-              <Button disabled={activeStep === 0 || saving} onClick={() => setActiveStep((step) => step - 1)}>
+
+            <Box
+              sx={{
+                px: { xs: 1, sm: 2 },
+                py: 1.5,
+                bgcolor: 'background.paper',
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+              }}
+            >
+              <Stepper
+                activeStep={activeStep}
+                alternativeLabel
+                sx={{
+                  '& .MuiStepIcon-root.Mui-active, & .MuiStepIcon-root.Mui-completed': {
+                    color: eliteGreen,
+                  },
+                  '& .MuiStepLabel-label': { mt: 0.75, fontSize: 12, fontWeight: 700 },
+                  '& .MuiStepLabel-label.Mui-active': { fontWeight: 900 },
+                  '& .MuiStepConnector-line': { borderColor: 'divider' },
+                }}
+              >
+                {steps.map((step) => (
+                  <Step key={step}>
+                    <StepLabel>{step}</StepLabel>
+                  </Step>
+                ))}
+              </Stepper>
+            </Box>
+
+            <Box sx={{ flex: 1, overflowY: 'auto', p: { xs: 2, sm: 3 } }}>
+              {saveError && (
+                <Alert severity="error" sx={{ mb: 2 }} onClose={() => setSaveError('')}>
+                  {saveError}
+                </Alert>
+              )}
+              {renderFormStep()}
+            </Box>
+
+            <Stack
+              direction="row"
+              spacing={1}
+              justifyContent="space-between"
+              sx={{
+                px: { xs: 2, sm: 3 },
+                py: 1.5,
+                borderTop: '1px solid',
+                borderColor: 'divider',
+                bgcolor: 'background.paper',
+              }}
+            >
+              <Button
+                variant="text"
+                disabled={activeStep === 0 || saving}
+                onClick={() => setActiveStep((step) => step - 1)}
+              >
                 Atras
               </Button>
-              <Stack direction="row" spacing={1}>
-                {activeStep < steps.length - 1 ? (
-                  <Button variant="contained" onClick={() => setActiveStep((step) => step + 1)}>
-                    Siguiente
-                  </Button>
-                ) : (
-                  <Button
-                    variant="contained"
-                    startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
-                    disabled={saving || !formValid}
-                    onClick={handleSave}
-                    sx={{ bgcolor: eliteGreen }}
-                  >
-                    Guardar
-                  </Button>
-                )}
-              </Stack>
+              {activeStep < steps.length - 1 ? (
+                <Button
+                  variant="contained"
+                  onClick={() => setActiveStep((step) => step + 1)}
+                  sx={{ minWidth: 120, bgcolor: eliteGreen }}
+                >
+                  Siguiente
+                </Button>
+              ) : (
+                <Button
+                  variant="contained"
+                  startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
+                  disabled={saving || !formValid}
+                  onClick={handleSave}
+                  sx={{ minWidth: 120, bgcolor: eliteGreen }}
+                >
+                  Guardar
+                </Button>
+              )}
             </Stack>
           </Box>
         </Drawer>
 
         <Drawer
           anchor="right"
-          open={Boolean(selectedEventDetail) && activeTab !== 2 && (compactDetail || activeTab === 1)}
+          open={
+            Boolean(selectedEventDetail) && activeTab !== 2 && (compactDetail || activeTab === 1)
+          }
           onClose={() => setSelectedEvent(null)}
-          PaperProps={{ sx: { width: { xs: '100%', sm: 460 }, maxWidth: '100%', p: 2.5 } }}
+          PaperProps={{
+            sx: { width: { xs: '100%', sm: 460 }, maxWidth: '100%', overflow: 'hidden' },
+          }}
         >
           {selectedEventDetail && renderEventDetail(selectedEventDetail)}
         </Drawer>
@@ -1758,7 +2439,13 @@ const MonitoringAlertsPage = () => {
               color="error"
               variant="contained"
               disabled={deletingAlert}
-              startIcon={deletingAlert ? <CircularProgress size={16} color="inherit" /> : <DeleteForeverIcon />}
+              startIcon={
+                deletingAlert ? (
+                  <CircularProgress size={16} color="inherit" />
+                ) : (
+                  <DeleteForeverIcon />
+                )
+              }
               onClick={handleConfirmDelete}
             >
               Eliminar

@@ -81,6 +81,7 @@ public class ProcessingHandler extends ChannelInboundHandlerAdapter implements B
     private final List<BasePositionHandler> positionHandlers;
     private final List<BaseEventHandler> eventHandlers;
     private final PostProcessHandler postProcessHandler;
+    private final AlertProcessor alertProcessor;
 
     private final Map<Long, Queue<Position>> queues = new HashMap<>();
 
@@ -96,6 +97,7 @@ public class ProcessingHandler extends ChannelInboundHandlerAdapter implements B
         this.notificationManager = notificationManager;
         this.positionLogger = positionLogger;
         bufferingManager = new BufferingManager(config, this);
+        alertProcessor = injector.getInstance(AlertProcessor.class);
 
         positionHandlers = Stream.of(
                 ComputedAttributesHandler.Early.class,
@@ -191,7 +193,10 @@ public class ProcessingHandler extends ChannelInboundHandlerAdapter implements B
 
     private void processEventHandlers(ChannelHandlerContext ctx, Position position) {
         eventHandlers.forEach(handler -> handler.analyzePosition(
-                position, (event) -> notificationManager.updateEvents(Map.of(event, position))));
+                position, (event) -> {
+                    alertProcessor.processEvent(event, position);
+                    notificationManager.updateEvents(Map.of(event, position));
+                }));
         finishedProcessing(ctx, position, false);
     }
 

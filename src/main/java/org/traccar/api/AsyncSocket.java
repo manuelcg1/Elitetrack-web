@@ -23,6 +23,7 @@ import org.eclipse.jetty.websocket.api.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.traccar.helper.model.PositionUtil;
+import org.traccar.model.AlertEvent;
 import org.traccar.model.Device;
 import org.traccar.model.Event;
 import org.traccar.model.LogRecord;
@@ -44,6 +45,7 @@ public class AsyncSocket implements Session.Listener.AutoDemanding, ConnectionMa
     private static final String KEY_DEVICES = "devices";
     private static final String KEY_POSITIONS = "positions";
     private static final String KEY_EVENTS = "events";
+    private static final String KEY_ALERT_EVENTS = "alertEvents";
     private static final String KEY_LOGS = "logs";
 
     private final ObjectMapper objectMapper;
@@ -118,6 +120,11 @@ public class AsyncSocket implements Session.Listener.AutoDemanding, ConnectionMa
     @Override
     public void onUpdateEvent(Event event) {
         sendData(Map.of(KEY_EVENTS, List.of(event)));
+    }
+
+    @Override
+    public void onUpdateAlertEvent(AlertEvent event) {
+        sendData(Map.of(KEY_ALERT_EVENTS, List.of(event)));
     }
 
     @Override

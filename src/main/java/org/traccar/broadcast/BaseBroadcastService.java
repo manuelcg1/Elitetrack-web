@@ -18,6 +18,7 @@ package org.traccar.broadcast;
 import java.util.HashSet;
 import java.util.Set;
 
+import org.traccar.model.AlertEvent;
 import org.traccar.model.BaseModel;
 import org.traccar.model.Device;
 import org.traccar.model.Event;
@@ -58,6 +59,13 @@ public abstract class BaseBroadcastService implements BroadcastService {
         BroadcastMessage message = new BroadcastMessage();
         message.setUserId(userId);
         message.setEvent(event);
+        sendMessage(message);
+    }
+
+    @Override
+    public void updateAlertEvent(boolean local, AlertEvent event) {
+        BroadcastMessage message = new BroadcastMessage();
+        message.setAlertEvent(event);
         sendMessage(message);
     }
 
@@ -103,6 +111,8 @@ public abstract class BaseBroadcastService implements BroadcastService {
             listeners.forEach(listener -> listener.updatePosition(false, message.getPosition()));
         } else if (message.getUserId() != null && message.getEvent() != null) {
             listeners.forEach(listener -> listener.updateEvent(false, message.getUserId(), message.getEvent()));
+        } else if (message.getAlertEvent() != null) {
+            listeners.forEach(listener -> listener.updateAlertEvent(false, message.getAlertEvent()));
         } else if (message.getCommandDeviceId() != null) {
             listeners.forEach(listener -> listener.updateCommand(false, message.getCommandDeviceId()));
         } else if (message.getInvalidateObject() != null) {

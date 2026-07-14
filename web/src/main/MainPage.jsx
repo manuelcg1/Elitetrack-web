@@ -4,6 +4,7 @@ import { makeStyles } from 'tss-react/mui';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useDispatch, useSelector } from 'react-redux';
+import { useLocation } from 'react-router-dom';
 import KeyboardDoubleArrowLeftIcon from '@mui/icons-material/KeyboardDoubleArrowLeft';
 import KeyboardDoubleArrowRightIcon from '@mui/icons-material/KeyboardDoubleArrowRight';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -158,6 +159,7 @@ const useStyles = makeStyles()((theme, { navigationWidth, sidebarLeft, sidebarOp
 
 const MainPage = () => {
   const dispatch = useDispatch();
+  const location = useLocation();
   const theme = useTheme();
   const desktop = useMediaQuery(theme.breakpoints.up('md'));
   const mapOnSelect = useAttributePreference('mapOnSelect', true);
@@ -183,6 +185,13 @@ const MainPage = () => {
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [devicesOpen, setDevicesOpen] = useState(false);
   const [eventsOpen, setEventsOpen] = useState(false);
+
+  useEffect(() => {
+    if (location.state?.notificationDeviceId) {
+      dispatch(devicesActions.selectId(location.state.notificationDeviceId));
+      setDevicesOpen(true);
+    }
+  }, [dispatch, location.state]);
 
   const onEventsClick = useCallback(() => setEventsOpen(true), []);
   const navigationWidth = desktop ? (navigationCollapsed ? 72 : 224) : 0;
@@ -213,6 +222,7 @@ const MainPage = () => {
         selectedPosition={selectedPosition}
         onEventsClick={onEventsClick}
         desktopPadding={desktopPadding}
+        notificationLocation={location.state?.notificationLocation}
       />
       {desktop && (
         <div className={classes.navigation}>

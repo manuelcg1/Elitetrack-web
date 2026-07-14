@@ -1,5 +1,6 @@
 package org.traccar.model;
 
+import org.traccar.storage.QueryIgnore;
 import org.traccar.storage.StorageName;
 
 import java.util.Date;
@@ -32,6 +33,9 @@ public class AlertEvent extends ExtendedModel {
     private String address;
     private long geofenceId;
     private long groupId;
+    private String alertName;
+    private String deviceName;
+    private String driverName;
 
     public long getAlertId() {
         return alertId;
@@ -191,6 +195,33 @@ public class AlertEvent extends ExtendedModel {
 
     public void setGroupId(long groupId) {
         this.groupId = groupId;
+    }
+
+    @QueryIgnore
+    public String getAlertName() {
+        return alertName;
+    }
+
+    public void setAlertName(String alertName) {
+        this.alertName = alertName;
+    }
+
+    @QueryIgnore
+    public String getDeviceName() {
+        return deviceName;
+    }
+
+    public void setDeviceName(String deviceName) {
+        this.deviceName = deviceName;
+    }
+
+    @QueryIgnore
+    public String getDriverName() {
+        return driverName;
+    }
+
+    public void setDriverName(String driverName) {
+        this.driverName = driverName;
     }
 
 }

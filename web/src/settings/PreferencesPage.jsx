@@ -68,7 +68,7 @@ const PreferencesPage = () => {
   const socket = useSelector((state) => state.session.socket);
 
   const [token, setToken] = useState(null);
-  const [tokenExpiration, setTokenExpiration] = useState(
+  const [tokenExpiration, setTokenExpiration] = useState(() =>
     dayjs().add(1, 'week').locale('en').format('YYYY-MM-DD'),
   );
 
@@ -328,6 +328,113 @@ const PreferencesPage = () => {
                   titleGetter={(it) => t(it.name)}
                   label={t('deviceSecondaryInfo')}
                 />
+              </AccordionDetails>
+            </Accordion>
+            <Accordion>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle1">Notificaciones</Typography>
+              </AccordionSummary>
+              <AccordionDetails className={classes.details}>
+                <FormGroup>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={
+                          attributes.hasOwnProperty('alertPopups') ? attributes.alertPopups : true
+                        }
+                        onChange={(e) =>
+                          setAttributes({ ...attributes, alertPopups: e.target.checked })
+                        }
+                      />
+                    }
+                    label="Mostrar Popups"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={
+                          attributes.hasOwnProperty('alertPopupSound')
+                            ? attributes.alertPopupSound
+                            : true
+                        }
+                        onChange={(e) =>
+                          setAttributes({ ...attributes, alertPopupSound: e.target.checked })
+                        }
+                      />
+                    }
+                    label="Reproducir sonido"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={
+                          attributes.hasOwnProperty('alertPopupAutoClose')
+                            ? attributes.alertPopupAutoClose
+                            : true
+                        }
+                        onChange={(e) =>
+                          setAttributes({
+                            ...attributes,
+                            alertPopupAutoClose: e.target.checked,
+                          })
+                        }
+                      />
+                    }
+                    label="Cerrar automáticamente"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={attributes.alertPopupRepeatSound || false}
+                        onChange={(e) =>
+                          setAttributes({
+                            ...attributes,
+                            alertPopupRepeatSound: e.target.checked,
+                          })
+                        }
+                      />
+                    }
+                    label="Repetir sonido una vez"
+                  />
+                </FormGroup>
+                <TextField
+                  label="Tiempo de cierre (segundos)"
+                  type="number"
+                  value={attributes.alertPopupDuration ?? 10}
+                  onChange={(e) =>
+                    setAttributes({
+                      ...attributes,
+                      alertPopupDuration: Math.max(1, Number(e.target.value)),
+                    })
+                  }
+                  slotProps={{ htmlInput: { min: 1, max: 120 } }}
+                />
+                <TextField
+                  label="Volumen (%)"
+                  type="number"
+                  value={attributes.alertPopupVolume ?? 80}
+                  onChange={(e) =>
+                    setAttributes({
+                      ...attributes,
+                      alertPopupVolume: Math.min(100, Math.max(0, Number(e.target.value))),
+                    })
+                  }
+                  slotProps={{ htmlInput: { min: 0, max: 100 } }}
+                />
+                <FormControl>
+                  <InputLabel>Alertas visibles</InputLabel>
+                  <Select
+                    label="Alertas visibles"
+                    value={attributes.alertPopupMode || 'all'}
+                    onChange={(e) =>
+                      setAttributes({ ...attributes, alertPopupMode: e.target.value })
+                    }
+                  >
+                    <MenuItem value="all">Mostrar todas</MenuItem>
+                    <MenuItem value="critical">Solo alertas críticas</MenuItem>
+                    <MenuItem value="none">No mostrar</MenuItem>
+                  </Select>
+                </FormControl>
               </AccordionDetails>
             </Accordion>
             <Accordion>
