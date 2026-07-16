@@ -250,7 +250,7 @@ const TripReportPage = () => {
                   />
                 </ReportFilter>
               </div>
-              <Table>
+              <Table className={classes.compactTable}>
                 <TableHead>
                   <TableRow>
                     <TableCell className={classes.columnAction} />

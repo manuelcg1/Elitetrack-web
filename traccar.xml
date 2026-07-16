@@ -4,46 +4,20 @@
 
     <!-- Documentation: https://www.traccar.org/configuration-file/ -->
 
+    <!-- En producción, sobrescribir credenciales y endpoints mediante variables de entorno. -->
+    <entry key='config.useEnvironmentVariables'>true</entry>
+
     <entry key='database.driver'>org.postgresql.Driver</entry>
     <entry key='database.url'>jdbc:postgresql://localhost:5432/traccar</entry>
     <entry key='database.user'>traccar</entry>
     <entry key='database.password'>123456</entry>
     <entry key='protocol.http.port'>5055</entry>
 
-    <entry key='forward.type'>
-    centralperu
-    </entry>
-
-    <entry key='forward.url'>
-    https://w7ft67zrn4.execute-api.us-west-2.amazonaws.com/prd/position/insert
-    </entry>
-
-    <entry key='centralperu.username'>
-    TU_USUARIO
-    </entry>
-
-    <entry key='centralperu.password'>
-    TU_PASSWORD
-    </entry>
-
-    <entry key='centralperu.apiKey'>
-    TU_API_KEY
-    </entry>
-
-    <entry key='forward.retry.enable'>
-    true
-    </entry>
-
-    <entry key='forward.retry.delay'>
-    1000
-    </entry>
-
-    <entry key='forward.retry.count'>
-    5
-    </entry>
-
-    <entry key='forward.retry.limit'>
-    1000
-    </entry>
+    <!--
+      El reenvío queda deshabilitado por defecto. Para activarlo en producción definir:
+      FORWARD_TYPE, FORWARD_URL, FORWARD_RETRY_ENABLE, FORWARD_RETRY_DELAY,
+      FORWARD_RETRY_COUNT, FORWARD_RETRY_LIMIT, CENTRALPERU_USERNAME,
+      CENTRALPERU_PASSWORD y CENTRALPERU_API_KEY.
+    -->
 
 </properties>

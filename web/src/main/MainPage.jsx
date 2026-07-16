@@ -11,12 +11,13 @@ import MenuIcon from '@mui/icons-material/Menu';
 import DeviceList from './DeviceList';
 import MainNavigation from './MainNavigation';
 import StatusCard from '../common/components/StatusCard';
-import { devicesActions } from '../store';
+import { devicesActions, deviceVisibilityActions } from '../store';
 import usePersistedState from '../common/util/usePersistedState';
 import EventsDrawer from './EventsDrawer';
 import useFilter from './useFilter';
 import MainToolbar from './MainToolbar';
 import MainMap from './MainMap';
+import DeviceVisibilityControl from './DeviceVisibilityControl';
 import { useAttributePreference } from '../common/util/preferences';
 
 const useStyles = makeStyles()((theme, { navigationWidth, sidebarLeft, sidebarOpen }) => ({
@@ -166,13 +167,22 @@ const MainPage = () => {
 
   const selectedDeviceId = useSelector((state) => state.devices.selectedId);
   const positions = useSelector((state) => state.session.positions);
+  const devices = useSelector((state) => state.devices.items);
+  const devicesInitialized = useSelector((state) => state.devices.initialized);
+  const userId = useSelector((state) => state.session.user?.id);
+  const visibleById = useSelector((state) => state.deviceVisibility.byId);
+  const visibilityUserId = useSelector((state) => state.deviceVisibility.userId);
 
   const [filteredPositions, setFilteredPositions] = useState([]);
   const [filteredDevices, setFilteredDevices] = useState([]);
 
-  const selectedPosition = filteredPositions.find(
+  const visiblePositions = filteredPositions.filter(
+    (position) => visibleById[position.deviceId] === true,
+  );
+  const selectedPosition = visiblePositions.find(
     (position) => selectedDeviceId && position.deviceId === selectedDeviceId,
   );
+  const hasVisibleDevices = Object.keys(devices).some((deviceId) => visibleById[deviceId] === true);
 
   const [keyword, setKeyword] = useState('');
   const [filter, setFilter] = usePersistedState('filter', { statuses: [], groups: [] });
@@ -185,6 +195,50 @@ const MainPage = () => {
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [devicesOpen, setDevicesOpen] = useState(false);
   const [eventsOpen, setEventsOpen] = useState(false);
+
+  useEffect(() => {
+    if (userId == null) {
+      dispatch(deviceVisibilityActions.reset());
+      return;
+    }
+    let savedDevices = {};
+    try {
+      const saved = JSON.parse(localStorage.getItem(`elitetrack:device-visibility:${userId}`));
+      if (saved?.devices && typeof saved.devices === 'object') {
+        savedDevices = saved.devices;
+      }
+    } catch {
+      // Ignore invalid or unavailable local storage and start with every device hidden.
+    }
+    dispatch(deviceVisibilityActions.hydrate({ userId, devices: savedDevices }));
+  }, [dispatch, userId]);
+
+  useEffect(() => {
+    if (devicesInitialized && userId != null && visibilityUserId === userId) {
+      dispatch(
+        deviceVisibilityActions.reconcile({
+          userId,
+          deviceIds: Object.keys(devices),
+        }),
+      );
+    }
+  }, [devices, devicesInitialized, dispatch, userId, visibilityUserId]);
+
+  useEffect(() => {
+    if (devicesInitialized && userId != null && visibilityUserId === userId) {
+      const deviceIds = Object.keys(devices);
+      const showAll =
+        deviceIds.length > 0 && deviceIds.every((deviceId) => visibleById[deviceId] === true);
+      try {
+        localStorage.setItem(
+          `elitetrack:device-visibility:${userId}`,
+          JSON.stringify({ showAll, devices: visibleById }),
+        );
+      } catch {
+        // Visibility still works for the current session if storage is unavailable.
+      }
+    }
+  }, [devices, devicesInitialized, userId, visibilityUserId, visibleById]);
 
   useEffect(() => {
     if (location.state?.notificationDeviceId) {
@@ -218,8 +272,9 @@ const MainPage = () => {
   return (
     <div className={classes.root}>
       <MainMap
-        filteredPositions={filteredPositions}
+        filteredPositions={visiblePositions}
         selectedPosition={selectedPosition}
+        hasVisibleDevices={hasVisibleDevices}
         onEventsClick={onEventsClick}
         desktopPadding={desktopPadding}
         notificationLocation={location.state?.notificationLocation}
@@ -287,6 +342,7 @@ const MainPage = () => {
               filterMap={filterMap}
               setFilterMap={setFilterMap}
             />
+            <DeviceVisibilityControl />
           </Paper>
           <div className={classes.middle}>
             <Paper
@@ -300,7 +356,7 @@ const MainPage = () => {
         </div>
       </div>
       <EventsDrawer open={eventsOpen} onClose={() => setEventsOpen(false)} />
-      {selectedDeviceId && (
+      {selectedDeviceId && visibleById[selectedDeviceId] === true && (
         <StatusCard
           deviceId={selectedDeviceId}
           position={selectedPosition}

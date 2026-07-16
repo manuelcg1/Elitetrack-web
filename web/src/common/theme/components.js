@@ -7,6 +7,8 @@ export default {
   MuiOutlinedInput: {
     styleOverrides: {
       root: ({ theme }) => ({
+        minHeight: 48,
+        borderRadius: 12,
         backgroundColor: theme.palette.background.default,
       }),
     },
@@ -14,7 +16,9 @@ export default {
   MuiButton: {
     styleOverrides: {
       sizeMedium: {
-        height: '40px',
+        height: '48px',
+        borderRadius: 12,
+        fontWeight: 600,
       },
     },
   },
@@ -35,6 +39,14 @@ export default {
     defaultProps: {
       enterDelay: 500,
       enterNextDelay: 500,
+    },
+    styleOverrides: {
+      tooltip: {
+        borderRadius: 10,
+        padding: '8px 12px',
+        fontFamily: 'Inter, Roboto, "Segoe UI", Helvetica, Arial, sans-serif',
+        fontSize: '0.75rem',
+      },
     },
   },
   MuiTableCell: {

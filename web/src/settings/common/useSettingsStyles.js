@@ -1,8 +1,10 @@
 import { makeStyles } from 'tss-react/mui';
+import { compactTableRules } from '../../common/theme/compactTableStyles';
 
 export default makeStyles()((theme) => ({
   table: {
     marginBottom: theme.spacing(10),
+    ...compactTableRules(theme),
   },
   columnAction: {
     width: '1%',

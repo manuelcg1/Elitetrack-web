@@ -1,5 +1,6 @@
 import { makeStyles } from 'tss-react/mui';
 import { alpha } from '@mui/material/styles';
+import { compactTableRules } from '../../common/theme/compactTableStyles';
 
 export default makeStyles()((theme) => ({
   container: {
@@ -7,6 +8,7 @@ export default makeStyles()((theme) => ({
     display: 'flex',
     flexDirection: 'column',
   },
+  compactTable: compactTableRules(theme),
   containerMap: {
     flexBasis: '40%',
     flexShrink: 0,

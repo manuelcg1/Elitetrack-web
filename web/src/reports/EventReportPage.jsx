@@ -90,6 +90,12 @@ const EventReportPage = () => {
   const [selectedItem, setSelectedItem] = useState(null);
   const [position, setPosition] = useState(null);
 
+  const toggleSelectedItem = (item) => {
+    if (item.positionId) {
+      setSelectedItem((current) => (current?.id === item.id ? null : item));
+    }
+  };
+
   useEffect(() => {
     if (!eventTypes.length) {
       updateReportParams(searchParams, setSearchParams, 'eventType', ['allEvents']);
@@ -347,7 +353,7 @@ const EventReportPage = () => {
                   />
                 </ReportFilter>
               </div>
-              <Table>
+              <Table className={classes.compactTable}>
                 <TableHead>
                   <TableRow>
                     <TableCell className={classes.columnAction} />
@@ -360,15 +366,46 @@ const EventReportPage = () => {
                 <TableBody>
                   {!loading ? (
                     items.map((item) => (
-                      <TableRow key={item.id}>
+                      <TableRow
+                        key={item.id}
+                        hover={Boolean(item.positionId)}
+                        selected={selectedItem?.id === item.id}
+                        onClick={item.positionId ? () => toggleSelectedItem(item) : undefined}
+                        onKeyDown={
+                          item.positionId
+                            ? (event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault();
+                                  toggleSelectedItem(item);
+                                }
+                              }
+                            : undefined
+                        }
+                        tabIndex={item.positionId ? 0 : undefined}
+                        sx={item.positionId ? { cursor: 'pointer' } : undefined}
+                      >
                         <TableCell className={classes.columnAction} padding="none">
                           {(item.positionId &&
-                            (selectedItem === item ? (
-                              <IconButton size="small" onClick={() => setSelectedItem(null)}>
+                            (selectedItem?.id === item.id ? (
+                              <IconButton
+                                size="small"
+                                aria-label="Ocultar ubicación del evento"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setSelectedItem(null);
+                                }}
+                              >
                                 <GpsFixedIcon fontSize="small" />
                               </IconButton>
                             ) : (
-                              <IconButton size="small" onClick={() => setSelectedItem(item)}>
+                              <IconButton
+                                size="small"
+                                aria-label="Mostrar ubicación del evento"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setSelectedItem(item);
+                                }}
+                              >
                                 <LocationSearchingIcon fontSize="small" />
                               </IconButton>
                             ))) ||

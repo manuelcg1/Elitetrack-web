@@ -145,7 +145,7 @@ const GeofenceReportPage = () => {
                   />
                 </ReportFilter>
               </div>
-              <Table>
+              <Table className={classes.compactTable}>
                 <TableHead>
                   <TableRow>
                     <TableCell>{t('sharedDevice')}</TableCell>

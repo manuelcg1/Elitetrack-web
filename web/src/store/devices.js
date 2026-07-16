@@ -5,11 +5,13 @@ const { reducer, actions } = createSlice({
   initialState: {
     items: {},
     selectedId: null,
+    initialized: false,
   },
   reducers: {
     refresh(state, action) {
       state.items = {};
       action.payload.forEach((item) => (state.items[item.id] = item));
+      state.initialized = true;
     },
     update(state, action) {
       action.payload.forEach((item) => (state.items[item.id] = item));

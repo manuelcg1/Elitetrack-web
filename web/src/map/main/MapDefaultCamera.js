@@ -4,9 +4,8 @@ import { useSelector } from 'react-redux';
 import { usePreference } from '../../common/util/preferences';
 import { map } from '../core/MapView';
 
-const MapDefaultCamera = ({ filteredPositions }) => {
+const MapDefaultCamera = ({ filteredPositions, selectedPosition }) => {
   const selectedDeviceId = useSelector((state) => state.devices.selectedId);
-  const positions = useSelector((state) => state.session.positions);
 
   const defaultLatitude = usePreference('latitude');
   const defaultLongitude = usePreference('longitude');
@@ -16,15 +15,12 @@ const MapDefaultCamera = ({ filteredPositions }) => {
 
   useEffect(() => {
     if (initialized) return;
-    if (selectedDeviceId) {
-      const position = positions[selectedDeviceId];
-      if (position) {
-        map.jumpTo({
-          center: [position.longitude, position.latitude],
-          zoom: Math.max(defaultZoom > 0 ? defaultZoom : map.getZoom(), 10),
-        });
-        setInitialized(true);
-      }
+    if (selectedDeviceId && selectedPosition) {
+      map.jumpTo({
+        center: [selectedPosition.longitude, selectedPosition.latitude],
+        zoom: Math.max(defaultZoom > 0 ? defaultZoom : map.getZoom(), 10),
+      });
+      setInitialized(true);
     } else {
       if (defaultLatitude && defaultLongitude) {
         map.jumpTo({
@@ -33,7 +29,7 @@ const MapDefaultCamera = ({ filteredPositions }) => {
         });
         setInitialized(true);
       } else {
-        const coordinates = (filteredPositions || Object.values(positions)).map((item) => [
+        const coordinates = (filteredPositions || []).map((item) => [
           item.longitude,
           item.latitude,
         ]);
@@ -64,8 +60,8 @@ const MapDefaultCamera = ({ filteredPositions }) => {
     defaultLatitude,
     defaultLongitude,
     defaultZoom,
-    positions,
     filteredPositions,
+    selectedPosition,
   ]);
 
   return null;

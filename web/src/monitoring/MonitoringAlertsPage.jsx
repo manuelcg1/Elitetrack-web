@@ -68,6 +68,7 @@ import PageLayout from '../common/components/PageLayout';
 import MonitoringMenu from './MonitoringMenu';
 import exportExcel from '../common/util/exportExcel';
 import fetchOrThrow from '../common/util/fetchOrThrow';
+import useCompactTableStyles from '../common/theme/compactTableStyles';
 
 const eliteGreen = '#00c853';
 
@@ -349,6 +350,7 @@ const FormStepPanel = ({ title, description, children }) => (
 );
 
 const MonitoringAlertsPage = () => {
+  const { classes: tableClasses } = useCompactTableStyles();
   const theme = useTheme();
   const compactDetail = useMediaQuery('(max-width:1199px)');
   const realtimeAlertEvents = useSelector((state) => state.alertEvents.items);
@@ -1640,7 +1642,7 @@ const MonitoringAlertsPage = () => {
         </Button>
       </Stack>
       <TableContainer>
-        <Table size="small">
+        <Table size="small" className={tableClasses.table}>
           <TableHead>
             <TableRow>
               <TableCell>Fecha</TableCell>
@@ -2164,7 +2166,7 @@ const MonitoringAlertsPage = () => {
                 Alertas configuradas
               </Typography>
               <TableContainer>
-                <Table size="small">
+                <Table size="small" className={tableClasses.table}>
                   <TableHead>
                     <TableRow
                       sx={{

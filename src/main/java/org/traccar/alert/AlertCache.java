@@ -27,7 +27,7 @@ public class AlertCache {
 
     public record CachedAlert(
             Alert alert, List<Long> deviceIds, List<Long> groupIds,
-            List<Long> geofenceIds, List<Long> geofenceGroupIds) {
+            List<Long> geofenceIds, List<Long> geofenceGroupIds, List<Geofence> geofences) {
     }
 
     private static final long CACHE_TTL = 30000;
@@ -75,18 +75,28 @@ public class AlertCache {
                 AlertGeofence.class, new Request(new Columns.All())).stream()
                 .collect(Collectors.groupingBy(AlertGeofence::getAlertId));
 
-        Map<Long, Set<Long>> geofenceFolders = new LinkedHashMap<>();
-        boolean hasGeofenceGroupScope = alerts.stream()
+        List<AlertGeofence> scopedGeofenceRelations = alerts.stream()
                 .flatMap(alert -> geofenceRelations.getOrDefault(alert.getId(), List.of()).stream())
+                .toList();
+        boolean hasGeofenceGroupScope = scopedGeofenceRelations.stream()
                 .anyMatch(relation -> relation.getGroupId() != null && relation.getGroupId() > 0);
+
+        Map<Long, Geofence> geofences = new LinkedHashMap<>();
+        if (!scopedGeofenceRelations.isEmpty()) {
+            for (Geofence geofence : storage.getObjects(Geofence.class, new Request(
+                    new Columns.Include("id", "area", "attributes")))) {
+                geofences.put(geofence.getId(), geofence);
+            }
+        }
+
+        Map<Long, Set<Long>> geofenceFolders = new LinkedHashMap<>();
         if (hasGeofenceGroupScope) {
             Map<Long, GeofenceFolder> folders = new LinkedHashMap<>();
             for (GeofenceFolder folder : storage.getObjects(GeofenceFolder.class, new Request(
                     new Columns.Include("id", "parentid")))) {
                 folders.put(folder.getId(), folder);
             }
-            for (Geofence geofence : storage.getObjects(Geofence.class, new Request(
-                    new Columns.Include("id", "attributes")))) {
+            for (Geofence geofence : geofences.values()) {
                 Set<Long> folderIds = new HashSet<>();
                 long folderId = geofence.getLong("folderId");
                 while (folderId > 0 && folderIds.add(folderId)) {
@@ -117,6 +127,13 @@ public class AlertCache {
                     }
                 });
             }
+            List<Geofence> effectiveGeofences = new ArrayList<>();
+            for (long geofenceId : effectiveGeofenceIds) {
+                Geofence geofence = geofences.get(geofenceId);
+                if (geofence != null) {
+                    effectiveGeofences.add(geofence);
+                }
+            }
             result.add(new CachedAlert(
                     alert,
                     relations.stream()
@@ -128,7 +145,8 @@ public class AlertCache {
                             .filter(groupId -> groupId != null && groupId > 0)
                             .toList(),
                     List.copyOf(effectiveGeofenceIds),
-                    geofenceGroupIds));
+                    geofenceGroupIds,
+                    List.copyOf(effectiveGeofences)));
         }
         return result;
     }

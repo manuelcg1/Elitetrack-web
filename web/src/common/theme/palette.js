@@ -2,13 +2,13 @@ const validatedColor = (color) => (/^#([0-9A-Fa-f]{3}){1,2}$/.test(color) ? colo
 
 // ── Colores de marca EliteTrack ───────────────────────────────────────────────
 const brand = {
-  green: '#00E65B', // verde principal
-  greenDark: '#00B848', // verde oscuro (hover)
-  greenLight: '#33FF7A', // verde claro (acentos)
-  dark: '#212529', // negro carbón
-  darkSoft: '#2C3136', // negro suave (superficies dark)
-  silver: '#4A5056', // plata
-  silverLight: '#8A9099', // plata clara
+  green: '#00C853', // verde principal
+  greenDark: '#00B248', // verde oscuro (hover)
+  greenLight: '#DCFCE7', // verde claro (acentos)
+  dark: '#0F172A', // azul carbón
+  darkSoft: '#172033', // superficie oscura
+  silver: '#64748B', // texto secundario
+  silverLight: '#94A3B8', // texto secundario oscuro
   white: '#FFFFFF',
 };
 
@@ -33,33 +33,33 @@ export default (server, darkMode) => ({
 
   // ── Background ─────────────────────────────────────────────────────────────
   background: {
-    default: darkMode ? brand.dark : '#F4F6F8',
+    default: darkMode ? brand.dark : '#F8FAFC',
     paper: darkMode ? brand.darkSoft : brand.white,
   },
 
   // ── Text ───────────────────────────────────────────────────────────────────
   text: {
-    primary: darkMode ? '#F0F2F4' : brand.dark,
+    primary: darkMode ? '#F8FAFC' : '#1E293B',
     secondary: darkMode ? brand.silverLight : brand.silver,
     disabled: darkMode ? '#555C64' : '#B0B8C1',
   },
 
   // ── Divider ────────────────────────────────────────────────────────────────
-  divider: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(33,37,41,0.10)',
+  divider: darkMode ? 'rgba(226,232,240,0.12)' : '#E2E8F0',
 
   // ── Action states ──────────────────────────────────────────────────────────
   action: {
-    hover: darkMode ? 'rgba(0,230,91,0.07)' : 'rgba(0,230,91,0.06)',
-    selected: darkMode ? 'rgba(0,230,91,0.14)' : 'rgba(0,230,91,0.12)',
-    focus: darkMode ? 'rgba(0,230,91,0.12)' : 'rgba(0,230,91,0.10)',
+    hover: darkMode ? 'rgba(0,200,83,0.10)' : '#F1F5F9',
+    selected: darkMode ? 'rgba(0,200,83,0.18)' : '#DCFCE7',
+    focus: darkMode ? 'rgba(0,200,83,0.16)' : 'rgba(0,200,83,0.12)',
     disabledBackground: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
   },
 
   // ── Semánticos ─────────────────────────────────────────────────────────────
   success: {
-    main: '#00E65B',
-    light: '#33FF7A',
-    dark: '#00B848',
+    main: '#00C853',
+    light: '#DCFCE7',
+    dark: '#00B248',
     contrastText: brand.dark,
   },
   warning: {

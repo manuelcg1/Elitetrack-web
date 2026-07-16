@@ -170,7 +170,7 @@ const SummaryReportPage = () => {
           <ColumnSelect columns={columns} setColumns={setColumns} columnsArray={columnsArray} />
         </ReportFilter>
       </div>
-      <Table>
+      <Table className={classes.compactTable}>
         <TableHead>
           <TableRow>
             <TableCell>{t('sharedDevice')}</TableCell>

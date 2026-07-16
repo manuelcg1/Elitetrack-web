@@ -159,8 +159,16 @@ public class AlertProcessor extends BasePositionHandler {
         if (eventGeofenceId > 0) {
             return cachedAlert.geofenceIds().contains(eventGeofenceId);
         }
-        return position.getGeofenceIds() != null
-                && position.getGeofenceIds().stream().anyMatch(cachedAlert.geofenceIds()::contains);
+        if (position.getGeofenceIds() != null
+                && position.getGeofenceIds().stream().anyMatch(cachedAlert.geofenceIds()::contains)) {
+            return true;
+        }
+        for (var geofence : cachedAlert.geofences()) {
+            if (geofence.containsPosition(position)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isPlatformEnabled(Alert alert) {

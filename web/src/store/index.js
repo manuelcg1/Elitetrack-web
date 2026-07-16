@@ -12,6 +12,7 @@ import { driversReducer as drivers } from './drivers';
 import { maintenancesReducer as maintenances } from './maintenances';
 import { calendarsReducer as calendars } from './calendars';
 import { gpsInventoryReducer as gpsInventory } from './gpsInventory';
+import { deviceVisibilityReducer as deviceVisibility } from './deviceVisibility';
 import throttleMiddleware from './throttleMiddleware';
 
 const reducer = combineReducers({
@@ -27,6 +28,7 @@ const reducer = combineReducers({
   maintenances,
   calendars,
   gpsInventory,
+  deviceVisibility,
 });
 
 export { errorsActions } from './errors';
@@ -41,6 +43,7 @@ export { driversActions } from './drivers';
 export { maintenancesActions } from './maintenances';
 export { calendarsActions } from './calendars';
 export { gpsInventoryActions } from './gpsInventory';
+export { deviceVisibilityActions } from './deviceVisibility';
 
 export default configureStore({
   reducer,

@@ -36,6 +36,7 @@ import Tooltip from '@mui/material/Tooltip';
 import PageLayout from '../common/components/PageLayout';
 import MonitoringMenu from './MonitoringMenu';
 import fetchOrThrow from '../common/util/fetchOrThrow';
+import useCompactTableStyles from '../common/theme/compactTableStyles';
 
 const REFRESH_INTERVAL = 30000;
 
@@ -137,6 +138,7 @@ const formatMinutes = (minutes) => {
 };
 
 const MonitoringHealthPage = () => {
+  const { classes: tableClasses } = useCompactTableStyles();
   const [summary, setSummary] = useState(null);
   const [devices, setDevices] = useState([]);
   const [search, setSearch] = useState('');
@@ -316,7 +318,7 @@ const MonitoringHealthPage = () => {
               </Stack>
 
               <TableContainer>
-                <Table size="small">
+                <Table size="small" className={tableClasses.table}>
                   <TableHead>
                     <TableRow>
                       <TableCell>Dispositivo</TableCell>

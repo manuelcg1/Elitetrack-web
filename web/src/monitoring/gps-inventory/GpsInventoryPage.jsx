@@ -31,6 +31,7 @@ import GpsStatusBadge from './GpsStatusBadge';
 import GpsFormDialog from './GpsFormDialog';
 import useGpsInventory from './useGpsInventory';
 import { GPS_STATUS_META, GPS_BRANDS } from './gpsConstants';
+import useCompactTableStyles from '../../common/theme/compactTableStyles';
 
 const ET = { green: '#00E65B' };
 
@@ -42,6 +43,7 @@ const ET = { green: '#00E65B' };
  * de trazabilidad (módulo de ciclo de vida).
  */
 const GpsInventoryPage = () => {
+  const { classes: tableClasses } = useCompactTableStyles();
   const navigate = useNavigate();
   const { loading, error, createGps, updateGps, deleteGps } = useGpsInventory();
 
@@ -202,7 +204,7 @@ const GpsInventoryPage = () => {
           )}
 
           {!loading && !error && filteredItems.length > 0 && (
-            <Table size="small" stickyHeader>
+            <Table size="small" stickyHeader className={tableClasses.table}>
               <TableHead>
                 <TableRow>
                   <TableCell>IMEI</TableCell>
@@ -216,9 +218,7 @@ const GpsInventoryPage = () => {
               <TableBody>
                 {filteredItems.map((gps) => (
                   <TableRow key={gps.id} hover>
-                    <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                      {gps.imei}
-                    </TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>{gps.imei}</TableCell>
                     <TableCell>{getBrandLabel(gps.brand)}</TableCell>
                     <TableCell>{gps.model || '—'}</TableCell>
                     <TableCell>{gps.serialNumber || '—'}</TableCell>

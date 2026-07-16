@@ -9,7 +9,7 @@
 .maplibregl-ctrl-geocoder {
   font-size: 15px;
   line-height: 20px;
-  font-family: "Open Sans", "Helvetica Neue", Arial, Helvetica, sans-serif;
+  font-family: Inter, Roboto, 'Segoe UI', Helvetica, Arial, sans-serif;
   position: relative;
   background-color: #fff;
   width: 100%;
@@ -17,7 +17,9 @@
   max-width: 360px;
   z-index: 1;
   border-radius: 4px;
-  transition: width 0.25s, min-width 0.25s;
+  transition:
+    width 0.25s,
+    min-width 0.25s;
 }
 
 .maplibregl-ctrl-geocoder--input {
@@ -60,7 +62,9 @@
 .maplibregl-ctrl-geocoder.maplibregl-ctrl-geocoder--collapsed {
   width: 29px;
   min-width: 29px;
-  transition: width 0.25s, min-width 0.25s;
+  transition:
+    width 0.25s,
+    min-width 0.25s;
 }
 
 /* Suggestions */
