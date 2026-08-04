@@ -27,6 +27,7 @@ const eventTitles = {
   hardBraking: 'Frenado brusco',
   hardAcceleration: 'Aceleración brusca',
   batteryLow: 'Voltaje bajo',
+  powerCut: 'Energía desconectada',
   ignitionOn: 'Motor encendido',
   ignitionOff: 'Motor apagado',
   deviceMoving: 'Vehículo en movimiento',

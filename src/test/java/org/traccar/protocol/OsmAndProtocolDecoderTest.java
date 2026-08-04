@@ -4,6 +4,7 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.ReadOnlyHttpHeaders;
 import org.junit.jupiter.api.Test;
 import org.traccar.ProtocolTest;
+import org.traccar.model.Position;
 
 public class OsmAndProtocolDecoderTest extends ProtocolTest {
 
@@ -60,6 +61,10 @@ public class OsmAndProtocolDecoderTest extends ProtocolTest {
 
         verifyPosition(decoder, request(
                 "/?id=123456789012345&timestamp=1504763810&lat=40.7232948571&lon=-74.0061408571&bearing=7.19889788244&speed=40&ignition=true&rpm=933&fuel=24"));
+
+        verifyAttribute(decoder, request(
+                "/?id=888888888888881&lat=-8.143&lon=-79.012&speed=0&alarm=powerCut&valid=true"),
+                Position.KEY_ALARM, Position.ALARM_POWER_CUT);
 
     }
 

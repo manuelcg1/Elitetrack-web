@@ -46,6 +46,7 @@ public class AlertResource extends BaseResource {
             Alert.TYPE_GEOFENCE_ENTER,
             Alert.TYPE_GEOFENCE_EXIT,
             Alert.TYPE_BATTERY_LOW,
+            Alert.TYPE_POWER_CUT,
             Alert.TYPE_IGNITION_ON,
             Alert.TYPE_IGNITION_OFF,
             Alert.TYPE_STOPPED_TOO_LONG,
@@ -94,6 +95,7 @@ public class AlertResource extends BaseResource {
     @POST
     public Response add(Alert alert) throws StorageException {
         checkAlertsAccess();
+        normalizeCondition(alert);
         validate(alert);
         alertSecurity.checkAlertPayload(getUserId(), alert);
         Date now = new Date();
@@ -122,6 +124,7 @@ public class AlertResource extends BaseResource {
         if (!alertSecurity.canManageAlert(getUserId(), before)) {
             throw new SecurityException("Alert access denied");
         }
+        normalizeCondition(alert);
         validate(alert);
         alertSecurity.checkAlertPayload(getUserId(), alert);
         alert.setId(id);
@@ -179,6 +182,18 @@ public class AlertResource extends BaseResource {
         }
         if (Alert.TYPE_SPEED.equals(alert.getType()) && alert.getLimitValue() <= 0) {
             throw new BadRequestException("Limit value is required for speed alerts");
+        }
+    }
+
+    private void normalizeCondition(Alert alert) {
+        if (alert != null && (Alert.TYPE_GEOFENCE_ENTER.equals(alert.getType())
+                || Alert.TYPE_GEOFENCE_EXIT.equals(alert.getType())
+                || Alert.TYPE_POWER_CUT.equals(alert.getType()))) {
+            alert.setLimitValue(0);
+            alert.setOperator(null);
+            alert.setUnit(null);
+            alert.getAttributes().remove("minimumDuration");
+            alert.getAttributes().remove("resolveThreshold");
         }
     }
 

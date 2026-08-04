@@ -59,6 +59,7 @@ import org.traccar.handler.events.OverspeedEventHandler;
 import org.traccar.handler.events.ProximityEventHandler;
 import org.traccar.handler.network.AcknowledgementHandler;
 import org.traccar.helper.PositionLogger;
+import org.traccar.model.Event;
 import org.traccar.model.Position;
 import org.traccar.session.cache.CacheManager;
 
@@ -194,8 +195,11 @@ public class ProcessingHandler extends ChannelInboundHandlerAdapter implements B
     private void processEventHandlers(ChannelHandlerContext ctx, Position position) {
         eventHandlers.forEach(handler -> handler.analyzePosition(
                 position, (event) -> {
-                    alertProcessor.processEvent(event, position);
-                    notificationManager.updateEvents(Map.of(event, position));
+                    boolean customAlertGenerated = alertProcessor.processEvent(event, position);
+                    boolean suppressNotification = customAlertGenerated
+                            && Event.TYPE_ALARM.equals(event.getType())
+                            && Position.ALARM_POWER_CUT.equals(event.getString(Position.KEY_ALARM));
+                    notificationManager.updateEvents(Map.of(event, position), suppressNotification);
                 }));
         finishedProcessing(ctx, position, false);
     }

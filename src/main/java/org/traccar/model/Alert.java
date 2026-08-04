@@ -14,6 +14,7 @@ public class Alert extends ExtendedModel {
     public static final String TYPE_GEOFENCE_ENTER = "geofenceEnter";
     public static final String TYPE_GEOFENCE_EXIT = "geofenceExit";
     public static final String TYPE_BATTERY_LOW = "batteryLow";
+    public static final String TYPE_POWER_CUT = "powerCut";
     public static final String TYPE_IGNITION_ON = "ignitionOn";
     public static final String TYPE_IGNITION_OFF = "ignitionOff";
     public static final String TYPE_STOPPED_TOO_LONG = "stoppedTooLong";

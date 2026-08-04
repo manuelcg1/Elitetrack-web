@@ -31,6 +31,7 @@ const iconByType = {
   ignitionOn: PowerIcon,
   ignitionOff: PowerIcon,
   batteryLow: BatteryAlertIcon,
+  powerCut: PowerIcon,
   deviceMoving: DirectionsCarIcon,
   stoppedTooLong: DirectionsCarIcon,
   deviceStopped: DirectionsCarIcon,

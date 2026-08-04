@@ -29,6 +29,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
 import { useTranslation } from './LocalizationProvider';
 import RemoveDialog from './RemoveDialog';
+import CommandDeviceDialog from '../../settings/components/CommandDeviceDialog';
 import PositionValue from './PositionValue';
 import { useDeviceReadonly, useRestriction } from '../util/permissions';
 import usePositionAttributes from '../attributes/usePositionAttributes';
@@ -340,6 +341,7 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
   const [anchorEl, setAnchorEl] = useState(null);
 
   const [removing, setRemoving] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
 
   const statusLabel = device?.status
     ? t(`deviceStatus${device.status.charAt(0).toUpperCase()}${device.status.slice(1)}`)
@@ -478,7 +480,7 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
                   <Tooltip title={t('commandTitle')}>
                     <IconButton
                       className={classes.actionButton}
-                      onClick={() => navigate(`/settings/device/${deviceId}/command`)}
+                      onClick={() => setCommandOpen(true)}
                       disabled={disableActions}
                     >
                       <SendIcon />
@@ -515,6 +517,14 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
           </Rnd>
         )}
       </div>
+      {commandOpen && (
+        <CommandDeviceDialog
+          deviceId={deviceId}
+          deviceName={device?.name}
+          open
+          onClose={() => setCommandOpen(false)}
+        />
+      )}
       {position && (
         <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
           {!readonly && <MenuItem onClick={handleGeofence}>{t('sharedCreateGeofence')}</MenuItem>}

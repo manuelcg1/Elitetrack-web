@@ -77,6 +77,7 @@ const alertTypes = [
   { value: 'geofenceEnter', label: 'Entrada a geocerca' },
   { value: 'geofenceExit', label: 'Salida de geocerca' },
   { value: 'batteryLow', label: 'Bateria baja' },
+  { value: 'powerCut', label: 'Energía desconectada' },
   { value: 'ignitionOn', label: 'Ignicion encendida' },
   { value: 'ignitionOff', label: 'Ignicion apagada' },
   { value: 'stoppedTooLong', label: 'Detenido demasiado tiempo' },
@@ -102,10 +103,26 @@ const operators = [
 
 const notificationChannels = [
   { key: 'platform', label: 'Plataforma' },
-  { key: 'email', label: 'Correo' },
-  { key: 'push', label: 'Push' },
-  { key: 'webhook', label: 'Webhook' },
+  { key: 'telegram', label: 'Telegram' },
 ];
+
+const normalizeNotificationChannels = (value) => {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((channel) => channel.trim())
+      .filter(Boolean);
+  }
+  if (value && typeof value === 'object') {
+    return Object.entries(value)
+      .filter(([, enabled]) => enabled)
+      .map(([channel]) => channel);
+  }
+  return ['platform'];
+};
 
 const steps = ['Informacion', 'Condicion', 'Destinos', 'Notificaciones', 'Resumen'];
 const eventPollInterval = 30000;
@@ -141,16 +158,14 @@ const emptyAlert = {
   attributes: {
     minimumDuration: '',
     resolveThreshold: '',
-    notifications: {
-      platform: true,
-      email: false,
-      push: false,
-      webhook: false,
-    },
+    notifications: ['platform'],
   },
 };
 
 const optionKey = (option) => `${option.kind}:${option.id}`;
+
+const isGeofenceTransition = (type) => ['geofenceEnter', 'geofenceExit'].includes(type);
+const isConditionlessAlert = (type) => isGeofenceTransition(type) || type === 'powerCut';
 
 const getTypeLabel = (value) =>
   alertTypes.find((type) => type.value === value)?.label || value || '-';
@@ -230,10 +245,7 @@ const normalizeAlert = (alert = {}) => ({
   attributes: {
     ...emptyAlert.attributes,
     ...(alert.attributes || {}),
-    notifications: {
-      ...emptyAlert.attributes.notifications,
-      ...(alert.attributes?.notifications || {}),
-    },
+    notifications: normalizeNotificationChannels(alert.attributes?.notifications),
   },
 });
 
@@ -693,24 +705,31 @@ const MonitoringAlertsPage = () => {
     setDrawerOpen(true);
   };
 
-  const buildPayload = (source) => ({
-    ...source,
-    limitValue: Number(source.limitValue),
-    unit: source.unit || 'km/h',
-    groupIds: source.groupIds || [],
-    deviceIds: source.deviceIds || [],
-    geofenceIds: source.geofenceIds || [],
-    geofenceGroupIds: source.geofenceGroupIds || [],
-    attributes: {
+  const buildPayload = (source) => {
+    const conditionlessAlert = isConditionlessAlert(source.type);
+    const attributes = {
       ...(source.attributes || {}),
-      minimumDuration: source.attributes?.minimumDuration || '',
-      resolveThreshold: source.attributes?.resolveThreshold || '',
-      notifications: {
-        ...emptyAlert.attributes.notifications,
-        ...(source.attributes?.notifications || {}),
-      },
-    },
-  });
+      notifications: normalizeNotificationChannels(source.attributes?.notifications),
+    };
+    if (conditionlessAlert) {
+      delete attributes.minimumDuration;
+      delete attributes.resolveThreshold;
+    } else {
+      attributes.minimumDuration = source.attributes?.minimumDuration || '';
+      attributes.resolveThreshold = source.attributes?.resolveThreshold || '';
+    }
+    return {
+      ...source,
+      limitValue: conditionlessAlert ? 0 : Number(source.limitValue),
+      unit: conditionlessAlert ? null : source.unit || 'km/h',
+      operator: conditionlessAlert ? null : source.operator,
+      groupIds: source.groupIds || [],
+      deviceIds: source.deviceIds || [],
+      geofenceIds: source.geofenceIds || [],
+      geofenceGroupIds: source.geofenceGroupIds || [],
+      attributes,
+    };
+  };
 
   const handleSave = async () => {
     if (!formValid) {
@@ -964,6 +983,25 @@ const MonitoringAlertsPage = () => {
           </FormStepPanel>
         );
       case 1:
+        if (isConditionlessAlert(item.type)) {
+          const powerCut = item.type === 'powerCut';
+          return (
+            <FormStepPanel
+              title="Condicion de activacion"
+              description={
+                powerCut
+                  ? 'El evento se genera cuando el GPS reporta la desconexion de energia externa.'
+                  : 'El evento se genera por la transicion de posicion respecto a la geocerca.'
+              }
+            >
+              <Alert severity="info">
+                {powerCut
+                  ? 'La alerta se activa al recibir la alarma powerCut del dispositivo. La velocidad, el operador, el limite y la duracion no se toman en cuenta.'
+                  : 'La alerta se activa cada vez que el vehiculo cruza el limite de la geocerca seleccionada. La velocidad, el operador, el limite y la duracion no se toman en cuenta.'}
+              </Alert>
+            </FormStepPanel>
+          );
+        }
         return (
           <FormStepPanel
             title="Condicion de activacion"
@@ -1108,15 +1146,17 @@ const MonitoringAlertsPage = () => {
                     labelPlacement="start"
                     control={
                       <Switch
-                        checked={Boolean(item.attributes.notifications?.[channel.key])}
-                        onChange={(event) =>
+                        checked={item.attributes.notifications?.includes(channel.key)}
+                        onChange={(event) => {
+                          const channels = normalizeNotificationChannels(
+                            item.attributes.notifications,
+                          );
                           updateAttributes({
-                            notifications: {
-                              ...item.attributes.notifications,
-                              [channel.key]: event.target.checked,
-                            },
-                          })
-                        }
+                            notifications: event.target.checked
+                              ? [...new Set([...channels, channel.key])]
+                              : channels.filter((value) => value !== channel.key),
+                          });
+                        }}
                       />
                     }
                     label={
@@ -1125,7 +1165,7 @@ const MonitoringAlertsPage = () => {
                           {channel.label}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {item.attributes.notifications?.[channel.key]
+                          {item.attributes.notifications?.includes(channel.key)
                             ? 'Canal habilitado'
                             : 'Canal deshabilitado'}
                         </Typography>
@@ -1193,7 +1233,11 @@ const MonitoringAlertsPage = () => {
                 {[
                   [
                     'Condicion',
-                    `${operators.find((operator) => operator.value === item.operator)?.label || item.operator} ${item.limitValue} km/h`,
+                    isConditionlessAlert(item.type)
+                      ? item.type === 'powerCut'
+                        ? 'Corte de energia reportado por el GPS; sin condicion de velocidad'
+                        : 'Ingreso o salida detectada por posicion; sin condicion de velocidad'
+                      : `${operators.find((operator) => operator.value === item.operator)?.label || item.operator} ${item.limitValue} km/h`,
                   ],
                   [
                     'Vehiculos / flotas',
@@ -1210,7 +1254,7 @@ const MonitoringAlertsPage = () => {
                   [
                     'Canales activos',
                     notificationChannels
-                      .filter((channel) => item.attributes.notifications?.[channel.key])
+                      .filter((channel) => item.attributes.notifications?.includes(channel.key))
                       .map((channel) => channel.label)
                       .join(', ') || 'Ninguno',
                   ],
@@ -1842,12 +1886,18 @@ const MonitoringAlertsPage = () => {
             </Typography>
             <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
               {notificationChannels
-                .filter((channel) => event.alertConfig?.attributes?.notifications?.[channel.key])
+                .filter((channel) =>
+                  normalizeNotificationChannels(
+                    event.alertConfig?.attributes?.notifications,
+                  ).includes(channel.key),
+                )
                 .map((channel) => (
                   <Chip key={channel.key} size="small" label={channel.label} />
                 ))}
-              {!notificationChannels.some(
-                (channel) => event.alertConfig?.attributes?.notifications?.[channel.key],
+              {!notificationChannels.some((channel) =>
+                normalizeNotificationChannels(
+                  event.alertConfig?.attributes?.notifications,
+                ).includes(channel.key),
               ) && (
                 <Typography variant="body2" color="text.secondary">
                   Sin canales registrados

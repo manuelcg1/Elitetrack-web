@@ -81,7 +81,7 @@ public class NotificationManager {
         }
     }
 
-    private void updateEvent(Event event, Position position) {
+    private void updateEvent(Event event, Position position, boolean suppressNotification) {
         try {
             event.setId(storage.addObject(event, new Request(new Columns.Exclude("id"))));
         } catch (StorageException error) {
@@ -89,6 +89,11 @@ public class NotificationManager {
         }
 
         forwardEvent(event, position);
+
+        if (suppressNotification) {
+            LOGGER.info("Skipping native notification for event {} handled by a custom alert", event.getId());
+            return;
+        }
 
         if (System.currentTimeMillis() - event.getEventTime().getTime() > timeThreshold) {
             LOGGER.info("Skipping notifications for old event");
@@ -175,13 +180,17 @@ public class NotificationManager {
     }
 
     public void updateEvents(Map<Event, Position> events) {
+        updateEvents(events, false);
+    }
+
+    public void updateEvents(Map<Event, Position> events, boolean suppressNotification) {
         for (Entry<Event, Position> entry : events.entrySet()) {
             Event event = entry.getKey();
             Position position = entry.getValue();
             var key = new Object();
             try {
                 cacheManager.addDevice(event.getDeviceId(), key);
-                updateEvent(event, position);
+                updateEvent(event, position, suppressNotification);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             } finally {

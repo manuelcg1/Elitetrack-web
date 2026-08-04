@@ -22,6 +22,7 @@ import jakarta.inject.Singleton;
 import jakarta.ws.rs.client.Client;
 import jakarta.ws.rs.client.ClientBuilder;
 import jakarta.ws.rs.client.Entity;
+import jakarta.ws.rs.core.Response;
 import org.glassfish.jersey.client.ClientProperties;
 import org.traccar.config.Config;
 import org.traccar.config.Keys;
@@ -29,6 +30,7 @@ import org.traccar.helper.ObjectMapperContextResolver;
 import org.traccar.model.Event;
 import org.traccar.model.Position;
 import org.traccar.model.User;
+import org.traccar.notification.MessageException;
 import org.traccar.notification.NotificationFormatter;
 import org.traccar.notification.NotificationMessage;
 
@@ -36,6 +38,8 @@ import java.net.URI;
 
 @Singleton
 public class NotificatorTelegram extends Notificator {
+
+    private static final int TIMEOUT_MILLIS = 10000;
 
     private final Client client;
 
@@ -107,7 +111,8 @@ public class NotificatorTelegram extends Notificator {
     }
 
     @Override
-    public void send(User user, NotificationMessage shortMessage, Event event, Position position) {
+    public void send(User user, NotificationMessage shortMessage, Event event, Position position)
+            throws MessageException {
 
         TextMessage message = new TextMessage();
         message.chatId = user.getString("telegramChatId");
@@ -115,10 +120,27 @@ public class NotificatorTelegram extends Notificator {
             message.chatId = chatId;
         }
         message.text = shortMessage.digest();
-        client.target(urlSendText).request().post(Entity.json(message)).close();
+        sendRequest(urlSendText, message);
         if (sendLocation && position != null) {
-            client.target(urlSendLocation).request().post(
-                    Entity.json(createLocationMessage(message.chatId, position))).close();
+            sendRequest(urlSendLocation, createLocationMessage(message.chatId, position));
+        }
+    }
+
+    private void sendRequest(String url, Object message) throws MessageException {
+        try (Response response = client.target(url)
+                .property(ClientProperties.CONNECT_TIMEOUT, TIMEOUT_MILLIS)
+                .property(ClientProperties.READ_TIMEOUT, TIMEOUT_MILLIS)
+                .request().post(Entity.json(message))) {
+            if (response.getStatus() / 100 != 2) {
+                if (response.getStatus() == 429) {
+                    throw new MessageException("Telegram rate limit exceeded");
+                }
+                throw new MessageException("Telegram request failed with status " + response.getStatus());
+            }
+        } catch (MessageException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new MessageException(e);
         }
     }
 

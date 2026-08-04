@@ -8,6 +8,6 @@
     <entry key='database.url'>jdbc:postgresql://localhost/traccar</entry>
     <entry key='database.user'>traccar</entry>
     <entry key='database.password'>123456</entry>
-    <entry key='protocol.http.port'>5055</entry>
+    <entry key='osmand.port'>5055</entry>
 
 </properties>
