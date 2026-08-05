@@ -15,10 +15,13 @@ import org.traccar.session.cache.CacheManager;
 import org.traccar.storage.Storage;
 import org.traccar.storage.query.Request;
 
+import java.time.Instant;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -33,6 +36,22 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.times;
 
 public class AlertNotificationServiceTest {
+
+    @Test
+    public void testTelegramDateUsesPeruTimeZone() {
+        Date utcDate = Date.from(Instant.parse("2026-08-05T18:19:34Z"));
+
+        assertEquals("05/08/2026 01:19 p. m.", AlertNotificationService.formatPeruDateTime(utcDate));
+    }
+
+    @Test
+    public void testTelegramAlertTypeLabels() {
+        assertEquals("Exceso de velocidad", AlertNotificationService.getTypeLabel("speed"));
+        assertEquals("Ingreso a geocerca", AlertNotificationService.getTypeLabel("geofenceEnter"));
+        assertEquals("Salida de geocerca", AlertNotificationService.getTypeLabel("geofenceExit"));
+        assertEquals("Batería baja", AlertNotificationService.getTypeLabel("lowBattery"));
+        assertEquals("Batería baja", AlertNotificationService.getTypeLabel("batteryLow"));
+    }
 
     private AlertNotificationService createService(
             Storage storage, CacheManager cacheManager, NotificatorManager notificatorManager,

@@ -5,27 +5,22 @@ import {
   Box,
   Card,
   CardContent,
-  Chip,
-  CircularProgress,
-  IconButton,
   InputAdornment,
   Snackbar,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import SearchIcon from '@mui/icons-material/Search';
+import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import EditIcon from '@mui/icons-material/Edit';
 import LinkIcon from '@mui/icons-material/Link';
+import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
+import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import SendIcon from '@mui/icons-material/Send';
+import TelegramIcon from '@mui/icons-material/Telegram';
 import { useAdministrator } from '../common/util/permissions';
 import { useCatch, useEffectAsync } from '../reactHelper';
 import fetchOrThrow from '../common/util/fetchOrThrow';
@@ -33,6 +28,13 @@ import PageLayout from '../common/components/PageLayout';
 import SettingsMenu from './components/SettingsMenu';
 import TelegramLinkDialog from './components/TelegramLinkDialog';
 import TelegramUnlinkDialog from './components/TelegramUnlinkDialog';
+import EliteTable, {
+  EliteTableActionButton,
+  EliteTableAvatar,
+  EliteTablePrimaryText,
+  EliteTableSecondaryText,
+  EliteTableStatusChip,
+} from '../common/components/EliteTable';
 
 const botLabels = {
   connected: { label: 'Conectado', color: 'success' },
@@ -40,20 +42,73 @@ const botLabels = {
   connectionError: { label: 'Error de conexión', color: 'error' },
 };
 
-const SummaryCard = ({ title, value, children }) => (
-  <Card variant="outlined" sx={{ minWidth: 0 }}>
-    <CardContent>
-      <Typography color="text.secondary" variant="body2">
-        {title}
-      </Typography>
-      {children || (
-        <Typography variant="h4" sx={{ mt: 1 }}>
+const SummaryCard = ({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+  color = 'primary',
+  valueColor = 'text.primary',
+}) => (
+  <Card
+    variant="outlined"
+    sx={{
+      minWidth: 0,
+      borderRadius: 2,
+      borderColor: 'divider',
+      boxShadow: (theme) => `0 4px 16px ${alpha(theme.palette.common.black, 0.035)}`,
+    }}
+  >
+    <CardContent
+      sx={{
+        minHeight: 96,
+        p: 1.5,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1.5,
+        '&:last-child': { pb: 1.5 },
+      }}
+    >
+      <Box
+        sx={(theme) => ({
+          width: 44,
+          height: 44,
+          flexShrink: 0,
+          display: 'grid',
+          placeItems: 'center',
+          borderRadius: '50%',
+          color: theme.palette[color].main,
+          bgcolor: alpha(theme.palette[color].main, theme.palette.mode === 'dark' ? 0.18 : 0.1),
+        })}
+      >
+        <Icon sx={{ fontSize: 24 }} />
+      </Box>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography color="text.secondary" sx={{ fontSize: 12, fontWeight: 500 }} noWrap>
+          {title}
+        </Typography>
+        <Typography
+          sx={{ fontSize: 22, lineHeight: 1.25, fontWeight: 700, color: valueColor }}
+          noWrap
+        >
           {value}
         </Typography>
-      )}
+        <Typography color="text.secondary" sx={{ fontSize: 11 }} noWrap>
+          {subtitle}
+        </Typography>
+      </Box>
     </CardContent>
   </Card>
 );
+
+const userInitials = (name = '') =>
+  name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
 
 const TelegramIntegrationPage = () => {
   const admin = useAdministrator();
@@ -114,6 +169,99 @@ const TelegramIntegrationPage = () => {
     setMessage({ severity: 'success', text: `Mensaje de prueba enviado a ${user.name}.` });
   });
 
+  const columns = useMemo(
+    () => [
+      {
+        id: 'name',
+        label: 'Usuario',
+        sortable: true,
+        minWidth: 220,
+        render: (user) => (
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <EliteTableAvatar>{userInitials(user.name)}</EliteTableAvatar>
+            <Box sx={{ minWidth: 0 }}>
+              <EliteTablePrimaryText noWrap>{user.name}</EliteTablePrimaryText>
+              <EliteTableSecondaryText>
+                {user.administrator ? 'Administrador' : 'Usuario'}
+              </EliteTableSecondaryText>
+            </Box>
+          </Stack>
+        ),
+      },
+      { id: 'email', label: 'Correo', sortable: true, minWidth: 240, hideOnMobile: true },
+      {
+        id: 'linked',
+        label: 'Estado',
+        sortable: true,
+        minWidth: 140,
+        render: (user) => (
+          <EliteTableStatusChip
+            label={user.linked ? 'Vinculado' : 'No vinculado'}
+            color={user.linked ? 'success' : 'default'}
+          />
+        ),
+      },
+      {
+        id: 'maskedChatId',
+        label: 'Chat Telegram',
+        sortable: true,
+        minWidth: 160,
+        render: (user) => (
+          <Stack direction="row" spacing={1} alignItems="center">
+            <TelegramIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+            <Box component="span" sx={{ fontFamily: 'monospace', fontSize: 13 }}>
+              {user.maskedChatId || '—'}
+            </Box>
+          </Stack>
+        ),
+        hideOnMobile: true,
+      },
+      {
+        id: 'actions',
+        label: 'Acciones',
+        align: 'right',
+        minWidth: 210,
+        render: (user) => (
+          <Stack direction="row" spacing={0.75} justifyContent="flex-end">
+            <EliteTableActionButton
+              label="Vincular"
+              color="success"
+              disabled={user.linked}
+              onClick={() => setLinkUser(user)}
+            >
+              <LinkIcon />
+            </EliteTableActionButton>
+            <EliteTableActionButton
+              label="Editar"
+              color="primary"
+              disabled={!user.linked}
+              onClick={() => setLinkUser(user)}
+            >
+              <EditIcon />
+            </EliteTableActionButton>
+            <EliteTableActionButton
+              label="Probar envío"
+              color="info"
+              disabled={!user.linked || status !== 'connected'}
+              onClick={() => sendTest(user)}
+            >
+              <SendIcon />
+            </EliteTableActionButton>
+            <EliteTableActionButton
+              label="Desvincular"
+              color="error"
+              disabled={!user.linked}
+              onClick={() => setUnlinkUser(user)}
+            >
+              <DeleteOutlineIcon />
+            </EliteTableActionButton>
+          </Stack>
+        ),
+      },
+    ],
+    [sendTest, status],
+  );
+
   if (!admin) {
     return <Navigate to="/" replace />;
   }
@@ -133,16 +281,41 @@ const TelegramIntegrationPage = () => {
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' },
-            gap: 2,
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+            gap: 1.5,
           }}
         >
-          <SummaryCard title="Usuarios" value={users.length} />
-          <SummaryCard title="Usuarios vinculados" value={linkedCount} />
-          <SummaryCard title="Usuarios pendientes" value={users.length - linkedCount} />
-          <SummaryCard title="Estado del Bot">
-            <Chip label={bot.label} color={bot.color} sx={{ mt: 1 }} />
-          </SummaryCard>
+          <SummaryCard
+            title="Usuarios"
+            value={users.length}
+            subtitle="Total de usuarios"
+            icon={GroupsOutlinedIcon}
+            color="primary"
+          />
+          <SummaryCard
+            title="Usuarios vinculados"
+            value={linkedCount}
+            subtitle="Con Telegram"
+            icon={LinkIcon}
+            color="success"
+          />
+          <SummaryCard
+            title="Usuarios pendientes"
+            value={users.length - linkedCount}
+            subtitle="Pendientes de vincular"
+            icon={ScheduleOutlinedIcon}
+            color="warning"
+          />
+          <SummaryCard
+            title="Estado del Bot"
+            value={bot.label}
+            subtitle={
+              status === 'connected' ? 'API activa y respondiendo' : 'Revise la configuración'
+            }
+            icon={SmartToyOutlinedIcon}
+            color={bot.color}
+            valueColor={`${bot.color}.main`}
+          />
         </Box>
         <TextField
           size="small"
@@ -157,75 +330,19 @@ const TelegramIntegrationPage = () => {
             ),
           }}
         />
-        <TableContainer sx={{ overflowX: 'auto' }}>
-          <Table sx={{ minWidth: 720 }}>
-            <TableHead>
-              <TableRow>
-                <TableCell>Usuario</TableCell>
-                <TableCell>Correo</TableCell>
-                <TableCell>Estado</TableCell>
-                <TableCell>Chat Telegram</TableCell>
-                <TableCell align="right">Acciones</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredUsers.map((user) => (
-                <TableRow key={user.id} hover>
-                  <TableCell>{user.name}</TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>
-                    <Chip
-                      size="small"
-                      label={user.linked ? 'Vinculado' : 'No vinculado'}
-                      color={user.linked ? 'success' : 'default'}
-                    />
-                  </TableCell>
-                  <TableCell>{user.maskedChatId || '—'}</TableCell>
-                  <TableCell align="right">
-                    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                      <Tooltip title={user.linked ? 'Editar' : 'Vincular'}>
-                        <IconButton onClick={() => setLinkUser(user)}>
-                          {user.linked ? <EditIcon /> : <LinkIcon />}
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Enviar prueba">
-                        <span>
-                          <IconButton
-                            disabled={!user.linked || status !== 'connected'}
-                            onClick={() => sendTest(user)}
-                          >
-                            <SendIcon />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                      <Tooltip title="Desvincular">
-                        <span>
-                          <IconButton
-                            color="error"
-                            disabled={!user.linked}
-                            onClick={() => setUnlinkUser(user)}
-                          >
-                            <DeleteOutlineIcon />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    </Stack>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        {loading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-            <CircularProgress />
-          </Box>
-        )}
-        {!loading && filteredUsers.length === 0 && (
-          <Typography align="center" color="text.secondary">
-            No se encontraron usuarios.
-          </Typography>
-        )}
+        <EliteTable
+          columns={columns}
+          rows={filteredUsers}
+          initialSort={{ id: 'name', direction: 'asc' }}
+          ariaLabel="Usuarios vinculados con Telegram"
+          loading={loading}
+          emptyState={{
+            title: 'No se encontraron usuarios',
+            description: search
+              ? 'Pruebe con otro nombre o correo electrónico.'
+              : 'Todavía no hay usuarios disponibles.',
+          }}
+        />
       </Stack>
       <TelegramLinkDialog
         user={linkUser}

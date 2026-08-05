@@ -4,7 +4,6 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.traccar.helper.DateUtil;
 import org.traccar.model.Alert;
 import org.traccar.model.AlertEvent;
 import org.traccar.model.Device;
@@ -21,7 +20,10 @@ import org.traccar.storage.query.Columns;
 import org.traccar.storage.query.Condition;
 import org.traccar.storage.query.Request;
 
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Collection;
+import java.util.Date;
 import java.util.Locale;
 import java.util.Map;
 import java.util.LinkedHashMap;
@@ -32,6 +34,10 @@ import java.util.concurrent.ExecutorService;
 public class AlertNotificationService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AlertNotificationService.class);
+    private static final ZoneId PERU_TIME_ZONE = ZoneId.of("America/Lima");
+    private static final DateTimeFormatter PERU_DATE_TIME_FORMAT = DateTimeFormatter
+            .ofPattern("dd/MM/yyyy hh:mm", Locale.ROOT)
+            .withZone(PERU_TIME_ZONE);
 
     public static final String CHANNEL_PLATFORM = "platform";
     public static final String CHANNEL_TELEGRAM = "telegram";
@@ -198,10 +204,10 @@ public class AlertNotificationService {
         } else {
             result.append("Vehículo: ").append(escape(deviceName));
         }
-        result.append("\nTipo: ").append(escape(alertEvent.getType()));
+        result.append("\nTipo: ").append(escape(getTypeLabel(alertEvent.getType())));
         result.append("\nSeveridad: ").append(escape(alertEvent.getSeverity()));
         if (alertEvent.getEventTime() != null) {
-            result.append("\nFecha: ").append(DateUtil.formatDate(alertEvent.getEventTime()));
+            result.append("\nFecha: ").append(formatPeruDateTime(alertEvent.getEventTime()));
         }
         if (alertEvent.getMessage() != null && !alertEvent.getMessage().isBlank()) {
             result.append("\nMensaje: ").append(escape(alertEvent.getMessage()));
@@ -215,6 +221,32 @@ public class AlertNotificationService {
                     position.getLatitude(), position.getLongitude()));
         }
         return result.toString();
+    }
+
+    static String formatPeruDateTime(Date date) {
+        int hour = date.toInstant().atZone(PERU_TIME_ZONE).getHour();
+        return PERU_DATE_TIME_FORMAT.format(date.toInstant()) + (hour < 12 ? " a. m." : " p. m.");
+    }
+
+    static String getTypeLabel(String type) {
+        if (type == null) {
+            return "-";
+        }
+        return switch (type) {
+            case Alert.TYPE_SPEED -> "Exceso de velocidad";
+            case Alert.TYPE_GEOFENCE_ENTER -> "Ingreso a geocerca";
+            case Alert.TYPE_GEOFENCE_EXIT -> "Salida de geocerca";
+            case Alert.TYPE_BATTERY_LOW, "lowBattery" -> "Batería baja";
+            case Alert.TYPE_POWER_CUT -> "Energía desconectada";
+            case Alert.TYPE_IGNITION_ON -> "Ignición encendida";
+            case Alert.TYPE_IGNITION_OFF -> "Ignición apagada";
+            case Alert.TYPE_STOPPED_TOO_LONG -> "Detenido demasiado tiempo";
+            case Alert.TYPE_MOVEMENT -> "Movimiento detectado";
+            case Alert.TYPE_HARSH_ACCELERATION -> "Aceleración brusca";
+            case Alert.TYPE_HARSH_BRAKING -> "Frenado brusco";
+            case Alert.TYPE_HARSH_CORNERING -> "Giro brusco";
+            default -> type;
+        };
     }
 
     private String escape(String value) {

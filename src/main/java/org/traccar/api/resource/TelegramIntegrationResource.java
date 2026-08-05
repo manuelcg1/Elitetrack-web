@@ -54,7 +54,8 @@ public class TelegramIntegrationResource extends BaseResource {
     public record Status(String status) {
     }
 
-    public record TelegramUser(long id, String name, String email, boolean linked, String maskedChatId) {
+    public record TelegramUser(
+            long id, String name, String email, boolean administrator, boolean linked, String maskedChatId) {
     }
 
     public record LinkRequest(String telegramChatId) {
@@ -172,7 +173,7 @@ public class TelegramIntegrationResource extends BaseResource {
 
     private static TelegramUser toTelegramUser(User user) {
         String chatId = user.getString(ATTRIBUTE_CHAT_ID);
-        return new TelegramUser(user.getId(), user.getName(), user.getEmail(),
+        return new TelegramUser(user.getId(), user.getName(), user.getEmail(), user.getAdministrator(),
                 chatId != null && !chatId.isBlank(), maskChatId(chatId));
     }
 

@@ -73,10 +73,10 @@ import useCompactTableStyles from '../common/theme/compactTableStyles';
 const eliteGreen = '#00c853';
 
 const alertTypes = [
-  { value: 'speed', label: 'Velocidad' },
-  { value: 'geofenceEnter', label: 'Entrada a geocerca' },
+  { value: 'speed', label: 'Exceso de velocidad' },
+  { value: 'geofenceEnter', label: 'Ingreso a geocerca' },
   { value: 'geofenceExit', label: 'Salida de geocerca' },
-  { value: 'batteryLow', label: 'Bateria baja' },
+  { value: 'batteryLow', label: 'Batería baja' },
   { value: 'powerCut', label: 'Energía desconectada' },
   { value: 'ignitionOn', label: 'Ignicion encendida' },
   { value: 'ignitionOff', label: 'Ignicion apagada' },
@@ -168,8 +168,10 @@ const optionKey = (option) => `${option.kind}:${option.id}`;
 const isGeofenceTransition = (type) => ['geofenceEnter', 'geofenceExit'].includes(type);
 const isConditionlessAlert = (type) => isGeofenceTransition(type) || type === 'powerCut';
 
-const getTypeLabel = (value) =>
-  alertTypes.find((type) => type.value === value)?.label || value || '-';
+const getTypeLabel = (value) => {
+  const normalizedValue = value === 'lowBattery' ? 'batteryLow' : value;
+  return alertTypes.find((type) => type.value === normalizedValue)?.label || value || '-';
+};
 const getSeverity = (value) =>
   severities.find((severity) => severity.value === value) || severities[1];
 const statusLabels = {
@@ -186,7 +188,26 @@ const statusColors = {
   dismissed: 'default',
 };
 
-const formatDateTime = (value) => (value ? new Date(value).toLocaleString() : '-');
+const formatDateTime = (value) => {
+  if (!value) {
+    return '-';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '-';
+  }
+  return date
+    .toLocaleString('es-PE', {
+      timeZone: 'America/Lima',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    })
+    .replace(',', '');
+};
 
 const relativeTime = (value) => {
   if (!value) {
@@ -2425,9 +2446,7 @@ const MonitoringAlertsPage = () => {
                           {(alert.geofenceIds.length || 0) + (alert.geofenceGroupIds.length || 0) ||
                             '-'}
                         </TableCell>
-                        <TableCell>
-                          {alert.updatedAt ? new Date(alert.updatedAt).toLocaleString() : '-'}
-                        </TableCell>
+                        <TableCell>{formatDateTime(alert.updatedAt)}</TableCell>
                         <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                           <Tooltip title="Editar">
                             <IconButton size="small" onClick={() => openEdit(alert)}>
