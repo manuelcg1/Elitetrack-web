@@ -13,6 +13,7 @@ import org.traccar.model.Position;
 import org.traccar.model.User;
 import org.traccar.notification.NotificationMessage;
 import org.traccar.notification.NotificatorManager;
+import org.traccar.notificators.Notificator;
 import org.traccar.session.cache.CacheManager;
 import org.traccar.storage.Storage;
 import org.traccar.storage.StorageException;
@@ -23,6 +24,8 @@ import org.traccar.storage.query.Request;
 import java.util.Collection;
 import java.util.Locale;
 import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 
 @Singleton
@@ -37,15 +40,28 @@ public class AlertNotificationService {
     private final CacheManager cacheManager;
     private final NotificatorManager notificatorManager;
     private final ExecutorService executorService;
+    private final AlertRecipientRepository alertRecipientRepository;
+    private final AlertSecurity alertSecurity;
+
+    private final Map<String, Boolean> deliveredEvents = java.util.Collections.synchronizedMap(
+            new LinkedHashMap<>(128, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, Boolean> eldest) {
+                    return size() > 10000;
+                }
+            });
 
     @Inject
     public AlertNotificationService(
             Storage storage, CacheManager cacheManager, NotificatorManager notificatorManager,
-            ExecutorService executorService) {
+            ExecutorService executorService, AlertRecipientRepository alertRecipientRepository,
+            AlertSecurity alertSecurity) {
         this.storage = storage;
         this.cacheManager = cacheManager;
         this.notificatorManager = notificatorManager;
         this.executorService = executorService;
+        this.alertRecipientRepository = alertRecipientRepository;
+        this.alertSecurity = alertSecurity;
     }
 
     public boolean isChannelEnabled(Alert alert, String channel, boolean defaultValue) {
@@ -77,18 +93,17 @@ public class AlertNotificationService {
     }
 
     private void sendTelegram(Alert alert, AlertEvent alertEvent) {
+        int sent = 0;
+        int skippedNoChat = 0;
+        int skippedNoPermission = 0;
+        int failed = 0;
         try {
-            if (alert.getCreatedBy() <= 0) {
-                LOGGER.warn("Telegram alert {} skipped because it has no creator", alert.getId());
+            List<Long> recipientIds = alertRecipientRepository.getUserIds(alert.getId());
+            if (recipientIds.isEmpty()) {
+                LOGGER.warn("Telegram alert {} has no recipients", alert.getId());
                 return;
             }
-            User user = storage.getObject(User.class, new Request(
-                    new Columns.All(), new Condition.Equals("id", alert.getCreatedBy())));
-            if (user == null || !user.hasAttribute("telegramChatId")
-                    || user.getString("telegramChatId").isBlank()) {
-                LOGGER.warn("Telegram alert {} skipped because its recipient has no chat configured", alert.getId());
-                return;
-            }
+            List<User> users = getUsers(recipientIds);
 
             Device device = cacheManager.getObject(Device.class, alertEvent.getDeviceId());
             if (device == null) {
@@ -108,11 +123,57 @@ public class AlertNotificationService {
             boolean priority = Alert.SEVERITY_HIGH.equals(alertEvent.getSeverity())
                     || Alert.SEVERITY_CRITICAL.equals(alertEvent.getSeverity());
             NotificationMessage notificationMessage = new NotificationMessage(subject, message, message, priority);
-            notificatorManager.getNotificator(CHANNEL_TELEGRAM)
-                    .send(user, notificationMessage, null, position);
+            Notificator notificator = null;
+            for (User user : users) {
+                String deliveryKey = alertEvent.getId() + ":" + user.getId() + ":" + CHANNEL_TELEGRAM;
+                synchronized (deliveredEvents) {
+                    if (deliveredEvents.putIfAbsent(deliveryKey, Boolean.TRUE) != null) {
+                        continue;
+                    }
+                }
+                if (!user.hasAttribute("telegramChatId") || user.getString("telegramChatId").isBlank()) {
+                    skippedNoChat++;
+                    continue;
+                }
+                try {
+                    if (!alertSecurity.canAccessDevice(user.getId(), alertEvent.getDeviceId())) {
+                        skippedNoPermission++;
+                        continue;
+                    }
+                    if (notificator == null) {
+                        notificator = notificatorManager.getNotificator(CHANNEL_TELEGRAM);
+                    }
+                    notificator.send(user, notificationMessage, null, position);
+                    sent++;
+                } catch (Exception e) {
+                    failed++;
+                    LOGGER.warn("Telegram delivery failed for alert event {} recipient {}",
+                            alertEvent.getId(), user.getId(), e);
+                }
+            }
+            int missingUsers = recipientIds.size() - users.size();
+            failed += Math.max(0, missingUsers);
+            LOGGER.info("Alert {} Telegram delivery summary: sent={}, skippedNoChat={}, "
+                            + "skippedNoPermission={}, failed={}",
+                    alert.getId(), sent, skippedNoChat, skippedNoPermission, failed);
         } catch (Exception e) {
             LOGGER.warn("Telegram delivery failed for alert event {}", alertEvent.getId(), e);
         }
+    }
+
+    private List<User> getUsers(List<Long> userIds) throws StorageException {
+        Condition condition = null;
+        for (long userId : new java.util.LinkedHashSet<>(userIds)) {
+            Condition next = new Condition.Equals("id", userId);
+            condition = condition == null ? next : new Condition.Or(condition, next);
+        }
+        return condition != null
+                ? storage.getObjects(User.class, new Request(new Columns.All(), condition)).stream()
+                        .filter(user -> !user.getDisabled())
+                        .filter(user -> user.getExpirationTime() == null
+                                || user.getExpirationTime().after(new java.util.Date()))
+                        .toList()
+                : List.of();
     }
 
     private Position getPosition(AlertEvent alertEvent) throws StorageException {

@@ -44,6 +44,7 @@ public class Alert extends ExtendedModel {
     private List<Long> groupIds = new ArrayList<>();
     private List<Long> geofenceIds = new ArrayList<>();
     private List<Long> geofenceGroupIds = new ArrayList<>();
+    private List<Long> recipientIds = new ArrayList<>();
 
     public String getName() {
         return name;
@@ -167,6 +168,15 @@ public class Alert extends ExtendedModel {
 
     public void setGeofenceGroupIds(List<Long> geofenceGroupIds) {
         this.geofenceGroupIds = geofenceGroupIds != null ? geofenceGroupIds : new ArrayList<>();
+    }
+
+    @QueryIgnore
+    public List<Long> getRecipientIds() {
+        return recipientIds;
+    }
+
+    public void setRecipientIds(List<Long> recipientIds) {
+        this.recipientIds = recipientIds != null ? recipientIds : new ArrayList<>();
     }
 
 }

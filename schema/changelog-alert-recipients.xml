@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+  xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.1.xsd">
+
+  <changeSet author="elitetrack" id="alert-recipients-1">
+    <preConditions onFail="MARK_RAN">
+      <not><tableExists tableName="tc_alert_recipients" /></not>
+    </preConditions>
+    <createTable tableName="tc_alert_recipients">
+      <column name="alertid" type="BIGINT"><constraints nullable="false" /></column>
+      <column name="userid" type="BIGINT"><constraints nullable="false" /></column>
+    </createTable>
+    <addPrimaryKey tableName="tc_alert_recipients" columnNames="alertid, userid"
+                   constraintName="pk_alert_recipients" />
+    <addForeignKeyConstraint baseTableName="tc_alert_recipients" baseColumnNames="alertid"
+      constraintName="fk_alert_recipients_alertid" referencedTableName="tc_alerts"
+      referencedColumnNames="id" onDelete="CASCADE" />
+    <addForeignKeyConstraint baseTableName="tc_alert_recipients" baseColumnNames="userid"
+      constraintName="fk_alert_recipients_userid" referencedTableName="tc_users"
+      referencedColumnNames="id" onDelete="CASCADE" />
+    <createIndex tableName="tc_alert_recipients" indexName="idx_alert_recipients_userid">
+      <column name="userid" />
+    </createIndex>
+  </changeSet>
+
+</databaseChangeLog>

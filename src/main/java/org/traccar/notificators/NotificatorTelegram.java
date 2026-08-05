@@ -45,6 +45,7 @@ public class NotificatorTelegram extends Notificator {
 
     private final String urlSendText;
     private final String urlSendLocation;
+    private final String urlGetMe;
     private final String chatId;
     private final boolean sendLocation;
 
@@ -78,6 +79,8 @@ public class NotificatorTelegram extends Notificator {
                 "https://api.telegram.org/bot%s/sendMessage", config.getString(Keys.NOTIFICATOR_TELEGRAM_KEY));
         urlSendLocation = String.format(
                 "https://api.telegram.org/bot%s/sendLocation", config.getString(Keys.NOTIFICATOR_TELEGRAM_KEY));
+        urlGetMe = String.format(
+                "https://api.telegram.org/bot%s/getMe", config.getString(Keys.NOTIFICATOR_TELEGRAM_KEY));
         chatId = config.getString(Keys.NOTIFICATOR_TELEGRAM_CHAT_ID);
         sendLocation = config.getBoolean(Keys.NOTIFICATOR_TELEGRAM_SEND_LOCATION);
 
@@ -123,6 +126,21 @@ public class NotificatorTelegram extends Notificator {
         sendRequest(urlSendText, message);
         if (sendLocation && position != null) {
             sendRequest(urlSendLocation, createLocationMessage(message.chatId, position));
+        }
+    }
+
+    public void checkConnection() throws MessageException {
+        try (Response response = client.target(urlGetMe)
+                .property(ClientProperties.CONNECT_TIMEOUT, TIMEOUT_MILLIS)
+                .property(ClientProperties.READ_TIMEOUT, TIMEOUT_MILLIS)
+                .request().get()) {
+            if (response.getStatus() / 100 != 2) {
+                throw new MessageException("Telegram connection failed with status " + response.getStatus());
+            }
+        } catch (MessageException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new MessageException(e);
         }
     }
 

@@ -22,12 +22,15 @@ import java.util.concurrent.ExecutorService;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 
 public class AlertNotificationServiceTest {
 
@@ -38,14 +41,23 @@ public class AlertNotificationServiceTest {
             invocation.getArgument(0, Runnable.class).run();
             return null;
         }).when(executorService).execute(any(Runnable.class));
-        return new AlertNotificationService(storage, cacheManager, notificatorManager, executorService);
+        AlertRecipientRepository repository = mock(AlertRecipientRepository.class);
+        AlertSecurity security = mock(AlertSecurity.class);
+        try {
+            when(repository.getUserIds(anyLong())).thenReturn(List.of(7L));
+            when(security.canAccessDevice(anyLong(), anyLong())).thenReturn(true);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        return new AlertNotificationService(
+                storage, cacheManager, notificatorManager, executorService, repository, security);
     }
 
     @Test
     public void testNotificationChannelFormats() {
         AlertNotificationService service = new AlertNotificationService(
                 mock(Storage.class), mock(CacheManager.class), mock(NotificatorManager.class),
-                mock(ExecutorService.class));
+                mock(ExecutorService.class), mock(AlertRecipientRepository.class), mock(AlertSecurity.class));
         Alert alert = new Alert();
 
         assertTrue(service.isChannelEnabled(alert, "platform", true));
@@ -65,7 +77,8 @@ public class AlertNotificationServiceTest {
     public void testNoTelegramChannelDoesNotScheduleTask() {
         ExecutorService executorService = mock(ExecutorService.class);
         AlertNotificationService service = new AlertNotificationService(
-                mock(Storage.class), mock(CacheManager.class), mock(NotificatorManager.class), executorService);
+                mock(Storage.class), mock(CacheManager.class), mock(NotificatorManager.class), executorService,
+                mock(AlertRecipientRepository.class), mock(AlertSecurity.class));
         Alert alert = new Alert();
         alert.getAttributes().put("notifications", List.of("platform"));
 
@@ -80,7 +93,8 @@ public class AlertNotificationServiceTest {
         org.mockito.Mockito.doThrow(new java.util.concurrent.RejectedExecutionException("shutdown"))
                 .when(executorService).execute(any(Runnable.class));
         AlertNotificationService service = new AlertNotificationService(
-                mock(Storage.class), mock(CacheManager.class), mock(NotificatorManager.class), executorService);
+                mock(Storage.class), mock(CacheManager.class), mock(NotificatorManager.class), executorService,
+                mock(AlertRecipientRepository.class), mock(AlertSecurity.class));
         Alert alert = new Alert();
         alert.set("notifications", "telegram");
 
@@ -108,7 +122,7 @@ public class AlertNotificationServiceTest {
         User user = new User();
         user.setId(7);
         user.set("telegramChatId", "123456789");
-        when(storage.getObject(eq(User.class), any(Request.class))).thenReturn(user);
+        when(storage.getObjects(eq(User.class), any(Request.class))).thenReturn(List.of(user));
 
         Device device = new Device();
         device.setId(10);
@@ -165,11 +179,12 @@ public class AlertNotificationServiceTest {
 
         User user = new User();
         user.setId(7);
-        when(storage.getObject(eq(User.class), any(Request.class))).thenReturn(user);
+        when(storage.getObjects(eq(User.class), any(Request.class))).thenReturn(List.of(user));
         service.sendAsync(alert, event);
         verify(notificatorManager, never()).getNotificator("telegram");
 
         user.set("telegramChatId", "123");
+        event.setId(3);
         when(notificatorManager.getNotificator("telegram"))
                 .thenThrow(new RuntimeException("disabled"));
         service.sendAsync(alert, event);
@@ -191,7 +206,8 @@ public class AlertNotificationServiceTest {
         alert.set("notifications", "telegram");
         User user = new User();
         user.set("telegramChatId", "123");
-        when(storage.getObject(eq(User.class), any(Request.class))).thenReturn(user);
+        user.setId(7);
+        when(storage.getObjects(eq(User.class), any(Request.class))).thenReturn(List.of(user));
         when(storage.getObject(eq(Position.class), any(Request.class))).thenReturn(null);
         Position cachedPosition = new Position();
         cachedPosition.setDeviceId(10);
@@ -204,5 +220,79 @@ public class AlertNotificationServiceTest {
         service.sendAsync(alert, event);
 
         verify(telegram).send(eq(user), any(NotificationMessage.class), eq(null), eq(cachedPosition));
+    }
+
+    @Test
+    public void testRecipientFailureDoesNotBlockOthersAndDeduplicatesEvent() throws Exception {
+        Storage storage = mock(Storage.class);
+        CacheManager cacheManager = mock(CacheManager.class);
+        NotificatorManager manager = mock(NotificatorManager.class);
+        ExecutorService executor = mock(ExecutorService.class);
+        AlertRecipientRepository repository = mock(AlertRecipientRepository.class);
+        AlertSecurity security = mock(AlertSecurity.class);
+        doAnswer(invocation -> {
+            invocation.getArgument(0, Runnable.class).run();
+            return null;
+        }).when(executor).execute(any(Runnable.class));
+
+        User first = new User();
+        first.setId(1);
+        first.set("telegramChatId", "11111");
+        User second = new User();
+        second.setId(4);
+        second.set("telegramChatId", "44444");
+        when(repository.getUserIds(9)).thenReturn(List.of(1L, 4L, 4L));
+        when(storage.getObjects(eq(User.class), any(Request.class))).thenReturn(List.of(first, second));
+        when(security.canAccessDevice(anyLong(), eq(10L))).thenReturn(true);
+        Notificator telegram = mock(Notificator.class);
+        when(manager.getNotificator("telegram")).thenReturn(telegram);
+        doThrow(new RuntimeException("recipient failure")).when(telegram)
+                .send(eq(first), any(NotificationMessage.class), eq(null), any());
+
+        AlertNotificationService service = new AlertNotificationService(
+                storage, cacheManager, manager, executor, repository, security);
+        Alert alert = new Alert();
+        alert.setId(9);
+        alert.getAttributes().put("notifications", List.of("telegram"));
+        AlertEvent event = new AlertEvent();
+        event.setId(20);
+        event.setDeviceId(10);
+
+        service.sendAsync(alert, event);
+        service.sendAsync(alert, event);
+
+        verify(telegram, times(1)).send(eq(first), any(NotificationMessage.class), eq(null), any());
+        verify(telegram, times(1)).send(eq(second), any(NotificationMessage.class), eq(null), any());
+    }
+
+    @Test
+    public void testRecipientWithoutDevicePermissionIsSkipped() throws Exception {
+        Storage storage = mock(Storage.class);
+        ExecutorService executor = mock(ExecutorService.class);
+        doAnswer(invocation -> {
+            invocation.getArgument(0, Runnable.class).run();
+            return null;
+        }).when(executor).execute(any(Runnable.class));
+        AlertRecipientRepository repository = mock(AlertRecipientRepository.class);
+        when(repository.getUserIds(9)).thenReturn(List.of(7L));
+        User user = new User();
+        user.setId(7);
+        user.set("telegramChatId", "77777");
+        when(storage.getObjects(eq(User.class), any(Request.class))).thenReturn(List.of(user));
+        AlertSecurity security = mock(AlertSecurity.class);
+        when(security.canAccessDevice(7, 10)).thenReturn(false);
+        NotificatorManager manager = mock(NotificatorManager.class);
+        AlertNotificationService service = new AlertNotificationService(
+                storage, mock(CacheManager.class), manager, executor, repository, security);
+        Alert alert = new Alert();
+        alert.setId(9);
+        alert.set("notifications", "telegram");
+        AlertEvent event = new AlertEvent();
+        event.setId(30);
+        event.setDeviceId(10);
+
+        service.sendAsync(alert, event);
+
+        verify(manager, never()).getNotificator("telegram");
     }
 }

@@ -250,7 +250,7 @@ No confirme el token real en Git. En produccion agregue las mismas propiedades
 a `/opt/traccar/traccar.xml` usando el secreto suministrado por BotFather y
 reinicie el servicio Traccar.
 
-El creador de la alerta debe tener este atributo de usuario:
+Cada destinatario seleccionado debe tener este atributo de usuario:
 
 ```json
 {
@@ -259,8 +259,8 @@ El creador de la alerta debe tener este atributo de usuario:
 ```
 
 El usuario debe haber iniciado previamente una conversacion con el bot. En
-**Monitoreo > Alertas**, habilite Telegram. El atributo guardado en la alerta
-debe tener este formato:
+**Monitoreo > Alertas**, habilite Telegram y seleccione uno o varios usuarios
+individuales. El atributo guardado en la alerta mantiene este formato:
 
 ```json
 {
@@ -268,9 +268,27 @@ debe tener este formato:
 }
 ```
 
-Para una prueba local, ejecute el servidor con `debug.xml`, cree la alerta con
-el usuario que contiene `telegramChatId` y genere el evento con el simulador.
+Los destinatarios se almacenan en `tc_alert_recipients`. Las alertas anteriores
+que no tengan destinatarios no envian Telegram y no usan al creador como
+fallback. Para una prueba local, ejecute el servidor con `debug.xml`, seleccione
+un usuario con `telegramChatId` y genere el evento con el simulador.
 Primero debe aparecer un registro en `tc_alert_events`; el envio Telegram se
 realiza despues en un hilo asincrono. Si Telegram no esta habilitado, el chat no
 existe o la API responde con error, el evento permanece guardado y el flujo GPS
 continua funcionando.
+
+El servicio carga los usuarios en una consulta, reutiliza el executor compartido
+y aisla el fallo de cada destinatario. Antes de enviar valida su permiso sobre
+el vehiculo. La clave defensiva `alertEventId + userId + telegram` evita envios
+duplicados y conserva hasta 10000 entregas recientes en memoria.
+
+Consulta opcional para detectar alertas Telegram sin destinatarios:
+
+```sql
+SELECT a.id, a.name
+FROM tc_alerts a
+LEFT JOIN tc_alert_recipients r ON r.alertid = a.id
+WHERE CAST(a.attributes AS TEXT) LIKE '%telegram%'
+GROUP BY a.id, a.name
+HAVING COUNT(r.userid) = 0;
+```

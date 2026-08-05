@@ -87,6 +87,10 @@ public class AlertSecurity {
         return false;
     }
 
+    public boolean canAccessDevice(long userId, long deviceId) throws StorageException {
+        return hasPermission(Device.class, userId, deviceId);
+    }
+
     public boolean alertAppliesToDevice(
             Alert alert, long deviceId, long deviceGroupId, List<Long> deviceIds, List<Long> groupIds)
             throws StorageException {

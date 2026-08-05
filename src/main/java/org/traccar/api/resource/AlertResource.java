@@ -15,11 +15,13 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.traccar.alert.AlertCache;
 import org.traccar.alert.AlertSecurity;
+import org.traccar.alert.AlertRecipientRepository;
 import org.traccar.api.BaseResource;
 import org.traccar.api.security.MenuKeys;
 import org.traccar.model.Alert;
 import org.traccar.model.AlertDevice;
 import org.traccar.model.AlertGeofence;
+import org.traccar.model.User;
 import org.traccar.storage.StorageException;
 import org.traccar.storage.query.Columns;
 import org.traccar.storage.query.Condition;
@@ -29,6 +31,9 @@ import org.traccar.storage.query.Request;
 import java.util.Date;
 import java.util.List;
 import java.util.Objects;
+import java.sql.SQLException;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Path("alerts")
 @Produces(MediaType.APPLICATION_JSON)
@@ -40,6 +45,16 @@ public class AlertResource extends BaseResource {
 
     @Inject
     private AlertCache alertCache;
+
+    @Inject
+    private AlertRecipientRepository alertRecipientRepository;
+
+    public record RecipientUpdate(List<Long> userIds) {
+    }
+
+    public record Recipient(
+            long userId, String name, String email, boolean telegramLinked, String maskedChatId) {
+    }
 
     private static final List<String> TYPES = List.of(
             Alert.TYPE_SPEED,
@@ -103,7 +118,7 @@ public class AlertResource extends BaseResource {
         alert.setCreatedAt(now);
         alert.setUpdatedAt(now);
         alert.setId(storage.addObject(alert, new Request(new Columns.Exclude(
-                "id", "deviceIds", "groupIds", "geofenceIds", "geofenceGroupIds"))));
+                "id", "deviceIds", "groupIds", "geofenceIds", "geofenceGroupIds", "recipientIds"))));
         saveRelations(alert);
         alertCache.invalidate();
         hydrateRelations(alert);
@@ -131,7 +146,7 @@ public class AlertResource extends BaseResource {
         alert.setUpdatedAt(new Date());
         storage.updateObject(alert, new Request(
                 new Columns.Exclude("id", "createdBy", "createdAt", "deviceIds", "groupIds",
-                        "geofenceIds", "geofenceGroupIds"),
+                        "geofenceIds", "geofenceGroupIds", "recipientIds"),
                 new Condition.Equals("id", id)));
         removeRelations(id);
         saveRelations(alert);
@@ -183,6 +198,120 @@ public class AlertResource extends BaseResource {
         if (Alert.TYPE_SPEED.equals(alert.getType()) && alert.getLimitValue() <= 0) {
             throw new BadRequestException("Limit value is required for speed alerts");
         }
+    }
+
+    @Path("{id}/recipients")
+    @GET
+    public List<Recipient> getRecipients(@PathParam("id") long id) throws StorageException {
+        Alert alert = getManagedAlert(id);
+        return loadRecipientUsers(getRecipientIds(alert.getId())).stream().map(AlertResource::toRecipient).toList();
+    }
+
+    @Path("{id}/recipient-options")
+    @GET
+    public List<Recipient> getRecipientOptions(@PathParam("id") long id) throws StorageException {
+        getManagedAlert(id);
+        boolean admin = alertSecurity.isAdmin(getUserId());
+        return storage.getObjects(User.class, new Request(new Columns.All(), new Order("name"))).stream()
+                .filter(user -> !user.getDisabled())
+                .filter(AlertResource::notExpired)
+                .filter(user -> admin || canManageUser(user.getId()))
+                .map(AlertResource::toRecipient)
+                .toList();
+    }
+
+    @Path("recipient-options")
+    @GET
+    public List<Recipient> getRecipientOptions() throws StorageException {
+        checkAlertsAccess();
+        boolean admin = alertSecurity.isAdmin(getUserId());
+        return storage.getObjects(User.class, new Request(new Columns.All(), new Order("name"))).stream()
+                .filter(user -> !user.getDisabled())
+                .filter(AlertResource::notExpired)
+                .filter(user -> admin || canManageUser(user.getId()))
+                .map(AlertResource::toRecipient)
+                .toList();
+    }
+
+    @Path("{id}/recipients")
+    @PUT
+    public List<Recipient> replaceRecipients(@PathParam("id") long id, RecipientUpdate update)
+            throws StorageException {
+        Alert alert = getManagedAlert(id);
+        Set<Long> userIds = new LinkedHashSet<>(update != null && update.userIds() != null
+                ? update.userIds() : List.of());
+        if (userIds.stream().anyMatch(userId -> userId == null || userId <= 0)) {
+            throw new BadRequestException("Invalid recipient user id");
+        }
+        List<User> users = loadRecipientUsers(userIds);
+        if (users.size() != userIds.size()) {
+            throw new BadRequestException("One or more recipient users do not exist");
+        }
+        for (User user : users) {
+            if (user.getDisabled() || !notExpired(user)
+                    || (!alertSecurity.isAdmin(getUserId()) && !canManageUser(user.getId()))) {
+                throw new SecurityException("Recipient user access denied");
+            }
+        }
+        try {
+            alertRecipientRepository.replace(alert.getId(), userIds);
+        } catch (SQLException e) {
+            throw new StorageException("Failed to replace alert recipients", e);
+        }
+        return users.stream().map(AlertResource::toRecipient).toList();
+    }
+
+    private Alert getManagedAlert(long id) throws StorageException {
+        checkAlertsAccess();
+        Alert alert = storage.getObject(Alert.class, new Request(
+                new Columns.All(), new Condition.Equals("id", id)));
+        if (alert == null) {
+            throw new NotFoundException();
+        }
+        hydrateRelations(alert);
+        if (!alertSecurity.canManageAlert(getUserId(), alert)) {
+            throw new SecurityException("Alert access denied");
+        }
+        return alert;
+    }
+
+    private boolean canManageUser(long userId) {
+        try {
+            permissionsService.checkUser(getUserId(), userId);
+            return true;
+        } catch (StorageException | SecurityException e) {
+            return false;
+        }
+    }
+
+    private List<Long> getRecipientIds(long alertId) throws StorageException {
+        try {
+            return alertRecipientRepository.getUserIds(alertId);
+        } catch (SQLException e) {
+            throw new StorageException("Failed to load alert recipients", e);
+        }
+    }
+
+    private List<User> loadRecipientUsers(java.util.Collection<Long> userIds) throws StorageException {
+        Condition condition = null;
+        for (long userId : userIds) {
+            Condition next = new Condition.Equals("id", userId);
+            condition = condition == null ? next : new Condition.Or(condition, next);
+        }
+        return condition != null
+                ? storage.getObjects(User.class, new Request(new Columns.All(), condition)) : List.of();
+    }
+
+    private static Recipient toRecipient(User user) {
+        String chatId = user.getString("telegramChatId");
+        String maskedChatId = chatId != null && !chatId.isBlank()
+                ? "••••••" + chatId.substring(Math.max(0, chatId.length() - 4)) : null;
+        return new Recipient(user.getId(), user.getName(), user.getEmail(),
+                chatId != null && !chatId.isBlank(), maskedChatId);
+    }
+
+    private static boolean notExpired(User user) {
+        return user.getExpirationTime() == null || user.getExpirationTime().after(new Date());
     }
 
     private void normalizeCondition(Alert alert) {
@@ -252,6 +381,7 @@ public class AlertResource extends BaseResource {
                 .map(AlertGeofence::getGroupId)
                 .filter(Objects::nonNull)
                 .toList());
+        alert.setRecipientIds(getRecipientIds(alert.getId()));
     }
 
 }

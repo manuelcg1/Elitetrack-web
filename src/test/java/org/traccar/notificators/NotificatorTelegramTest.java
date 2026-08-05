@@ -34,8 +34,10 @@ public class NotificatorTelegramTest {
         when(target.request()).thenReturn(builder);
         if (failure != null) {
             when(builder.post(any(Entity.class))).thenThrow(failure);
+            when(builder.get()).thenThrow(failure);
         } else {
             when(builder.post(any(Entity.class))).thenReturn(response);
+            when(builder.get()).thenReturn(response);
         }
         return new NotificatorTelegram(
                 config, mock(NotificationFormatter.class), client, mock(ObjectMapperContextResolver.class));
@@ -81,5 +83,19 @@ public class NotificatorTelegramTest {
                 null, new ProcessingException("timeout"));
         assertThrows(MessageException.class, () -> notificator.send(
                 createUser(), new NotificationMessage("title", "body", "body", false), null, null));
+    }
+
+    @Test
+    public void testConnectionStatus() throws Exception {
+        Response response = mock(Response.class);
+        when(response.getStatus()).thenReturn(200);
+        createNotificator(response, null).checkConnection();
+    }
+
+    @Test
+    public void testConnectionError() {
+        Response response = mock(Response.class);
+        when(response.getStatus()).thenReturn(401);
+        assertThrows(MessageException.class, () -> createNotificator(response, null).checkConnection());
     }
 }

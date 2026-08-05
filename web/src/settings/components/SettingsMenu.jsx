@@ -14,6 +14,7 @@ import HelpIcon from '@mui/icons-material/Help';
 import PaymentIcon from '@mui/icons-material/Payment';
 import CampaignIcon from '@mui/icons-material/Campaign';
 import CalculateIcon from '@mui/icons-material/Calculate';
+import TelegramIcon from '@mui/icons-material/Telegram';
 import { useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { useTranslation } from '../../common/components/LocalizationProvider';
@@ -138,12 +139,20 @@ const SettingsMenu = () => {
               selected={location.pathname === '/settings/announcement'}
             />
             {admin && (
-              <MenuItem
-                title={t('settingsServer')}
-                link="/settings/server"
-                icon={<SettingsIcon />}
-                selected={location.pathname === '/settings/server'}
-              />
+              <>
+                <MenuItem
+                  title={t('settingsServer')}
+                  link="/settings/server"
+                  icon={<SettingsIcon />}
+                  selected={location.pathname === '/settings/server'}
+                />
+                <MenuItem
+                  title="Integraciones · Telegram"
+                  link="/settings/integrations/telegram"
+                  icon={<TelegramIcon />}
+                  selected={location.pathname === '/settings/integrations/telegram'}
+                />
+              </>
             )}
             <MenuItem
               title={t('settingsUsers')}

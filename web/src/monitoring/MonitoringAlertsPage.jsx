@@ -155,6 +155,7 @@ const emptyAlert = {
   groupIds: [],
   geofenceIds: [],
   geofenceGroupIds: [],
+  recipientIds: [],
   attributes: {
     minimumDuration: '',
     resolveThreshold: '',
@@ -242,6 +243,7 @@ const normalizeAlert = (alert = {}) => ({
   deviceIds: alert.deviceIds || [],
   geofenceIds: alert.geofenceIds || [],
   geofenceGroupIds: alert.geofenceGroupIds || [],
+  recipientIds: alert.recipientIds || [],
   attributes: {
     ...emptyAlert.attributes,
     ...(alert.attributes || {}),
@@ -372,6 +374,7 @@ const MonitoringAlertsPage = () => {
   const [groups, setGroups] = useState([]);
   const [geofences, setGeofences] = useState([]);
   const [geofenceFolders, setGeofenceFolders] = useState([]);
+  const [recipientOptions, setRecipientOptions] = useState([]);
   const [item, setItem] = useState(emptyAlert);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
@@ -624,18 +627,32 @@ const MonitoringAlertsPage = () => {
     item.name.trim() &&
     item.type &&
     item.severity &&
-    (item.type !== 'speed' || Number(item.limitValue) > 0);
+    (item.type !== 'speed' || Number(item.limitValue) > 0) &&
+    (!item.attributes.notifications?.includes('telegram') || item.recipientIds.length > 0) &&
+    (!item.attributes.notifications?.includes('telegram') ||
+      item.attributes.notifications?.includes('platform') ||
+      recipientOptions.some(
+        (recipient) => item.recipientIds.includes(recipient.userId) && recipient.telegramLinked,
+      ));
 
   const loadData = async () => {
-    const [alertsData, eventsData, devicesData, groupsData, geofencesData, foldersData] =
-      await Promise.all([
-        loadJson('/api/alerts'),
-        loadJson(buildEventQuery({}, { limit: eventPageSize })),
-        loadJson(['/api/devices?all=true', '/api/devices'], true),
-        loadJson(['/api/groups?all=true', '/api/groups'], true),
-        loadJson(['/api/geofences?all=true', '/api/geofences'], true),
-        loadJson(['/api/geofenceFolders?all=true', '/api/geofenceFolders'], true),
-      ]);
+    const [
+      alertsData,
+      eventsData,
+      devicesData,
+      groupsData,
+      geofencesData,
+      foldersData,
+      recipientsData,
+    ] = await Promise.all([
+      loadJson('/api/alerts'),
+      loadJson(buildEventQuery({}, { limit: eventPageSize })),
+      loadJson(['/api/devices?all=true', '/api/devices'], true),
+      loadJson(['/api/groups?all=true', '/api/groups'], true),
+      loadJson(['/api/geofences?all=true', '/api/geofences'], true),
+      loadJson(['/api/geofenceFolders?all=true', '/api/geofenceFolders'], true),
+      loadJson('/api/alerts/recipient-options'),
+    ]);
 
     setAlerts(alertsData.map(normalizeAlert));
     setEvents(eventsData);
@@ -643,6 +660,7 @@ const MonitoringAlertsPage = () => {
     setGroups(groupsData);
     setGeofences(geofencesData);
     setGeofenceFolders(foldersData);
+    setRecipientOptions(recipientsData);
   };
 
   const loadEvents = useCallback(async () => {
@@ -749,6 +767,13 @@ const MonitoringAlertsPage = () => {
         body: JSON.stringify(payload),
       });
       const saved = normalizeAlert(await response.json());
+      setItem(saved);
+      await fetchOrThrow(`/api/alerts/${saved.id}/recipients`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userIds: item.recipientIds }),
+      });
+      saved.recipientIds = [...item.recipientIds];
       setAlerts((current) => [saved, ...current.filter((alert) => alert.id !== saved.id)]);
       setDrawerOpen(false);
       setItem(emptyAlert);
@@ -1175,6 +1200,75 @@ const MonitoringAlertsPage = () => {
                 </Paper>
               ))}
             </Box>
+            {item.attributes.notifications?.includes('telegram') && (
+              <Stack spacing={1.5} sx={{ mt: 2.5 }}>
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 900 }}>
+                    Destinatarios de Telegram
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Selecciona usuarios individuales. Los usuarios sin vinculación no recibirán
+                    mensajes hasta configurar Telegram.
+                  </Typography>
+                </Box>
+                <Autocomplete
+                  multiple
+                  disableCloseOnSelect
+                  options={recipientOptions}
+                  value={recipientOptions.filter((recipient) =>
+                    item.recipientIds.includes(recipient.userId),
+                  )}
+                  isOptionEqualToValue={(option, value) => option.userId === value.userId}
+                  getOptionLabel={(option) => option.name || option.email}
+                  onChange={(_, values) =>
+                    setItem((current) => ({
+                      ...current,
+                      recipientIds: values.map((recipient) => recipient.userId),
+                    }))
+                  }
+                  renderOption={(props, option, state) => (
+                    <li key={option.userId} {...props}>
+                      <Checkbox checked={state.selected} sx={{ mr: 1 }} />
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="body2" noWrap>
+                          {option.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" noWrap>
+                          {option.email}
+                        </Typography>
+                      </Box>
+                      <Chip
+                        size="small"
+                        color={option.telegramLinked ? 'success' : 'warning'}
+                        label={option.telegramLinked ? 'Vinculado' : 'No vinculado'}
+                      />
+                    </li>
+                  )}
+                  renderInput={(params) => (
+                    <TextField {...params} label="Buscar usuarios" placeholder="Nombre o correo" />
+                  )}
+                />
+                {!item.recipientIds.length && (
+                  <Alert severity="error">Selecciona al menos un destinatario para Telegram.</Alert>
+                )}
+                {!!item.recipientIds.length &&
+                  !recipientOptions.some(
+                    (recipient) =>
+                      item.recipientIds.includes(recipient.userId) && recipient.telegramLinked,
+                  ) && (
+                    <Alert
+                      severity={
+                        item.attributes.notifications?.includes('platform') ? 'warning' : 'error'
+                      }
+                    >
+                      Ningún destinatario seleccionado tiene Telegram vinculado.
+                    </Alert>
+                  )}
+                <Button href="/settings/integrations/telegram" sx={{ alignSelf: 'flex-start' }}>
+                  Administrar vinculaciones Telegram
+                </Button>
+              </Stack>
+            )}
           </FormStepPanel>
         );
       default:
@@ -2232,6 +2326,7 @@ const MonitoringAlertsPage = () => {
                     >
                       <TableCell>Estado</TableCell>
                       <TableCell>Nombre</TableCell>
+                      <TableCell>Notificación</TableCell>
                       <TableCell>Tipo</TableCell>
                       <TableCell>Condicion</TableCell>
                       <TableCell>Severidad</TableCell>
@@ -2260,6 +2355,57 @@ const MonitoringAlertsPage = () => {
                             <Typography variant="caption" color="text.secondary">
                               {alert.description}
                             </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {alert.attributes.notifications?.length ? (
+                            <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap">
+                              {notificationChannels
+                                .filter((channel) =>
+                                  alert.attributes.notifications.includes(channel.key),
+                                )
+                                .map((channel) => {
+                                  const telegramWithoutRecipients =
+                                    channel.key === 'telegram' && !alert.recipientIds.length;
+                                  const telegramWithUnlinkedRecipients =
+                                    channel.key === 'telegram' &&
+                                    alert.recipientIds.some(
+                                      (userId) =>
+                                        !recipientOptions.find(
+                                          (recipient) =>
+                                            recipient.userId === userId && recipient.telegramLinked,
+                                        ),
+                                    );
+
+                                  return (
+                                    <Tooltip
+                                      key={channel.key}
+                                      title={
+                                        telegramWithoutRecipients
+                                          ? 'Telegram sin destinatarios'
+                                          : telegramWithUnlinkedRecipients
+                                            ? 'Hay destinatarios sin vincular a Telegram'
+                                            : `${channel.label} configurada correctamente`
+                                      }
+                                    >
+                                      <Chip
+                                        size="small"
+                                        label={channel.label}
+                                        color={
+                                          telegramWithoutRecipients
+                                            ? 'error'
+                                            : telegramWithUnlinkedRecipients
+                                              ? 'warning'
+                                              : 'success'
+                                        }
+                                        variant="outlined"
+                                      />
+                                    </Tooltip>
+                                  );
+                                })}
+                            </Stack>
+                          ) : (
+                            '-'
                           )}
                         </TableCell>
                         <TableCell>{getTypeLabel(alert.type)}</TableCell>
