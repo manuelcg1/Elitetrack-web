@@ -23,7 +23,6 @@ import org.traccar.storage.query.Request;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.Locale;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Singleton
@@ -126,8 +125,6 @@ public class AlertProcessor extends BasePositionHandler {
     }
 
     private void processGeofenceAlerts(Position position) throws StorageException {
-        Set<Long> currentGeofences = position.getGeofenceIds() != null
-                ? new HashSet<>(position.getGeofenceIds()) : Set.of();
         Device device = cacheManager.getObject(Device.class, position.getDeviceId());
         long deviceGroupId = device != null ? device.getGroupId() : 0;
 
@@ -138,10 +135,11 @@ public class AlertProcessor extends BasePositionHandler {
                     || !appliesToDevice(cachedAlert, position.getDeviceId(), deviceGroupId)) {
                 continue;
             }
-            for (long geofenceId : cachedAlert.geofenceIds()) {
+            for (var geofence : cachedAlert.geofences()) {
+                long geofenceId = geofence.getId();
                 var key = new AlertGeofenceStateManager.AlertGeofenceStateKey(
                         alert.getId(), position.getDeviceId(), geofenceId);
-                var currentState = currentGeofences.contains(geofenceId)
+                var currentState = geofence.containsPosition(position)
                         ? AlertGeofenceStateManager.AlertGeofenceState.INSIDE
                         : AlertGeofenceStateManager.AlertGeofenceState.OUTSIDE;
                 var transition = geofenceStateManager.update(key, currentState);

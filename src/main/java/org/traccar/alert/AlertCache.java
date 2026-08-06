@@ -2,6 +2,8 @@ package org.traccar.alert;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.traccar.model.Alert;
 import org.traccar.model.AlertDevice;
 import org.traccar.model.AlertGeofence;
@@ -24,6 +26,8 @@ import java.util.stream.Collectors;
 
 @Singleton
 public class AlertCache {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(AlertCache.class);
 
     public record CachedAlert(
             Alert alert, List<Long> deviceIds, List<Long> groupIds,
@@ -132,6 +136,8 @@ public class AlertCache {
                 Geofence geofence = geofences.get(geofenceId);
                 if (geofence != null) {
                     effectiveGeofences.add(geofence);
+                } else {
+                    LOGGER.warn("Alert {} references missing geofence {}", alert.getId(), geofenceId);
                 }
             }
             result.add(new CachedAlert(

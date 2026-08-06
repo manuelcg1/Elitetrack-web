@@ -69,7 +69,7 @@ public class AlertProcessorTest {
         position.setDeviceId(1);
         position.setFixTime(new Date());
         position.setSpeed(0);
-        position.setGeofenceIds(List.of(10L));
+        position.setGeofenceIds(List.of());
         when(cacheManager.getPosition(1)).thenReturn(previousPosition);
         when(geofence.containsPosition(previousPosition)).thenReturn(false);
         when(geofence.containsPosition(position)).thenReturn(true);
@@ -81,6 +81,7 @@ public class AlertProcessorTest {
         initialOutside.setDeviceId(1);
         initialOutside.setFixTime(new Date(System.currentTimeMillis() - 500));
         initialOutside.setGeofenceIds(List.of());
+        when(geofence.containsPosition(initialOutside)).thenReturn(false);
 
         AlertProcessor processor = new AlertProcessor(
                 storage, cacheManager, alertSecurity, alertCache, connectionManager, alertNotificationService,
@@ -98,7 +99,7 @@ public class AlertProcessorTest {
     }
 
     @Test
-    public void testGeofenceExitCreatesEventWithoutSpeedOrDeviceGeofenceRelation() throws Exception {
+    public void testAlertOnlyGeofenceExitUsesGeometry() throws Exception {
         Storage storage = mock(Storage.class);
         CacheManager cacheManager = mock(CacheManager.class);
         AlertSecurity alertSecurity = mock(AlertSecurity.class);
@@ -146,7 +147,8 @@ public class AlertProcessorTest {
         initialInside.setId(50);
         initialInside.setDeviceId(1);
         initialInside.setFixTime(new Date(System.currentTimeMillis() - 500));
-        initialInside.setGeofenceIds(List.of(10L));
+        initialInside.setGeofenceIds(List.of());
+        when(geofence.containsPosition(initialInside)).thenReturn(true);
         processor.onPosition(initialInside, filtered -> { });
         processor.onPosition(position, filtered -> { });
 
@@ -256,6 +258,9 @@ public class AlertProcessorTest {
         stillOutside.setId(62);
         stillOutside.setDeviceId(1);
         stillOutside.setGeofenceIds(List.of());
+        when(geofence.containsPosition(inside)).thenReturn(true);
+        when(geofence.containsPosition(outside)).thenReturn(false);
+        when(geofence.containsPosition(stillOutside)).thenReturn(false);
 
         AlertProcessor processor = new AlertProcessor(
                 storage, cacheManager, alertSecurity, alertCache, connectionManager, alertNotificationService,
@@ -266,6 +271,67 @@ public class AlertProcessorTest {
 
         verify(storage).getObjects(eq(AlertEvent.class), any(Request.class));
         verify(storage, org.mockito.Mockito.never()).addObject(any(AlertEvent.class), any(Request.class));
+    }
+
+    @Test
+    public void testMultipleAlertOnlyGeofencesExitIndependently() throws Exception {
+        Storage storage = mock(Storage.class);
+        CacheManager cacheManager = mock(CacheManager.class);
+        AlertSecurity alertSecurity = mock(AlertSecurity.class);
+        AlertCache alertCache = mock(AlertCache.class);
+        ConnectionManager connectionManager = mock(ConnectionManager.class);
+        AlertNotificationService alertNotificationService = mock(AlertNotificationService.class);
+
+        Alert alert = new Alert();
+        alert.setId(7);
+        alert.setType(Alert.TYPE_GEOFENCE_EXIT);
+        alert.set("cooldownMinutes", 0);
+        Geofence geoZona = mock(Geofence.class);
+        when(geoZona.getId()).thenReturn(8L);
+        Geofence trujillo = mock(Geofence.class);
+        when(trujillo.getId()).thenReturn(7L);
+        var cachedAlert = new AlertCache.CachedAlert(
+                alert, List.of(1L), List.of(), List.of(8L, 7L), List.of(), List.of(geoZona, trujillo));
+        when(alertCache.getAlerts()).thenReturn(List.of(cachedAlert));
+        when(alertSecurity.alertAppliesToDevice(alert, 1, 0, List.of(1L), List.of())).thenReturn(true);
+        when(storage.addObject(any(AlertEvent.class), any(Request.class))).thenReturn(701L, 702L);
+        Device device = new Device();
+        device.setId(1);
+        when(cacheManager.getObject(Device.class, 1)).thenReturn(device);
+
+        Position bothInside = position(70, List.of(99L));
+        Position outsideGeoZona = position(71, List.of(99L));
+        Position bothOutside = position(72, List.of(99L));
+        Position stillOutside = position(73, List.of(99L));
+        when(geoZona.containsPosition(bothInside)).thenReturn(true);
+        when(trujillo.containsPosition(bothInside)).thenReturn(true);
+        when(geoZona.containsPosition(outsideGeoZona)).thenReturn(false);
+        when(trujillo.containsPosition(outsideGeoZona)).thenReturn(true);
+        when(geoZona.containsPosition(bothOutside)).thenReturn(false);
+        when(trujillo.containsPosition(bothOutside)).thenReturn(false);
+        when(geoZona.containsPosition(stillOutside)).thenReturn(false);
+        when(trujillo.containsPosition(stillOutside)).thenReturn(false);
+
+        AlertProcessor processor = new AlertProcessor(
+                storage, cacheManager, alertSecurity, alertCache, connectionManager, alertNotificationService,
+                new AlertGeofenceStateManager(new Config()));
+        processor.onPosition(bothInside, filtered -> { });
+        processor.onPosition(outsideGeoZona, filtered -> { });
+        processor.onPosition(bothOutside, filtered -> { });
+        processor.onPosition(stillOutside, filtered -> { });
+
+        ArgumentCaptor<AlertEvent> events = ArgumentCaptor.forClass(AlertEvent.class);
+        verify(storage, times(2)).addObject(events.capture(), any(Request.class));
+        assertEquals(List.of(8L, 7L), events.getAllValues().stream().map(AlertEvent::getGeofenceId).toList());
+    }
+
+    private static Position position(long id, List<Long> nativeGeofenceIds) {
+        Position position = new Position();
+        position.setId(id);
+        position.setDeviceId(1);
+        position.setFixTime(new Date());
+        position.setGeofenceIds(nativeGeofenceIds);
+        return position;
     }
 
     @Test
