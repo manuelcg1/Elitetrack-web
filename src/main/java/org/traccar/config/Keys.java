@@ -503,6 +503,21 @@ public final class Keys {
             List.of(KeyType.CONFIG),
             true);
 
+    public static final ConfigKey<Integer> ALERT_GEOFENCE_STATE_EXPIRATION_HOURS = new IntegerConfigKey(
+            "alert.geofenceState.expirationHours",
+            List.of(KeyType.CONFIG),
+            168);
+
+    public static final ConfigKey<Integer> ALERT_GEOFENCE_STATE_CLEANUP_MINUTES = new IntegerConfigKey(
+            "alert.geofenceState.cleanupMinutes",
+            List.of(KeyType.CONFIG),
+            60);
+
+    public static final ConfigKey<Integer> ALERT_GEOFENCE_STATE_MAXIMUM_SIZE = new IntegerConfigKey(
+            "alert.geofenceState.maximumSize",
+            List.of(KeyType.CONFIG),
+            100000);
+
     /**
      * If the speed is above specified value, the object is considered to be in motion. Default value is 0.01 knots.
      */

@@ -8,6 +8,7 @@ import org.traccar.model.Device;
 import org.traccar.model.Event;
 import org.traccar.model.Geofence;
 import org.traccar.model.Position;
+import org.traccar.config.Config;
 import org.traccar.session.ConnectionManager;
 import org.traccar.session.cache.CacheManager;
 import org.traccar.storage.Storage;
@@ -75,8 +76,16 @@ public class AlertProcessorTest {
         Event entry = new Event(Event.TYPE_GEOFENCE_ENTER, position);
         entry.setGeofenceId(10);
 
+        Position initialOutside = new Position();
+        initialOutside.setId(49);
+        initialOutside.setDeviceId(1);
+        initialOutside.setFixTime(new Date(System.currentTimeMillis() - 500));
+        initialOutside.setGeofenceIds(List.of());
+
         AlertProcessor processor = new AlertProcessor(
-                storage, cacheManager, alertSecurity, alertCache, connectionManager, alertNotificationService);
+                storage, cacheManager, alertSecurity, alertCache, connectionManager, alertNotificationService,
+                new AlertGeofenceStateManager(new Config()));
+        processor.onPosition(initialOutside, filtered -> { });
         processor.onPosition(position, filtered -> { });
         processor.onPosition(position, filtered -> { });
         processor.processEvent(entry, position);
@@ -131,7 +140,14 @@ public class AlertProcessorTest {
         when(geofence.containsPosition(position)).thenReturn(false);
 
         AlertProcessor processor = new AlertProcessor(
-                storage, cacheManager, alertSecurity, alertCache, connectionManager, alertNotificationService);
+                storage, cacheManager, alertSecurity, alertCache, connectionManager, alertNotificationService,
+                new AlertGeofenceStateManager(new Config()));
+        Position initialInside = new Position();
+        initialInside.setId(50);
+        initialInside.setDeviceId(1);
+        initialInside.setFixTime(new Date(System.currentTimeMillis() - 500));
+        initialInside.setGeofenceIds(List.of(10L));
+        processor.onPosition(initialInside, filtered -> { });
         processor.onPosition(position, filtered -> { });
 
         Event standardExit = new Event(Event.TYPE_GEOFENCE_EXIT, position);
@@ -188,7 +204,8 @@ public class AlertProcessorTest {
         source.set(Position.KEY_ALARM, Position.ALARM_POWER_CUT);
 
         AlertProcessor processor = new AlertProcessor(
-                storage, cacheManager, alertSecurity, alertCache, connectionManager, alertNotificationService);
+                storage, cacheManager, alertSecurity, alertCache, connectionManager, alertNotificationService,
+                new AlertGeofenceStateManager(new Config()));
         boolean alertGenerated = processor.processEvent(source, position);
         boolean duplicateGenerated = processor.processEvent(source, position);
 
@@ -201,6 +218,54 @@ public class AlertProcessorTest {
         assertEquals(0, captor.getValue().getThreshold());
         assertTrue(alertGenerated);
         assertTrue(duplicateGenerated);
+    }
+
+    @Test
+    public void testCooldownBlockedGeofenceTransitionStillAdvancesState() throws Exception {
+        Storage storage = mock(Storage.class);
+        CacheManager cacheManager = mock(CacheManager.class);
+        AlertSecurity alertSecurity = mock(AlertSecurity.class);
+        AlertCache alertCache = mock(AlertCache.class);
+        ConnectionManager connectionManager = mock(ConnectionManager.class);
+        AlertNotificationService alertNotificationService = mock(AlertNotificationService.class);
+
+        Alert alert = new Alert();
+        alert.setId(6);
+        alert.setType(Alert.TYPE_GEOFENCE_EXIT);
+        Geofence geofence = mock(Geofence.class);
+        when(geofence.getId()).thenReturn(10L);
+        var cachedAlert = new AlertCache.CachedAlert(
+                alert, List.of(1L), List.of(), List.of(10L), List.of(), List.of(geofence));
+        when(alertCache.getAlerts()).thenReturn(List.of(cachedAlert));
+        when(alertSecurity.alertAppliesToDevice(alert, 1, 0, List.of(1L), List.of())).thenReturn(true);
+        when(storage.getObjects(eq(AlertEvent.class), any(Request.class)))
+                .thenReturn(List.of(new AlertEvent()));
+        Device device = new Device();
+        device.setId(1);
+        when(cacheManager.getObject(Device.class, 1)).thenReturn(device);
+
+        Position inside = new Position();
+        inside.setId(60);
+        inside.setDeviceId(1);
+        inside.setGeofenceIds(List.of(10L));
+        Position outside = new Position();
+        outside.setId(61);
+        outside.setDeviceId(1);
+        outside.setGeofenceIds(List.of());
+        Position stillOutside = new Position();
+        stillOutside.setId(62);
+        stillOutside.setDeviceId(1);
+        stillOutside.setGeofenceIds(List.of());
+
+        AlertProcessor processor = new AlertProcessor(
+                storage, cacheManager, alertSecurity, alertCache, connectionManager, alertNotificationService,
+                new AlertGeofenceStateManager(new Config()));
+        processor.onPosition(inside, filtered -> { });
+        processor.onPosition(outside, filtered -> { });
+        processor.onPosition(stillOutside, filtered -> { });
+
+        verify(storage).getObjects(eq(AlertEvent.class), any(Request.class));
+        verify(storage, org.mockito.Mockito.never()).addObject(any(AlertEvent.class), any(Request.class));
     }
 
     @Test
@@ -229,7 +294,8 @@ public class AlertProcessorTest {
         source.set(Position.KEY_ALARM, Position.ALARM_POWER_CUT);
 
         AlertProcessor processor = new AlertProcessor(
-                storage, cacheManager, alertSecurity, alertCache, connectionManager, alertNotificationService);
+                storage, cacheManager, alertSecurity, alertCache, connectionManager, alertNotificationService,
+                new AlertGeofenceStateManager(new Config()));
 
         assertFalse(processor.processEvent(source, position));
         verify(storage, org.mockito.Mockito.never()).addObject(any(AlertEvent.class), any(Request.class));
@@ -265,7 +331,8 @@ public class AlertProcessorTest {
         source.set(Position.KEY_ALARM, Position.ALARM_POWER_CUT);
 
         AlertProcessor processor = new AlertProcessor(
-                storage, cacheManager, alertSecurity, alertCache, connectionManager, alertNotificationService);
+                storage, cacheManager, alertSecurity, alertCache, connectionManager, alertNotificationService,
+                new AlertGeofenceStateManager(new Config()));
 
         assertFalse(processor.processEvent(source, position));
         verify(alertNotificationService, org.mockito.Mockito.never()).sendAsync(any(), any());

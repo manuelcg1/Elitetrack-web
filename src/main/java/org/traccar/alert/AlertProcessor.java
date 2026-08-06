@@ -45,19 +45,22 @@ public class AlertProcessor extends BasePositionHandler {
     private final AlertCache alertCache;
     private final ConnectionManager connectionManager;
     private final AlertNotificationService alertNotificationService;
+    private final AlertGeofenceStateManager geofenceStateManager;
     private final Object[] idempotencyLocks = new Object[IDEMPOTENCY_LOCK_COUNT];
     private final ConcurrentHashMap<AlertEventKey, Long> recentEvents = new ConcurrentHashMap<>();
 
     @Inject
     public AlertProcessor(
             Storage storage, CacheManager cacheManager, AlertSecurity alertSecurity, AlertCache alertCache,
-            ConnectionManager connectionManager, AlertNotificationService alertNotificationService) {
+            ConnectionManager connectionManager, AlertNotificationService alertNotificationService,
+            AlertGeofenceStateManager geofenceStateManager) {
         this.storage = storage;
         this.cacheManager = cacheManager;
         this.alertSecurity = alertSecurity;
         this.alertCache = alertCache;
         this.connectionManager = connectionManager;
         this.alertNotificationService = alertNotificationService;
+        this.geofenceStateManager = geofenceStateManager;
         for (int i = 0; i < idempotencyLocks.length; i++) {
             idempotencyLocks[i] = new Object();
         }
@@ -123,15 +126,8 @@ public class AlertProcessor extends BasePositionHandler {
     }
 
     private void processGeofenceAlerts(Position position) throws StorageException {
-        Position previousPosition = cacheManager.getPosition(position.getDeviceId());
-        Set<Long> previousGeofences = previousPosition != null && previousPosition.getGeofenceIds() != null
-                ? new HashSet<>(previousPosition.getGeofenceIds()) : Set.of();
         Set<Long> currentGeofences = position.getGeofenceIds() != null
                 ? new HashSet<>(position.getGeofenceIds()) : Set.of();
-        Set<Long> enteredGeofences = new HashSet<>(currentGeofences);
-        enteredGeofences.removeAll(previousGeofences);
-        Set<Long> exitedGeofences = new HashSet<>(previousGeofences);
-        exitedGeofences.removeAll(currentGeofences);
         Device device = cacheManager.getObject(Device.class, position.getDeviceId());
         long deviceGroupId = device != null ? device.getGroupId() : 0;
 
@@ -142,10 +138,19 @@ public class AlertProcessor extends BasePositionHandler {
                     || !appliesToDevice(cachedAlert, position.getDeviceId(), deviceGroupId)) {
                 continue;
             }
-            Set<Long> transitions = Alert.TYPE_GEOFENCE_ENTER.equals(alert.getType())
-                    ? enteredGeofences : exitedGeofences;
             for (long geofenceId : cachedAlert.geofenceIds()) {
-                if (transitions.contains(geofenceId)
+                var key = new AlertGeofenceStateManager.AlertGeofenceStateKey(
+                        alert.getId(), position.getDeviceId(), geofenceId);
+                var currentState = currentGeofences.contains(geofenceId)
+                        ? AlertGeofenceStateManager.AlertGeofenceState.INSIDE
+                        : AlertGeofenceStateManager.AlertGeofenceState.OUTSIDE;
+                var transition = geofenceStateManager.update(key, currentState);
+                boolean matchingTransition = transition.changed()
+                        && ((Alert.TYPE_GEOFENCE_ENTER.equals(alert.getType())
+                                        && currentState == AlertGeofenceStateManager.AlertGeofenceState.INSIDE)
+                                || (Alert.TYPE_GEOFENCE_EXIT.equals(alert.getType())
+                                        && currentState == AlertGeofenceStateManager.AlertGeofenceState.OUTSIDE));
+                if (matchingTransition
                         && !hasRecentEvent(alert, position.getDeviceId(), geofenceId, alert.getType())) {
                     saveEvent(position, alert, alert.getType(), 0, 0, null, geofenceId);
                 }

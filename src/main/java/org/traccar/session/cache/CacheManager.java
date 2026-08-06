@@ -21,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.traccar.broadcast.BroadcastInterface;
 import org.traccar.broadcast.BroadcastService;
+import org.traccar.alert.AlertGeofenceStateManager;
 import org.traccar.config.Config;
 import org.traccar.config.Keys;
 import org.traccar.helper.model.AttributeUtil;
@@ -69,6 +70,7 @@ public class CacheManager implements BroadcastInterface {
     private final Config config;
     private final Storage storage;
     private final BroadcastService broadcastService;
+    private final AlertGeofenceStateManager alertGeofenceStateManager;
 
     private final CacheGraph graph = new CacheGraph();
 
@@ -77,10 +79,13 @@ public class CacheManager implements BroadcastInterface {
     private final Map<Long, HashSet<Object>> deviceReferences = new ConcurrentHashMap<>();
 
     @Inject
-    public CacheManager(Config config, Storage storage, BroadcastService broadcastService) throws StorageException {
+    public CacheManager(
+            Config config, Storage storage, BroadcastService broadcastService,
+            AlertGeofenceStateManager alertGeofenceStateManager) throws StorageException {
         this.config = config;
         this.storage = storage;
         this.broadcastService = broadcastService;
+        this.alertGeofenceStateManager = alertGeofenceStateManager;
         server = storage.getObject(Server.class, new Request(new Columns.All()));
         broadcastService.registerListener(this);
     }
@@ -208,6 +213,14 @@ public class CacheManager implements BroadcastInterface {
             boolean local, Class<T> clazz, long id, ObjectOperation operation) throws Exception {
         if (local) {
             broadcastService.invalidateObject(true, clazz, id, operation);
+        }
+
+        if (operation == ObjectOperation.UPDATE || operation == ObjectOperation.DELETE) {
+            if (clazz.equals(Device.class)) {
+                alertGeofenceStateManager.removeByDeviceId(id);
+            } else if (clazz.equals(Geofence.class)) {
+                alertGeofenceStateManager.removeByGeofenceId(id);
+            }
         }
 
         synchronized (this) {

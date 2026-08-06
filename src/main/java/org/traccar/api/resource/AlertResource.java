@@ -14,6 +14,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.traccar.alert.AlertCache;
+import org.traccar.alert.AlertGeofenceStateManager;
 import org.traccar.alert.AlertSecurity;
 import org.traccar.alert.AlertRecipientRepository;
 import org.traccar.api.BaseResource;
@@ -45,6 +46,9 @@ public class AlertResource extends BaseResource {
 
     @Inject
     private AlertCache alertCache;
+
+    @Inject
+    private AlertGeofenceStateManager alertGeofenceStateManager;
 
     @Inject
     private AlertRecipientRepository alertRecipientRepository;
@@ -151,6 +155,7 @@ public class AlertResource extends BaseResource {
         removeRelations(id);
         saveRelations(alert);
         alertCache.invalidate();
+        alertGeofenceStateManager.removeByAlertId(id);
         hydrateRelations(alert);
         return Response.ok(alert).build();
     }
@@ -171,6 +176,7 @@ public class AlertResource extends BaseResource {
         removeRelations(id);
         storage.removeObject(Alert.class, new Request(new Condition.Equals("id", id)));
         alertCache.invalidate();
+        alertGeofenceStateManager.removeByAlertId(id);
         return Response.noContent().build();
     }
 
