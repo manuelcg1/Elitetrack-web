@@ -31,7 +31,7 @@ import static org.mockito.Mockito.when;
 public class AlertProcessorTest {
 
     @Test
-    public void testEveryGeofenceReentryCreatesAlertEventWhenCooldownDisabled() throws Exception {
+    public void testSameGeofencePositionIsIdempotentWhenCooldownDisabled() throws Exception {
         Storage storage = mock(Storage.class);
         CacheManager cacheManager = mock(CacheManager.class);
         AlertSecurity alertSecurity = mock(AlertSecurity.class);
@@ -62,11 +62,13 @@ public class AlertProcessorTest {
         Position previousPosition = new Position();
         previousPosition.setDeviceId(1);
         previousPosition.setFixTime(new Date(System.currentTimeMillis() - 1000));
+        previousPosition.setGeofenceIds(List.of());
         Position position = new Position();
         position.setId(50);
         position.setDeviceId(1);
         position.setFixTime(new Date());
         position.setSpeed(0);
+        position.setGeofenceIds(List.of(10L));
         when(cacheManager.getPosition(1)).thenReturn(previousPosition);
         when(geofence.containsPosition(previousPosition)).thenReturn(false);
         when(geofence.containsPosition(position)).thenReturn(true);
@@ -80,9 +82,9 @@ public class AlertProcessorTest {
         processor.processEvent(entry, position);
 
         ArgumentCaptor<AlertEvent> captor = ArgumentCaptor.forClass(AlertEvent.class);
-        verify(storage, times(2)).addObject(captor.capture(), any(Request.class));
-        verify(alertNotificationService, times(2)).sendAsync(eq(alert), any(AlertEvent.class));
-        assertEquals(List.of(10L, 10L), captor.getAllValues().stream()
+        verify(storage).addObject(captor.capture(), any(Request.class));
+        verify(alertNotificationService).sendAsync(eq(alert), any(AlertEvent.class));
+        assertEquals(List.of(10L), captor.getAllValues().stream()
                 .map(AlertEvent::getGeofenceId).toList());
     }
 
@@ -117,11 +119,13 @@ public class AlertProcessorTest {
         Position previousPosition = new Position();
         previousPosition.setDeviceId(1);
         previousPosition.setFixTime(new Date(System.currentTimeMillis() - 1000));
+        previousPosition.setGeofenceIds(List.of(10L));
         Position position = new Position();
         position.setId(51);
         position.setDeviceId(1);
         position.setFixTime(new Date());
         position.setSpeed(0);
+        position.setGeofenceIds(List.of());
         when(cacheManager.getPosition(1)).thenReturn(previousPosition);
         when(geofence.containsPosition(previousPosition)).thenReturn(true);
         when(geofence.containsPosition(position)).thenReturn(false);
@@ -138,7 +142,7 @@ public class AlertProcessorTest {
         verify(storage).addObject(captor.capture(), any(Request.class));
         verify(alertNotificationService).sendAsync(eq(alert), any(AlertEvent.class));
         ArgumentCaptor<Request> requestCaptor = ArgumentCaptor.forClass(Request.class);
-        verify(storage).getObjects(eq(AlertEvent.class), requestCaptor.capture());
+        verify(storage, times(2)).getObjects(eq(AlertEvent.class), requestCaptor.capture());
         assertTrue(conditionContains(requestCaptor.getValue().getCondition(), "geofenceId", 10L));
         assertTrue(conditionContains(
                 requestCaptor.getValue().getCondition(), "type", Alert.TYPE_GEOFENCE_EXIT));
@@ -186,6 +190,7 @@ public class AlertProcessorTest {
         AlertProcessor processor = new AlertProcessor(
                 storage, cacheManager, alertSecurity, alertCache, connectionManager, alertNotificationService);
         boolean alertGenerated = processor.processEvent(source, position);
+        boolean duplicateGenerated = processor.processEvent(source, position);
 
         ArgumentCaptor<AlertEvent> captor = ArgumentCaptor.forClass(AlertEvent.class);
         verify(storage).addObject(captor.capture(), any(Request.class));
@@ -195,6 +200,7 @@ public class AlertProcessorTest {
         assertEquals(0, captor.getValue().getValue());
         assertEquals(0, captor.getValue().getThreshold());
         assertTrue(alertGenerated);
+        assertTrue(duplicateGenerated);
     }
 
     @Test

@@ -11,7 +11,6 @@ import org.traccar.model.AlertEvent;
 import org.traccar.model.Device;
 import org.traccar.model.Driver;
 import org.traccar.model.Event;
-import org.traccar.model.Geofence;
 import org.traccar.model.Position;
 import org.traccar.session.ConnectionManager;
 import org.traccar.session.cache.CacheManager;
@@ -22,7 +21,10 @@ import org.traccar.storage.query.Condition;
 import org.traccar.storage.query.Request;
 
 import java.util.Date;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Singleton
 public class AlertProcessor extends BasePositionHandler {
@@ -33,6 +35,9 @@ public class AlertProcessor extends BasePositionHandler {
     private static final String OPERATOR_GREATER_THAN_SYMBOL = ">";
     private static final String UNIT_KMH = "km/h";
     private static final int DEFAULT_COOLDOWN_MINUTES = 5;
+    private static final int IDEMPOTENCY_LOCK_COUNT = 256;
+    private static final int IDEMPOTENCY_CACHE_SIZE = 10000;
+    private static final long IDEMPOTENCY_CACHE_EXPIRATION = 10 * 60 * 1000L;
 
     private final Storage storage;
     private final CacheManager cacheManager;
@@ -40,6 +45,8 @@ public class AlertProcessor extends BasePositionHandler {
     private final AlertCache alertCache;
     private final ConnectionManager connectionManager;
     private final AlertNotificationService alertNotificationService;
+    private final Object[] idempotencyLocks = new Object[IDEMPOTENCY_LOCK_COUNT];
+    private final ConcurrentHashMap<AlertEventKey, Long> recentEvents = new ConcurrentHashMap<>();
 
     @Inject
     public AlertProcessor(
@@ -51,6 +58,9 @@ public class AlertProcessor extends BasePositionHandler {
         this.alertCache = alertCache;
         this.connectionManager = connectionManager;
         this.alertNotificationService = alertNotificationService;
+        for (int i = 0; i < idempotencyLocks.length; i++) {
+            idempotencyLocks[i] = new Object();
+        }
     }
 
     @Override
@@ -91,15 +101,20 @@ public class AlertProcessor extends BasePositionHandler {
             return;
         }
         double batteryLevel = position.getDouble(Position.KEY_BATTERY_LEVEL);
+        Position previousPosition = cacheManager.getPosition(position.getDeviceId());
         Device device = cacheManager.getObject(Device.class, position.getDeviceId());
         long deviceGroupId = device != null ? device.getGroupId() : 0;
         for (AlertCache.CachedAlert cachedAlert : alertCache.getAlerts()) {
             Alert alert = cachedAlert.alert();
             double threshold = alert.getLimitValue() > 0 ? alert.getLimitValue() : 20;
+            boolean wasLow = previousPosition != null
+                    && previousPosition.hasAttribute(Position.KEY_BATTERY_LEVEL)
+                    && previousPosition.getDouble(Position.KEY_BATTERY_LEVEL) <= threshold;
             if (!Alert.TYPE_BATTERY_LOW.equals(alert.getType())
                     || !appliesToDevice(cachedAlert, position.getDeviceId(), deviceGroupId)
                     || !appliesToGeofence(cachedAlert, 0, position)
                     || hasRecentEvent(alert, position.getDeviceId(), 0, Alert.TYPE_BATTERY_LOW)
+                    || wasLow
                     || batteryLevel > threshold) {
                 continue;
             }
@@ -109,6 +124,14 @@ public class AlertProcessor extends BasePositionHandler {
 
     private void processGeofenceAlerts(Position position) throws StorageException {
         Position previousPosition = cacheManager.getPosition(position.getDeviceId());
+        Set<Long> previousGeofences = previousPosition != null && previousPosition.getGeofenceIds() != null
+                ? new HashSet<>(previousPosition.getGeofenceIds()) : Set.of();
+        Set<Long> currentGeofences = position.getGeofenceIds() != null
+                ? new HashSet<>(position.getGeofenceIds()) : Set.of();
+        Set<Long> enteredGeofences = new HashSet<>(currentGeofences);
+        enteredGeofences.removeAll(previousGeofences);
+        Set<Long> exitedGeofences = new HashSet<>(previousGeofences);
+        exitedGeofences.removeAll(currentGeofences);
         Device device = cacheManager.getObject(Device.class, position.getDeviceId());
         long deviceGroupId = device != null ? device.getGroupId() : 0;
 
@@ -119,13 +142,12 @@ public class AlertProcessor extends BasePositionHandler {
                     || !appliesToDevice(cachedAlert, position.getDeviceId(), deviceGroupId)) {
                 continue;
             }
-            for (Geofence geofence : cachedAlert.geofences()) {
-                boolean wasInside = previousPosition != null && geofence.containsPosition(previousPosition);
-                boolean isInside = geofence.containsPosition(position);
-                if (((Alert.TYPE_GEOFENCE_ENTER.equals(alert.getType()) && !wasInside && isInside)
-                        || (Alert.TYPE_GEOFENCE_EXIT.equals(alert.getType()) && wasInside && !isInside))
-                        && !hasRecentEvent(alert, position.getDeviceId(), geofence.getId(), alert.getType())) {
-                    saveEvent(position, alert, alert.getType(), 0, 0, null, geofence.getId());
+            Set<Long> transitions = Alert.TYPE_GEOFENCE_ENTER.equals(alert.getType())
+                    ? enteredGeofences : exitedGeofences;
+            for (long geofenceId : cachedAlert.geofenceIds()) {
+                if (transitions.contains(geofenceId)
+                        && !hasRecentEvent(alert, position.getDeviceId(), geofenceId, alert.getType())) {
+                    saveEvent(position, alert, alert.getType(), 0, 0, null, geofenceId);
                 }
             }
         }
@@ -143,6 +165,10 @@ public class AlertProcessor extends BasePositionHandler {
             default -> null;
         };
         if (alertType == null) {
+            return false;
+        }
+        if (isRepeatedPowerAlarm(alertType, position)) {
+            LOGGER.debug("Alert skipped because no power state change for device {}", position.getDeviceId());
             return false;
         }
         boolean alertGenerated = false;
@@ -179,8 +205,24 @@ public class AlertProcessor extends BasePositionHandler {
             case Position.ALARM_BRAKING -> Alert.TYPE_HARSH_BRAKING;
             case Position.ALARM_CORNERING -> Alert.TYPE_HARSH_CORNERING;
             case Position.ALARM_POWER_CUT -> Alert.TYPE_POWER_CUT;
+            case Position.ALARM_POWER_RESTORED -> Alert.TYPE_POWER_RESTORED;
             default -> null;
         };
+    }
+
+    private boolean isRepeatedPowerAlarm(String alertType, Position position) {
+        if (!Alert.TYPE_POWER_CUT.equals(alertType) && !Alert.TYPE_POWER_RESTORED.equals(alertType)) {
+            return false;
+        }
+        Position previousPosition = cacheManager.getPosition(position.getDeviceId());
+        if (previousPosition == null) {
+            return false;
+        }
+        String previousAlarms = previousPosition.getString(Position.KEY_ALARM);
+        String expectedAlarm = Alert.TYPE_POWER_CUT.equals(alertType)
+                ? Position.ALARM_POWER_CUT : Position.ALARM_POWER_RESTORED;
+        return previousAlarms != null
+                && new HashSet<>(java.util.Arrays.asList(previousAlarms.split(","))).contains(expectedAlarm);
     }
 
     private boolean appliesToGeofence(
@@ -249,6 +291,46 @@ public class AlertProcessor extends BasePositionHandler {
     private void saveEvent(
             Position position, Alert alert, String type, double value, double threshold, String unit, long geofenceId)
             throws StorageException {
+        AlertEventKey eventKey = new AlertEventKey(
+                alert.getId(), position.getDeviceId(), position.getId(), type, geofenceId);
+        Object lock = idempotencyLocks[Math.floorMod(eventKey.hashCode(), idempotencyLocks.length)];
+        synchronized (lock) {
+            if (hasEvent(eventKey)) {
+                LOGGER.debug("Duplicate alert event skipped for alert {} and device {}",
+                        alert.getId(), position.getDeviceId());
+                return;
+            }
+            saveEventUnchecked(position, alert, type, value, threshold, unit, geofenceId);
+            if (recentEvents.size() >= IDEMPOTENCY_CACHE_SIZE) {
+                long expiration = System.currentTimeMillis() - IDEMPOTENCY_CACHE_EXPIRATION;
+                recentEvents.entrySet().removeIf(entry -> entry.getValue() < expiration);
+                if (recentEvents.size() >= IDEMPOTENCY_CACHE_SIZE) {
+                    recentEvents.clear();
+                }
+            }
+            recentEvents.put(eventKey, System.currentTimeMillis());
+        }
+    }
+
+    private boolean hasEvent(AlertEventKey key) throws StorageException {
+        Long cachedAt = recentEvents.get(key);
+        if (cachedAt != null && cachedAt >= System.currentTimeMillis() - IDEMPOTENCY_CACHE_EXPIRATION) {
+            return true;
+        }
+        Condition condition = new Condition.And(
+                new Condition.Equals("alertId", key.alertId()),
+                new Condition.Equals("deviceId", key.deviceId()));
+        condition = new Condition.And(condition, new Condition.Equals("positionId", key.positionId()));
+        condition = new Condition.And(condition, new Condition.Equals("type", key.type()));
+        condition = new Condition.And(condition, new Condition.Equals("geofenceId", key.geofenceId()));
+        return !storage.getObjects(AlertEvent.class, new Request(
+                new Columns.Include("id"), condition,
+                new org.traccar.storage.query.Order("id", true, 1, 0))).isEmpty();
+    }
+
+    private void saveEventUnchecked(
+            Position position, Alert alert, String type, double value, double threshold, String unit, long geofenceId)
+            throws StorageException {
         AlertEvent event = new AlertEvent();
         event.setAlertId(alert.getId());
         event.setDeviceId(position.getDeviceId());
@@ -284,6 +366,9 @@ public class AlertProcessor extends BasePositionHandler {
             connectionManager.updateAlertEvent(true, event);
         }
         alertNotificationService.sendAsync(alert, event);
+    }
+
+    private record AlertEventKey(long alertId, long deviceId, long positionId, String type, long geofenceId) {
     }
 
 }
