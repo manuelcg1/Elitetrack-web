@@ -22,6 +22,7 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.traccar.config.Config;
 import org.traccar.config.Keys;
+import org.traccar.retention.DeviceRetentionScheduler;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -50,7 +51,8 @@ public class ScheduleManager implements LifecycleObject {
                 TaskDeleteTemporary.class,
                 TaskReports.class,
                 TaskDeviceInactivityCheck.class,
-                TaskWebSocketKeepalive.class)
+                TaskWebSocketKeepalive.class,
+                DeviceRetentionScheduler.class)
                 .forEachOrdered(taskClass -> {
                     var task = injector.getInstance(taskClass);
                     if (task.multipleInstances() || !secondary) {

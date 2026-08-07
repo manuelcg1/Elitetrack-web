@@ -503,6 +503,19 @@ public final class Keys {
             List.of(KeyType.CONFIG),
             true);
 
+    public static final ConfigKey<Boolean> RETENTION_ENABLED = new BooleanConfigKey(
+            "retention.enabled", List.of(KeyType.CONFIG), false);
+    public static final ConfigKey<String> RETENTION_SCHEDULE = new StringConfigKey(
+            "retention.schedule", List.of(KeyType.CONFIG), "02:30");
+    public static final ConfigKey<Integer> RETENTION_BATCH_SIZE = new IntegerConfigKey(
+            "retention.batchSize", List.of(KeyType.CONFIG), 5000);
+    public static final ConfigKey<Integer> RETENTION_PAUSE_MILLIS = new IntegerConfigKey(
+            "retention.pauseMillis", List.of(KeyType.CONFIG), 200);
+    public static final ConfigKey<Integer> RETENTION_MAX_DEVICES_PER_RUN = new IntegerConfigKey(
+            "retention.maxDevicesPerRun", List.of(KeyType.CONFIG), 0);
+    public static final ConfigKey<Boolean> RETENTION_DRY_RUN = new BooleanConfigKey(
+            "retention.dryRun", List.of(KeyType.CONFIG), true);
+
     public static final ConfigKey<Integer> ALERT_GEOFENCE_STATE_EXPIRATION_HOURS = new IntegerConfigKey(
             "alert.geofenceState.expirationHours",
             List.of(KeyType.CONFIG),

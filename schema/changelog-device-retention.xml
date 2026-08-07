@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.1.xsd">
+
+  <changeSet author="elitetrack" id="device-retention-policy">
+    <preConditions onFail="MARK_RAN">
+      <not><tableExists tableName="tc_device_retention" /></not>
+    </preConditions>
+    <createTable tableName="tc_device_retention">
+      <column name="deviceid" type="BIGINT"><constraints primaryKey="true" nullable="false" /></column>
+      <column name="enabled" type="BOOLEAN" defaultValueBoolean="false"><constraints nullable="false" /></column>
+      <column name="retentiondays" type="INT" defaultValueNumeric="60"><constraints nullable="false" /></column>
+      <column name="lastcleanup" type="TIMESTAMP" />
+      <column name="laststatus" type="VARCHAR(32)" />
+      <column name="lastdeleted" type="BIGINT" />
+      <column name="lasterror" type="VARCHAR(1024)" />
+      <column name="createdat" type="TIMESTAMP"><constraints nullable="false" /></column>
+      <column name="updatedat" type="TIMESTAMP"><constraints nullable="false" /></column>
+      <column name="updatedby" type="BIGINT" />
+    </createTable>
+    <addForeignKeyConstraint baseTableName="tc_device_retention" baseColumnNames="deviceid"
+        constraintName="fk_device_retention_device" referencedTableName="tc_devices"
+        referencedColumnNames="id" onDelete="CASCADE" />
+    <addForeignKeyConstraint baseTableName="tc_device_retention" baseColumnNames="updatedby"
+        constraintName="fk_device_retention_user" referencedTableName="tc_users"
+        referencedColumnNames="id" onDelete="SET NULL" />
+    <sql dbms="postgresql">
+      ALTER TABLE tc_device_retention
+      ADD CONSTRAINT chk_device_retention_days CHECK (retentiondays BETWEEN 30 AND 3650)
+    </sql>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="device-retention-runs">
+    <preConditions onFail="MARK_RAN">
+      <not><tableExists tableName="tc_device_retention_runs" /></not>
+    </preConditions>
+    <createTable tableName="tc_device_retention_runs">
+      <column autoIncrement="true" name="id" type="BIGINT"><constraints primaryKey="true" /></column>
+      <column name="deviceid" type="BIGINT"><constraints nullable="false" /></column>
+      <column name="userid" type="BIGINT" />
+      <column name="retentiondays" type="INT"><constraints nullable="false" /></column>
+      <column name="dryrun" type="BOOLEAN"><constraints nullable="false" /></column>
+      <column name="startedat" type="TIMESTAMP"><constraints nullable="false" /></column>
+      <column name="finishedat" type="TIMESTAMP" />
+      <column name="deletedrows" type="BIGINT" />
+      <column name="status" type="VARCHAR(32)"><constraints nullable="false" /></column>
+      <column name="error" type="VARCHAR(1024)" />
+    </createTable>
+    <addForeignKeyConstraint baseTableName="tc_device_retention_runs" baseColumnNames="deviceid"
+        constraintName="fk_device_retention_run_device" referencedTableName="tc_devices"
+        referencedColumnNames="id" onDelete="CASCADE" />
+    <addForeignKeyConstraint baseTableName="tc_device_retention_runs" baseColumnNames="userid"
+        constraintName="fk_device_retention_run_user" referencedTableName="tc_users"
+        referencedColumnNames="id" onDelete="SET NULL" />
+  </changeSet>
+</databaseChangeLog>

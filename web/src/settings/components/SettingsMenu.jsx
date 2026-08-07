@@ -15,6 +15,7 @@ import PaymentIcon from '@mui/icons-material/Payment';
 import CampaignIcon from '@mui/icons-material/Campaign';
 import CalculateIcon from '@mui/icons-material/Calculate';
 import TelegramIcon from '@mui/icons-material/Telegram';
+import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import { useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { useTranslation } from '../../common/components/LocalizationProvider';
@@ -151,6 +152,12 @@ const SettingsMenu = () => {
                   link="/settings/integrations/telegram"
                   icon={<TelegramIcon />}
                   selected={location.pathname === '/settings/integrations/telegram'}
+                />
+                <MenuItem
+                  title="Retención de datos"
+                  link="/settings/retention"
+                  icon={<DeleteSweepIcon />}
+                  selected={location.pathname === '/settings/retention'}
                 />
               </>
             )}

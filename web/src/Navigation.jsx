@@ -73,6 +73,7 @@ const CommandGroupPage = lazy(() => import('./settings/CommandGroupPage'));
 const SharePage = lazy(() => import('./settings/SharePage'));
 const AnnouncementPage = lazy(() => import('./settings/AnnouncementPage'));
 const TelegramIntegrationPage = lazy(() => import('./settings/TelegramIntegrationPage'));
+const DeviceRetentionPage = lazy(() => import('./settings/DeviceRetentionPage'));
 
 const MonitoringHealthPage = lazy(() => import('./monitoring/MonitoringHealthPage'));
 const MonitoringMantenimientoPage = lazy(() => import('./monitoring/MonitoringMantenimientoPage'));
@@ -203,6 +204,7 @@ const Navigation = () => {
             <Route path="server" element={<ServerPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="integrations/telegram" element={<TelegramIntegrationPage />} />
+            <Route path="retention" element={<DeviceRetentionPage />} />
             <Route path="user/:id/connections" element={<UserConnectionsPage />} />
             <Route path="user/:id" element={<UserPage />} />
             <Route path="user" element={<UserPage />} />
