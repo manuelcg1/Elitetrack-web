@@ -17,10 +17,11 @@ const MapGeofence = () => {
   const mapGeofences = useAttributePreference('mapGeofences', true);
   const geofences = useSelector((state) => state.geofences.items);
   const visibleIds = useSelector((state) => state.geofences.visibleIds);
+  const enabled = mapGeofences || visibleIds.length > 0;
 
   // ── Inicializar capas del mapa ────────────────────────────────────────────
   useEffect(() => {
-    if (!mapGeofences) return () => {};
+    if (!enabled) return () => {};
 
     map.addSource(id, {
       type: 'geojson',
@@ -75,11 +76,11 @@ const MapGeofence = () => {
       if (map.getLayer(`${id}-title`)) map.removeLayer(`${id}-title`);
       if (map.getSource(id)) map.removeSource(id);
     };
-  }, [mapGeofences, id]);
+  }, [enabled, id]);
 
   // ── Actualizar features visibles ─────────────────────────────────────────
   useEffect(() => {
-    if (mapGeofences) {
+    if (enabled) {
       map.getSource(id)?.setData({
         type: 'FeatureCollection',
         features: Object.values(geofences)
@@ -87,7 +88,7 @@ const MapGeofence = () => {
           .map((geofence) => geofenceToFeature(theme, geofence)),
       });
     }
-  }, [mapGeofences, geofences, visibleIds, theme, id]);
+  }, [enabled, geofences, visibleIds, theme, id]);
 
   return null;
 };

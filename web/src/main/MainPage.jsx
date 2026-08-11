@@ -18,6 +18,7 @@ import useFilter from './useFilter';
 import MainToolbar from './MainToolbar';
 import MainMap from './MainMap';
 import DeviceVisibilityControl from './DeviceVisibilityControl';
+import GeofencePanel from './GeofencePanel';
 import { useAttributePreference } from '../common/util/preferences';
 
 const useStyles = makeStyles()((theme, { navigationWidth, sidebarLeft, sidebarOpen }) => ({
@@ -193,7 +194,9 @@ const MainPage = () => {
     false,
   );
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
-  const [devicesOpen, setDevicesOpen] = useState(false);
+  const [activePanel, setActivePanel] = useState(null);
+  const devicesOpen = activePanel === 'devices';
+  const geofencesOpen = activePanel === 'geofences';
   const [eventsOpen, setEventsOpen] = useState(false);
 
   useEffect(() => {
@@ -243,19 +246,19 @@ const MainPage = () => {
   useEffect(() => {
     if (location.state?.notificationDeviceId) {
       dispatch(devicesActions.selectId(location.state.notificationDeviceId));
-      setDevicesOpen(true);
+      setActivePanel('devices');
     }
   }, [dispatch, location.state]);
 
   const onEventsClick = useCallback(() => setEventsOpen(true), []);
   const navigationWidth = desktop ? (navigationCollapsed ? 72 : 224) : 0;
   const sidebarLeft = navigationWidth + 14;
-  const desktopPadding = desktop ? navigationWidth + (devicesOpen ? 324 : 24) : undefined;
-  const { classes } = useStyles({ navigationWidth, sidebarLeft, sidebarOpen: devicesOpen });
+  const desktopPadding = desktop ? navigationWidth + (activePanel ? 324 : 24) : undefined;
+  const { classes } = useStyles({ navigationWidth, sidebarLeft, sidebarOpen: !!activePanel });
 
   useEffect(() => {
     if (!desktop && mapOnSelect && selectedDeviceId) {
-      setDevicesOpen(false);
+      setActivePanel(null);
     }
   }, [desktop, mapOnSelect, selectedDeviceId]);
 
@@ -284,8 +287,10 @@ const MainPage = () => {
           <MainNavigation
             collapsed={navigationCollapsed}
             vehiclesPanelOpen={devicesOpen}
-            onVehiclesClick={() => setDevicesOpen(true)}
-            onMapClick={() => setDevicesOpen(false)}
+            geofencesPanelOpen={geofencesOpen}
+            onVehiclesClick={() => setActivePanel('devices')}
+            onGeofencesClick={() => setActivePanel('geofences')}
+            onMapClick={() => setActivePanel(null)}
           />
         </div>
       )}
@@ -319,8 +324,10 @@ const MainPage = () => {
             <MainNavigation
               collapsed={false}
               vehiclesPanelOpen={devicesOpen}
-              onVehiclesClick={() => setDevicesOpen(true)}
-              onMapClick={() => setDevicesOpen(false)}
+              geofencesPanelOpen={geofencesOpen}
+              onVehiclesClick={() => setActivePanel('devices')}
+              onGeofencesClick={() => setActivePanel('geofences')}
+              onMapClick={() => setActivePanel(null)}
               onClose={() => setMobileNavigationOpen(false)}
             />
           </Drawer>
@@ -328,22 +335,24 @@ const MainPage = () => {
       )}
       <div className={classes.sidebar}>
         <div className={classes.panel}>
-          <Paper square elevation={3} className={classes.header}>
-            <MainToolbar
-              filteredDevices={filteredDevices}
-              devicesOpen={devicesOpen}
-              setDevicesOpen={setDevicesOpen}
-              keyword={keyword}
-              setKeyword={setKeyword}
-              filter={filter}
-              setFilter={setFilter}
-              filterSort={filterSort}
-              setFilterSort={setFilterSort}
-              filterMap={filterMap}
-              setFilterMap={setFilterMap}
-            />
-            <DeviceVisibilityControl />
-          </Paper>
+          {devicesOpen && (
+            <Paper square elevation={3} className={classes.header}>
+              <MainToolbar
+                filteredDevices={filteredDevices}
+                devicesOpen={devicesOpen}
+                setDevicesOpen={(open) => setActivePanel(open ? 'devices' : null)}
+                keyword={keyword}
+                setKeyword={setKeyword}
+                filter={filter}
+                setFilter={setFilter}
+                filterSort={filterSort}
+                setFilterSort={setFilterSort}
+                filterMap={filterMap}
+                setFilterMap={setFilterMap}
+              />
+              <DeviceVisibilityControl />
+            </Paper>
+          )}
           <div className={classes.middle}>
             <Paper
               square
@@ -351,6 +360,13 @@ const MainPage = () => {
               style={devicesOpen ? {} : { visibility: 'hidden' }}
             >
               <DeviceList devices={filteredDevices} />
+            </Paper>
+            <Paper
+              square
+              className={classes.contentList}
+              style={geofencesOpen ? {} : { visibility: 'hidden' }}
+            >
+              {geofencesOpen && <GeofencePanel />}
             </Paper>
           </div>
         </div>

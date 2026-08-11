@@ -143,7 +143,15 @@ const useStyles = makeStyles()((theme, { collapsed }) => ({
   },
 }));
 
-const MainNavigation = ({ collapsed, vehiclesPanelOpen, onVehiclesClick, onMapClick, onClose }) => {
+const MainNavigation = ({
+  collapsed,
+  vehiclesPanelOpen,
+  geofencesPanelOpen,
+  onVehiclesClick,
+  onGeofencesClick,
+  onMapClick,
+  onClose,
+}) => {
   const { classes, cx } = useStyles({ collapsed });
   const navigate = useNavigate();
   const location = useLocation();
@@ -246,7 +254,16 @@ const MainNavigation = ({ collapsed, vehiclesPanelOpen, onVehiclesClick, onMapCl
             },
           })}
         {showGeofences &&
-          item({ label: 'Geocercas', icon: <PlaceIcon fontSize="small" />, path: '/geofences' })}
+          item({
+            label: 'Geocercas',
+            icon: <PlaceIcon fontSize="small" />,
+            path: '/',
+            active: geofencesPanelOpen,
+            onClick: () => {
+              onGeofencesClick();
+              navigate('/');
+            },
+          })}
         {showMap &&
           item({
             label: 'Mapa',

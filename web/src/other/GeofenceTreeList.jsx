@@ -19,6 +19,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import FolderIcon from '@mui/icons-material/Folder';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
+import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import SearchIcon from '@mui/icons-material/Search';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
@@ -148,6 +149,7 @@ const GeofenceTreeNode = ({
   onEditFolder,
   onDeleteFolder,
   onDeleteGeofence,
+  onEditCircle,
 }) => {
   const navigate = useNavigate();
   const [open, setOpen] = useState(true);
@@ -257,6 +259,7 @@ const GeofenceTreeNode = ({
             onEditFolder={onEditFolder}
             onDeleteFolder={onDeleteFolder}
             onDeleteGeofence={onDeleteGeofence}
+            onEditCircle={onEditCircle}
           />
         ))}
 
@@ -299,6 +302,17 @@ const GeofenceTreeNode = ({
             </Box>
 
             <Stack className="treeActions" direction="row" spacing={0.25} sx={treeActionSx}>
+              {geofence.area?.startsWith('CIRCLE') && (
+                <Tooltip title="Editar centro y radio">
+                  <IconButton
+                    size="small"
+                    onClick={() => onEditCircle(geofence)}
+                    sx={treeIconButtonSx}
+                  >
+                    <RadioButtonUncheckedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
               <Tooltip title="Editar geocerca">
                 <IconButton
                   size="small"
@@ -326,7 +340,7 @@ const GeofenceTreeNode = ({
   );
 };
 
-const GeofenceTreeList = ({ onGeofenceSelected }) => {
+const GeofenceTreeList = ({ onGeofenceSelected, onEditCircle }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
@@ -578,6 +592,7 @@ const GeofenceTreeList = ({ onGeofenceSelected }) => {
         onEditFolder={handleEditFolder}
         onDeleteFolder={handleDeleteFolder}
         onDeleteGeofence={handleDeleteGeofence}
+        onEditCircle={onEditCircle}
       />
 
       <GeofenceFolderDialog

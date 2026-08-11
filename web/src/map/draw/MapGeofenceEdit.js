@@ -18,7 +18,14 @@ MapboxDraw.constants.classes.CONTROL_BASE = 'maplibregl-ctrl';
 MapboxDraw.constants.classes.CONTROL_PREFIX = 'maplibregl-ctrl-';
 MapboxDraw.constants.classes.CONTROL_GROUP = 'maplibregl-ctrl-group';
 
-const MapGeofenceEdit = ({ selectedGeofenceId, folderId = 0, geofenceType }) => {
+const MapGeofenceEdit = ({
+  selectedGeofenceId,
+  folderId = 0,
+  geofenceType,
+  circleCenter,
+  circleRadius,
+  onCircleCenterChange,
+}) => {
   const theme = useTheme();
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -79,10 +86,87 @@ const MapGeofenceEdit = ({ selectedGeofenceId, folderId = 0, geofenceType }) => 
       draw.changeMode('draw_polygon');
     } else if (geofenceType === 'polyline') {
       draw.changeMode('draw_line_string');
-    } else if (geofenceType === 'circle') {
-      draw.changeMode('draw_polygon');
     }
   }, [draw, geofenceType]);
+
+  useEffect(() => {
+    if (geofenceType !== 'circle') return () => {};
+
+    const listener = (event) => {
+      onCircleCenterChange?.({
+        latitude: Number(event.lngLat.lat.toFixed(7)),
+        longitude: Number(event.lngLat.lng.toFixed(7)),
+      });
+    };
+    map.on('click', listener);
+    map.getCanvas().style.cursor = 'crosshair';
+    return () => {
+      map.off('click', listener);
+      map.getCanvas().style.cursor = '';
+    };
+  }, [geofenceType, onCircleCenterChange]);
+
+  useEffect(() => {
+    if (
+      geofenceType !== 'circle' ||
+      !circleCenter ||
+      !Number.isFinite(circleRadius) ||
+      circleRadius <= 0
+    ) {
+      return () => {};
+    }
+
+    const sourceId = 'geofence-circle-preview';
+    const fillId = `${sourceId}-fill`;
+    const lineId = `${sourceId}-line`;
+    const feature = geofenceToFeature(theme, {
+      id: sourceId,
+      name: `${circleRadius} m`,
+      area: `CIRCLE (${circleCenter.latitude} ${circleCenter.longitude}, ${circleRadius})`,
+      attributes: {},
+    });
+
+    if (!map.getSource(sourceId)) {
+      map.addSource(sourceId, { type: 'geojson', data: feature });
+      map.addLayer({
+        id: fillId,
+        source: sourceId,
+        type: 'fill',
+        paint: {
+          'fill-color': theme.palette.success.main,
+          'fill-opacity': 0.2,
+        },
+      });
+      map.addLayer({
+        id: lineId,
+        source: sourceId,
+        type: 'line',
+        paint: {
+          'line-color': theme.palette.success.main,
+          'line-width': 3,
+        },
+      });
+    } else {
+      map.getSource(sourceId).setData(feature);
+    }
+
+    const coordinates = feature.geometry.coordinates[0];
+    const bounds = coordinates.reduce(
+      (current, coordinate) => current.extend(coordinate),
+      new maplibregl.LngLatBounds(coordinates[0], coordinates[0]),
+    );
+    map.fitBounds(bounds, {
+      padding: Math.min(map.getCanvas().width, map.getCanvas().height) * 0.15,
+      maxZoom: 17,
+      duration: 400,
+    });
+
+    return () => {
+      if (map.getLayer(fillId)) map.removeLayer(fillId);
+      if (map.getLayer(lineId)) map.removeLayer(lineId);
+      if (map.getSource(sourceId)) map.removeSource(sourceId);
+    };
+  }, [circleCenter, circleRadius, geofenceType, theme]);
 
   useEffect(() => {
     const listener = async (event) => {
@@ -138,6 +222,10 @@ const MapGeofenceEdit = ({ selectedGeofenceId, folderId = 0, geofenceType }) => 
       const item = Object.values(geofences).find((i) => i.id === feature.id);
 
       if (item) {
+        if (item.area.startsWith('CIRCLE')) {
+          refreshGeofences();
+          return;
+        }
         const updatedItem = {
           ...item,
           area: geometryToArea(feature.geometry),
