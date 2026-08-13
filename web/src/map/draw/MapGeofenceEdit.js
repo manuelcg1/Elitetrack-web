@@ -80,16 +80,6 @@ const MapGeofenceEdit = ({
   }, [refreshGeofences, draw, theme.direction]);
 
   useEffect(() => {
-    if (!geofenceType) return;
-
-    if (geofenceType === 'polygon') {
-      draw.changeMode('draw_polygon');
-    } else if (geofenceType === 'polyline') {
-      draw.changeMode('draw_line_string');
-    }
-  }, [draw, geofenceType]);
-
-  useEffect(() => {
     if (geofenceType !== 'circle') return () => {};
 
     const listener = (event) => {
@@ -255,7 +245,13 @@ const MapGeofenceEdit = ({
         draw.add(geofenceToFeature(theme, geofence));
       }
     });
-  }, [geofences, visibleIds, draw, theme]);
+
+    if (geofenceType === 'polygon') {
+      draw.changeMode('draw_polygon');
+    } else if (geofenceType === 'polyline') {
+      draw.changeMode('draw_line_string');
+    }
+  }, [geofences, visibleIds, draw, geofenceType, theme]);
 
   useEffect(() => {
     if (selectedGeofenceId) {

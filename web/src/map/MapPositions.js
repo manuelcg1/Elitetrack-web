@@ -100,32 +100,30 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, selectedPosition }
   mapClusterRef.current = mapCluster;
   onMarkerClickRef.current = onMarkerClick;
 
-  const createFeature = useCallback(
-    (deviceItems, position, selectedPositionId) => {
-      const device = deviceItems[position.deviceId];
-      let showDirection;
+  const showDirection = useCallback(
+    (position, selectedPositionId) => {
       switch (directionType) {
         case 'none':
-          showDirection = false;
-          break;
+          return false;
         case 'all':
-          showDirection = position.course > 0;
-          break;
+          return position.course > 0;
         default:
-          showDirection = selectedPositionId === position.id && position.course > 0;
-          break;
+          return selectedPositionId === position.id && position.course > 0;
       }
-      return {
-        id: position.id,
-        deviceId: position.deviceId,
-        name: device?.name,
-        category: mapIconKey(device?.category),
-        rotation: position.course,
-        direction: showDirection,
-      };
     },
     [directionType],
   );
+
+  const createFeature = useCallback((deviceItems, position) => {
+    const device = deviceItems[position.deviceId];
+    return {
+      id: position.id,
+      deviceId: position.deviceId,
+      name: device?.name,
+      category: mapIconKey(device?.category),
+      rotation: position.course,
+    };
+  }, []);
 
   const onMouseEnter = () => (map.getCanvas().style.cursor = 'pointer');
   const onMouseLeave = () => (map.getCanvas().style.cursor = '');
@@ -288,6 +286,8 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, selectedPosition }
         status: data.status,
         detail,
         selected: deviceId === currentSelectedDeviceId,
+        showDirection: data.showDirection,
+        mapBearing: map.getBearing(),
       });
     });
   }, [id]);
@@ -310,21 +310,6 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, selectedPosition }
         features: [],
       },
     });
-    [id, selected].forEach((source) => {
-      map.addLayer({
-        id: `direction-${source}`,
-        type: 'symbol',
-        source,
-        filter: ['all', ['!has', 'point_count'], ['==', 'direction', true]],
-        layout: {
-          'icon-image': 'direction',
-          'icon-size': iconScale,
-          'icon-allow-overlap': true,
-          'icon-rotate': ['get', 'rotation'],
-          'icon-rotation-alignment': 'map',
-        },
-      });
-    });
     map.addLayer({
       id: clusters,
       type: 'symbol',
@@ -345,6 +330,7 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, selectedPosition }
     map.on('click', onMapClickCallback);
     map.on('moveend', updateSmartMarkers);
     map.on('zoomend', updateSmartMarkers);
+    map.on('rotate', updateSmartMarkers);
     map.on('idle', updateSmartMarkers);
 
     return () => {
@@ -354,6 +340,7 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, selectedPosition }
       map.off('click', onMapClickCallback);
       map.off('moveend', updateSmartMarkers);
       map.off('zoomend', updateSmartMarkers);
+      map.off('rotate', updateSmartMarkers);
       map.off('idle', updateSmartMarkers);
       removeSmartMarkers();
 
@@ -362,9 +349,6 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, selectedPosition }
       }
 
       [id, selected].forEach((source) => {
-        if (map.getLayer(`direction-${source}`)) {
-          map.removeLayer(`direction-${source}`);
-        }
         if (map.getSource(source)) {
           map.removeSource(source);
         }
@@ -408,6 +392,10 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, selectedPosition }
             position: normalizedPosition,
             device: devices[normalizedPosition.deviceId],
             status: getVehicleStatus(normalizedPosition),
+            showDirection: showDirection(
+              normalizedPosition,
+              selectedPosition && selectedPosition.id,
+            ),
           },
         ];
       }),
@@ -434,7 +422,7 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, selectedPosition }
               type: 'Point',
               coordinates: [Number(position.longitude), Number(position.latitude)],
             },
-            properties: createFeature(devices, position, selectedPosition && selectedPosition.id),
+            properties: createFeature(devices, position),
           })),
       });
     });
@@ -447,6 +435,7 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, selectedPosition }
     selected,
     selectedDeviceId,
     selectedPosition,
+    showDirection,
     updateSmartMarkers,
   ]);
 

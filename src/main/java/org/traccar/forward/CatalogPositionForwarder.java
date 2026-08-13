@@ -2,6 +2,7 @@ package org.traccar.forward;
 
 import jakarta.annotation.Nullable;
 import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import org.traccar.model.DeviceForwardServer;
 import org.traccar.model.ForwardServer;
 import org.traccar.storage.Storage;
@@ -19,6 +20,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
+@Singleton
 public class CatalogPositionForwarder implements PositionForwarder {
 
     private static final Logger LOGGER = Logger.getLogger(CatalogPositionForwarder.class.getName());

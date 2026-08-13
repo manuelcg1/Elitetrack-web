@@ -34,6 +34,7 @@ export const createSmartVehicleMarkerElement = () => {
   const element = document.createElement('div');
   element.className = 'smart-vehicle-marker';
   element.innerHTML = `
+    <div class="smart-vehicle-marker-direction" aria-hidden="true"></div>
     <div class="smart-vehicle-marker-content">
       <div class="smart-vehicle-marker-name"></div>
       <div class="smart-vehicle-marker-speed">
@@ -50,7 +51,15 @@ export const createSmartVehicleMarkerElement = () => {
 
 export const updateSmartVehicleMarkerElement = (
   element,
-  { device, position, status, detail = SMART_MARKER_DETAIL.HIGH, selected = false },
+  {
+    device,
+    position,
+    status,
+    detail = SMART_MARKER_DETAIL.HIGH,
+    selected = false,
+    showDirection = false,
+    mapBearing = 0,
+  },
 ) => {
   if (!element || !position) {
     return;
@@ -69,6 +78,10 @@ export const updateSmartVehicleMarkerElement = (
   element.style.setProperty('--marker-background', vehicleStatus.background);
   element.style.setProperty('--marker-glow', vehicleStatus.glow);
   element.style.setProperty('--marker-speed-width', `${Math.min(speed, 140) / 1.4}%`);
+  element.style.setProperty(
+    '--marker-course',
+    `${(Number(position.course) || 0) - Number(mapBearing)}deg`,
+  );
   element.className = [
     'smart-vehicle-marker',
     `smart-vehicle-marker-${detail}`,
@@ -76,6 +89,7 @@ export const updateSmartVehicleMarkerElement = (
   ]
     .filter(Boolean)
     .join(' ');
+  element.classList.toggle('smart-vehicle-marker-direction-visible', showDirection);
 
   const icon = element.querySelector('.smart-vehicle-marker-icon img');
   const name = element.querySelector('.smart-vehicle-marker-name');

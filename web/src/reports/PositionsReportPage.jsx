@@ -78,6 +78,7 @@ const PositionsReportPage = () => {
     : null;
   const [loading, setLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [selectionVersion, setSelectionVersion] = useState(0);
 
   const selectedRef = useRef();
 
@@ -87,11 +88,19 @@ const PositionsReportPage = () => {
     }
   }, [selectedItem]);
 
+  const selectItem = useCallback((item) => {
+    setSelectedItem(item);
+    setSelectionVersion((current) => current + 1);
+  }, []);
+
   const onMapPointClick = useCallback(
     (positionId) => {
-      setSelectedItem(items.find((it) => it.id === positionId));
+      const item = items.find((it) => it.id === positionId);
+      if (item) {
+        selectItem(item);
+      }
     },
-    [items, setSelectedItem],
+    [items, selectItem],
   );
 
   const onShow = useCatch(async ({ deviceIds, from, to }) => {
@@ -100,6 +109,7 @@ const PositionsReportPage = () => {
       query.append('geofenceId', geofenceId);
     }
     deviceIds.forEach((deviceId) => query.append('deviceId', deviceId));
+    setSelectedItem(null);
     setLoading(true);
     try {
       const response = await fetchOrThrow(`/api/positions?${query.toString()}`, {
@@ -213,7 +223,7 @@ const PositionsReportPage = () => {
     navigate('/reports/scheduled');
   });
 
-  const mapPanel = selectedItem ? (
+  const mapPanel = items.length ? (
     <div className={classes.containerMap}>
       <MapView>
         <MapGeofence />
@@ -226,10 +236,18 @@ const PositionsReportPage = () => {
             </Fragment>
           );
         })}
-        <MapPositions positions={[selectedItem]} titleField="fixTime" />
+        {selectedItem && <MapPositions positions={[selectedItem]} titleField="fixTime" />}
+        {selectedItem ? (
+          <MapCamera
+            key={selectionVersion}
+            latitude={selectedItem.latitude}
+            longitude={selectedItem.longitude}
+          />
+        ) : (
+          <MapCamera positions={items} />
+        )}
       </MapView>
       <MapScale />
-      <MapCamera positions={items} />
     </div>
   ) : null;
 
@@ -276,18 +294,42 @@ const PositionsReportPage = () => {
         <TableBody>
           {!loading ? (
             items.slice(0, 4000).map((item) => (
-              <TableRow key={item.id}>
+              <TableRow
+                key={item.id}
+                hover
+                selected={selectedItem?.id === item.id}
+                onClick={() => selectItem(item)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    selectItem(item);
+                  }
+                }}
+                tabIndex={0}
+                sx={{ cursor: 'pointer' }}
+              >
                 <TableCell className={classes.columnAction} padding="none">
-                  {selectedItem === item ? (
+                  {selectedItem?.id === item.id ? (
                     <IconButton
                       size="small"
-                      onClick={() => setSelectedItem(null)}
+                      aria-label="Ocultar ubicación seleccionada"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setSelectedItem(null);
+                      }}
                       ref={selectedRef}
                     >
                       <GpsFixedIcon fontSize="small" />
                     </IconButton>
                   ) : (
-                    <IconButton size="small" onClick={() => setSelectedItem(item)}>
+                    <IconButton
+                      size="small"
+                      aria-label="Mostrar ubicación en el mapa"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        selectItem(item);
+                      }}
+                    >
                       <LocationSearchingIcon fontSize="small" />
                     </IconButton>
                   )}
