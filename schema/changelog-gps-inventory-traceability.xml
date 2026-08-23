@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.1.xsd">
+
+  <changeSet author="elitetrack" id="gps-inventory-traceability-lifecycle-columns">
+    <addColumn tableName="tc_gps_inventory">
+      <column name="registeredat" type="TIMESTAMP" />
+      <column name="registeredby" type="INT" />
+      <column name="updatedat" type="TIMESTAMP" />
+      <column name="updatedby" type="INT" />
+      <column name="retiredat" type="TIMESTAMP" />
+      <column name="retiredby" type="INT" />
+      <column name="retirementreason" type="VARCHAR(512)" />
+    </addColumn>
+    <addForeignKeyConstraint
+        baseTableName="tc_gps_inventory"
+        baseColumnNames="registeredby"
+        constraintName="fk_gps_inventory_registeredby"
+        onDelete="SET NULL"
+        referencedColumnNames="id"
+        referencedTableName="tc_users" />
+    <addForeignKeyConstraint
+        baseTableName="tc_gps_inventory"
+        baseColumnNames="updatedby"
+        constraintName="fk_gps_inventory_updatedby"
+        onDelete="SET NULL"
+        referencedColumnNames="id"
+        referencedTableName="tc_users" />
+    <addForeignKeyConstraint
+        baseTableName="tc_gps_inventory"
+        baseColumnNames="retiredby"
+        constraintName="fk_gps_inventory_retiredby"
+        onDelete="SET NULL"
+        referencedColumnNames="id"
+        referencedTableName="tc_users" />
+    <rollback>
+      <dropForeignKeyConstraint
+          baseTableName="tc_gps_inventory" constraintName="fk_gps_inventory_retiredby" />
+      <dropForeignKeyConstraint
+          baseTableName="tc_gps_inventory" constraintName="fk_gps_inventory_updatedby" />
+      <dropForeignKeyConstraint
+          baseTableName="tc_gps_inventory" constraintName="fk_gps_inventory_registeredby" />
+      <dropColumn tableName="tc_gps_inventory" columnName="retirementreason" />
+      <dropColumn tableName="tc_gps_inventory" columnName="retiredby" />
+      <dropColumn tableName="tc_gps_inventory" columnName="retiredat" />
+      <dropColumn tableName="tc_gps_inventory" columnName="updatedby" />
+      <dropColumn tableName="tc_gps_inventory" columnName="updatedat" />
+      <dropColumn tableName="tc_gps_inventory" columnName="registeredby" />
+      <dropColumn tableName="tc_gps_inventory" columnName="registeredat" />
+    </rollback>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="gps-inventory-traceability-assignments-table">
+    <createTable tableName="tc_gps_inventory_assignments">
+      <column autoIncrement="true" name="id" type="INT">
+        <constraints primaryKey="true" />
+      </column>
+      <column name="gpsinventoryid" type="INT">
+        <constraints nullable="false" />
+      </column>
+      <column name="deviceid" type="INT" />
+      <column name="devicenamesnapshot" type="VARCHAR(128)" />
+      <column name="deviceuniqueidsnapshot" type="VARCHAR(128)" />
+      <column name="assignedat" type="TIMESTAMP">
+        <constraints nullable="false" />
+      </column>
+      <column name="assignedby" type="INT" />
+      <column name="unassignedat" type="TIMESTAMP" />
+      <column name="unassignedby" type="INT" />
+      <column name="assignmentreason" type="VARCHAR(512)" />
+      <column name="unassignmentreason" type="VARCHAR(512)" />
+      <column name="notes" type="VARCHAR(4000)" />
+      <column name="attributes" type="VARCHAR(4000)" />
+    </createTable>
+    <addForeignKeyConstraint
+        baseTableName="tc_gps_inventory_assignments"
+        baseColumnNames="gpsinventoryid"
+        constraintName="fk_gps_inventory_assignment_gps"
+        onDelete="RESTRICT"
+        referencedColumnNames="id"
+        referencedTableName="tc_gps_inventory" />
+    <addForeignKeyConstraint
+        baseTableName="tc_gps_inventory_assignments"
+        baseColumnNames="deviceid"
+        constraintName="fk_gps_inventory_assignment_device"
+        onDelete="SET NULL"
+        referencedColumnNames="id"
+        referencedTableName="tc_devices" />
+    <addForeignKeyConstraint
+        baseTableName="tc_gps_inventory_assignments"
+        baseColumnNames="assignedby"
+        constraintName="fk_gps_inventory_assignment_assignedby"
+        onDelete="SET NULL"
+        referencedColumnNames="id"
+        referencedTableName="tc_users" />
+    <addForeignKeyConstraint
+        baseTableName="tc_gps_inventory_assignments"
+        baseColumnNames="unassignedby"
+        constraintName="fk_gps_inventory_assignment_unassignedby"
+        onDelete="SET NULL"
+        referencedColumnNames="id"
+        referencedTableName="tc_users" />
+    <createIndex tableName="tc_gps_inventory_assignments" indexName="idx_gps_assignment_history">
+      <column name="gpsinventoryid" />
+      <column name="assignedat" descending="true" />
+    </createIndex>
+    <createIndex tableName="tc_gps_inventory_assignments" indexName="idx_gps_assignment_device_history">
+      <column name="deviceid" />
+      <column name="assignedat" descending="true" />
+    </createIndex>
+    <rollback>
+      <dropTable tableName="tc_gps_inventory_assignments" />
+    </rollback>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="gps-inventory-traceability-active-assignment-indexes" dbms="postgresql">
+    <sql>
+      CREATE UNIQUE INDEX uq_gps_assignment_active_gps
+      ON tc_gps_inventory_assignments (gpsinventoryid)
+      WHERE unassignedat IS NULL;
+    </sql>
+    <sql>
+      CREATE UNIQUE INDEX uq_gps_assignment_active_device
+      ON tc_gps_inventory_assignments (deviceid)
+      WHERE unassignedat IS NULL AND deviceid IS NOT NULL;
+    </sql>
+    <rollback>
+      <sql>DROP INDEX uq_gps_assignment_active_device;</sql>
+      <sql>DROP INDEX uq_gps_assignment_active_gps;</sql>
+    </rollback>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="gps-inventory-traceability-inspections-table">
+    <createTable tableName="tc_gps_inventory_inspections">
+      <column autoIncrement="true" name="id" type="INT">
+        <constraints primaryKey="true" />
+      </column>
+      <column name="gpsinventoryid" type="INT">
+        <constraints nullable="false" />
+      </column>
+      <column name="startedat" type="TIMESTAMP">
+        <constraints nullable="false" />
+      </column>
+      <column name="completedat" type="TIMESTAMP" />
+      <column name="technicianuserid" type="INT" />
+      <column name="result" type="VARCHAR(32)" />
+      <column name="findings" type="VARCHAR(4000)" />
+      <column name="actionstaken" type="VARCHAR(4000)" />
+      <column name="nextinspectionat" type="TIMESTAMP" />
+      <column name="notes" type="VARCHAR(4000)" />
+      <column name="attributes" type="VARCHAR(4000)" />
+    </createTable>
+    <addForeignKeyConstraint
+        baseTableName="tc_gps_inventory_inspections"
+        baseColumnNames="gpsinventoryid"
+        constraintName="fk_gps_inventory_inspection_gps"
+        onDelete="RESTRICT"
+        referencedColumnNames="id"
+        referencedTableName="tc_gps_inventory" />
+    <addForeignKeyConstraint
+        baseTableName="tc_gps_inventory_inspections"
+        baseColumnNames="technicianuserid"
+        constraintName="fk_gps_inventory_inspection_technician"
+        onDelete="SET NULL"
+        referencedColumnNames="id"
+        referencedTableName="tc_users" />
+    <createIndex tableName="tc_gps_inventory_inspections" indexName="idx_gps_inspection_history">
+      <column name="gpsinventoryid" />
+      <column name="startedat" descending="true" />
+    </createIndex>
+    <rollback>
+      <dropTable tableName="tc_gps_inventory_inspections" />
+    </rollback>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="gps-inventory-traceability-events-table">
+    <createTable tableName="tc_gps_inventory_events">
+      <column autoIncrement="true" name="id" type="INT">
+        <constraints primaryKey="true" />
+      </column>
+      <column name="gpsinventoryid" type="INT">
+        <constraints nullable="false" />
+      </column>
+      <column name="eventtime" type="TIMESTAMP">
+        <constraints nullable="false" />
+      </column>
+      <column name="eventtype" type="VARCHAR(32)">
+        <constraints nullable="false" />
+      </column>
+      <column name="deviceid" type="INT" />
+      <column name="devicenamesnapshot" type="VARCHAR(128)" />
+      <column name="deviceuniqueidsnapshot" type="VARCHAR(128)" />
+      <column name="userid" type="INT" />
+      <column name="notes" type="VARCHAR(4000)" />
+      <column name="attributes" type="VARCHAR(4000)" />
+    </createTable>
+    <addForeignKeyConstraint
+        baseTableName="tc_gps_inventory_events"
+        baseColumnNames="gpsinventoryid"
+        constraintName="fk_gps_inventory_event_gps"
+        onDelete="RESTRICT"
+        referencedColumnNames="id"
+        referencedTableName="tc_gps_inventory" />
+    <addForeignKeyConstraint
+        baseTableName="tc_gps_inventory_events"
+        baseColumnNames="deviceid"
+        constraintName="fk_gps_inventory_event_device"
+        onDelete="SET NULL"
+        referencedColumnNames="id"
+        referencedTableName="tc_devices" />
+    <addForeignKeyConstraint
+        baseTableName="tc_gps_inventory_events"
+        baseColumnNames="userid"
+        constraintName="fk_gps_inventory_event_user"
+        onDelete="SET NULL"
+        referencedColumnNames="id"
+        referencedTableName="tc_users" />
+    <createIndex tableName="tc_gps_inventory_events" indexName="idx_gps_event_history">
+      <column name="gpsinventoryid" />
+      <column name="eventtime" descending="true" />
+    </createIndex>
+    <rollback>
+      <dropTable tableName="tc_gps_inventory_events" />
+    </rollback>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="gps-inventory-traceability-active-inspection-index" dbms="postgresql">
+    <sql>
+      CREATE UNIQUE INDEX uq_gps_inspection_active
+      ON tc_gps_inventory_inspections (gpsinventoryid)
+      WHERE completedat IS NULL;
+    </sql>
+    <rollback>
+      <sql>DROP INDEX uq_gps_inspection_active;</sql>
+    </rollback>
+  </changeSet>
+
+</databaseChangeLog>

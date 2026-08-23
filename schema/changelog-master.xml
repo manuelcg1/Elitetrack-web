@@ -43,5 +43,7 @@
   <include file="changelog-forward-servers.xml" relativeToChangelogFile="true" />
   <include file="changelog-roles.xml" relativeToChangelogFile="true" />
   <include file="changelog-device-retention.xml" relativeToChangelogFile="true" />
+  <include file="changelog-gps-inventory-traceability.xml" relativeToChangelogFile="true" />
+  <include file="changelog-gps-inventory-identifier.xml" relativeToChangelogFile="true" />
 
 </databaseChangeLog>

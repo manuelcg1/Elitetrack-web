@@ -10,7 +10,7 @@ import {
   Box,
   Alert,
 } from '@mui/material';
-import { GPS_BRANDS, GPS_STATUS, isValidImei } from './gpsConstants';
+import { GPS_BRANDS, GPS_IDENTIFIER_MAX_LENGTH, GPS_STATUS, isValidImei } from './gpsConstants';
 
 const EMPTY_FORM = {
   imei: '',
@@ -50,7 +50,7 @@ const GpsFormDialog = ({ open, gps, onClose, onSave }) => {
 
   const validate = () => {
     if (!isValidImei(form.imei)) {
-      return 'El IMEI debe tener exactamente 15 dígitos numéricos.';
+      return `El identificador debe contener entre 1 y ${GPS_IDENTIFIER_MAX_LENGTH} letras o números, sin espacios.`;
     }
     if (!form.brand) {
       return 'Selecciona una marca.';
@@ -95,8 +95,8 @@ const GpsFormDialog = ({ open, gps, onClose, onSave }) => {
             onChange={handleChange('imei')}
             required
             fullWidth
-            slotProps={{ htmlInput: { maxLength: 15 } }}
-            helperText="15 dígitos numéricos"
+            slotProps={{ htmlInput: { maxLength: GPS_IDENTIFIER_MAX_LENGTH } }}
+            helperText={`Entre 1 y ${GPS_IDENTIFIER_MAX_LENGTH} letras o números, sin espacios`}
             autoFocus
           />
 

@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { Rnd } from 'react-rnd';
-import dayjs from 'dayjs';
 import {
   Card,
   CardContent,
@@ -105,47 +104,6 @@ const useStyles = makeStyles()((theme, { desktopPadding }) => ({
     fontSize: '0.95rem',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-  },
-  status: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 68,
-    marginTop: theme.spacing(0.4),
-    padding: theme.spacing(0.25, 1),
-    borderRadius: 999,
-    border: '1px solid currentColor',
-    '& .MuiTypography-root': {
-      fontSize: '0.68rem',
-      fontWeight: 600,
-      lineHeight: 1.2,
-      textAlign: 'center',
-      whiteSpace: 'nowrap',
-      color: 'inherit !important',
-    },
-  },
-  statusOnline: {
-    color: `${theme.palette.success.dark} !important`,
-    borderColor: `${theme.palette.success.main} !important`,
-    backgroundColor: `${theme.palette.success.main}14 !important`,
-  },
-  statusOffline: {
-    color: `${theme.palette.error.main} !important`,
-    borderColor: `${theme.palette.error.main} !important`,
-    backgroundColor: `${theme.palette.error.main}0D !important`,
-  },
-  statusUnknown: {
-    color: `${theme.palette.text.secondary} !important`,
-    borderColor: `${theme.palette.text.secondary} !important`,
-    backgroundColor: `${theme.palette.action.hover} !important`,
-  },
-  offlineDuration: {
-    color: theme.palette.error.main,
-    fontSize: '0.68rem',
-    fontWeight: 500,
-    lineHeight: 1.2,
-    marginTop: theme.spacing(0.5),
-    whiteSpace: 'nowrap',
   },
   closeButton: {
     color: theme.palette.text.secondary,
@@ -348,32 +306,8 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
   const navigationAppTitle = useAttributePreference('navigationAppTitle');
 
   const [anchorEl, setAnchorEl] = useState(null);
-  const [currentTime, setCurrentTime] = useState(() => Date.now());
-
   const [removing, setRemoving] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
-
-  const statusLabel = device?.status
-    ? t(`deviceStatus${device.status.charAt(0).toUpperCase()}${device.status.slice(1)}`)
-    : t('deviceStatusUnknown');
-  const statusClass =
-    {
-      online: classes.statusOnline,
-      offline: classes.statusOffline,
-      unknown: classes.statusUnknown,
-    }[device?.status] || classes.statusUnknown;
-  const lastUpdate = dayjs(device?.lastUpdate);
-  const offlineDuration =
-    device?.status === 'offline' && lastUpdate.isValid() ? lastUpdate.from(currentTime) : null;
-
-  useEffect(() => {
-    if (device?.status !== 'offline' || !device.lastUpdate) {
-      return undefined;
-    }
-    setCurrentTime(Date.now());
-    const interval = setInterval(() => setCurrentTime(Date.now()), 60_000);
-    return () => clearInterval(interval);
-  }, [device?.status, device?.lastUpdate]);
 
   const handleRemove = useCatch(async (removed) => {
     if (removed) {
@@ -423,14 +357,6 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
                     <Typography variant="subtitle1" className={classes.title}>
                       {device.name}
                     </Typography>
-                    <div className={cx(classes.status, statusClass)}>
-                      <Typography variant="caption">{statusLabel}</Typography>
-                    </div>
-                    {offlineDuration && (
-                      <Typography variant="caption" className={classes.offlineDuration}>
-                        {offlineDuration}
-                      </Typography>
-                    )}
                   </div>
                 </div>
                 <IconButton

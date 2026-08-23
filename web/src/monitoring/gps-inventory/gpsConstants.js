@@ -68,8 +68,13 @@ export const GPS_STATUS_META = {
 };
 
 // ── Validación de IMEI ────────────────────────────────────────────────────────
-// IMEI estándar: 15 dígitos numéricos
-export const isValidImei = (imei) => /^\d{15}$/.test(imei?.trim() || '');
+export const GPS_IDENTIFIER_MAX_LENGTH = 128;
+
+// Identificador flexible: una o más letras o números, sin espacios.
+export const isValidImei = (imei) => {
+  const value = imei?.trim() || '';
+  return value.length <= GPS_IDENTIFIER_MAX_LENGTH && /^[\p{L}\p{N}]+$/u.test(value);
+};
 
 // ── Helper para obtener metadata de un estado de forma segura ────────────────
 export const getStatusMeta = (status) =>

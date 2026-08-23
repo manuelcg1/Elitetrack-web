@@ -79,6 +79,9 @@ const MonitoringHealthPage = lazy(() => import('./monitoring/MonitoringHealthPag
 const MonitoringMantenimientoPage = lazy(() => import('./monitoring/MonitoringMantenimientoPage'));
 const MonitoringAlertsPage = lazy(() => import('./monitoring/MonitoringAlertsPage'));
 const GpsInventoryPage = lazy(() => import('./monitoring/gps-inventory/GpsInventoryPage'));
+const GpsInventoryHistoryPage = lazy(
+  () => import('./monitoring/gps-inventory/GpsInventoryHistoryPage'),
+);
 const ForwarderPage = lazy(() => import('./monitoring/forwarder/ForwarderPage'));
 
 // ── Fallback de carga ─────────────────────────────────────────────────────────
@@ -158,6 +161,10 @@ const Navigation = () => {
           <Route path="monitoring/health" element={<MonitoringHealthPage />} />
           <Route path="monitoring/mantenimiento" element={<MonitoringMantenimientoPage />} />
           <Route path="monitoring/gps-inventory" element={<GpsInventoryPage />} />
+          <Route
+            path="monitoring/gps-inventory/:id/history"
+            element={<GpsInventoryHistoryPage />}
+          />
           <Route path="monitoring/alerts" element={<MonitoringAlertsPage />} />
           <Route path="monitoring/forwarder" element={<ForwarderPage />} />
           <Route path="roles">
