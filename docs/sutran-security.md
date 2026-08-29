@@ -70,6 +70,36 @@ EnvironmentFile=/etc/traccar/sutran.env
 Ejecute `systemctl daemon-reload` y reinicie Traccar. La primera puesta en marcha aplica automáticamente
 los changesets de Liquibase. Verifique el arranque antes de registrar el token.
 
+### Archivos de esquema externos
+
+Las instalaciones empaquetadas pueden cargar el esquema desde `/opt/traccar/schema` y no exclusivamente
+desde el JAR. Antes de iniciar la versión nueva, respalde la base de datos y sincronice también:
+
+```text
+/opt/traccar/schema/changelog-master.xml
+/opt/traccar/schema/changelog-sutran-forwarding.xml
+```
+
+Compruebe que el master externo incluya `changelog-sutran-forwarding.xml`. No edite
+`databasechangelog` manualmente. Si los changesets ya existen, Liquibase los reconoce y no los repite.
+
+### Alcance de reintentos y recuperación
+
+Cada entrega se persiste como `PENDING` antes de iniciar HTTP y cambia a `PROCESSING` al enviarse. Los
+reintentos configurados por `maxAttempts` y `retryDelay` ocurren en memoria dentro de la misma ejecución.
+Si el proceso se reinicia mientras una entrega está `PENDING` o `PROCESSING`, se recupera al arrancar.
+Al agotar intentos queda `FAILED`; no existe un reintento diferido posterior de filas `FAILED`.
+
+La columna `nextAttempt` está reservada para una futura planificación persistente y permanece nula con
+la política actual. El CRC y `lastSent` solo se guardan cuando la respuesta es HTTP exitosa, contiene
+`code=2000` y un CRC válido de seis caracteres.
+
+### Fuente de la placa
+
+`plate` se obtiene exclusivamente de `Device.name`: se eliminan espacios laterales, se convierte a
+mayúsculas y se exige exactamente seis caracteres alfanuméricos (`A-Z`, `0-9`). Los valores inválidos
+se rechazan localmente y nunca se inventa ni se sustituye la placa.
+
 ## Piloto con un vehículo
 
 1. Inicie con `SUTRAN_TRANSMISSION_ENABLED=false` y confirme que las funciones existentes operan normalmente.

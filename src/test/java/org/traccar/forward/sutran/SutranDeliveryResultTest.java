@@ -64,4 +64,22 @@ public class SutranDeliveryResultTest {
         assertEquals("String is too long: 7/6.", response.getError().get(0).getTxt());
     }
 
+    @Test
+    public void testContractRejectionCodesAreFinal() throws Exception {
+        for (int code = 4001; code <= 4004; code++) {
+            SutranDeliveryResult result = SutranDeliveryResult.classify(
+                    200, response("{\"code\":" + code + ",\"result\":\"Rejected\"}"));
+            assertEquals(SutranDeliveryResult.Status.REJECTED, result.status());
+        }
+    }
+
+    @Test
+    public void testContractServerCodesAreFinalWhenReturnedInSuccessfulHttp() throws Exception {
+        for (int code = 5001; code <= 5003; code++) {
+            SutranDeliveryResult result = SutranDeliveryResult.classify(
+                    200, response("{\"code\":" + code + ",\"result\":\"Server response\"}"));
+            assertEquals(SutranDeliveryResult.Status.REJECTED, result.status());
+        }
+    }
+
 }

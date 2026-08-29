@@ -33,6 +33,14 @@ import { formatTime } from '../../common/util/formatter';
 import ForwardServerDialog from './ForwardServerDialog';
 import { useManager } from '../../common/util/permissions';
 
+const deliveryStatusLabels = {
+  PENDING: 'Pendiente',
+  PROCESSING: 'Procesando',
+  DELIVERED: 'Entregado',
+  REJECTED: 'Rechazado',
+  FAILED: 'Fallido',
+};
+
 const ForwarderPage = () => {
   const manager = useManager();
   const devices = useSelector((state) => state.devices.items);
@@ -336,7 +344,7 @@ const ForwarderPage = () => {
                         />
                         {server.type === 'SUTRAN_V2' && (
                           <Chip
-                            label={server.transmissionEnabled ? 'transmitiendo' : 'bloqueado'}
+                            label={server.transmissionEnabled ? 'habilitado' : 'bloqueado'}
                             color={server.transmissionEnabled ? 'warning' : 'default'}
                             variant={server.transmissionEnabled ? 'filled' : 'outlined'}
                             size="small"
@@ -391,16 +399,30 @@ const ForwarderPage = () => {
                         py: { xs: 1.5, sm: 2 },
                       }}
                     >
+                      {server.type === 'SUTRAN_V2' && !latestDelivery && (
+                        <Alert severity="info" sx={{ mb: 1.5 }}>
+                          Sin envíos registrados. El destino está{' '}
+                          {server.transmissionEnabled ? 'habilitado' : 'bloqueado'}.
+                        </Alert>
+                      )}
                       {server.type === 'SUTRAN_V2' && latestDelivery && (
                         <Alert
-                          severity={latestDelivery.status === 'DELIVERED' ? 'success' : 'info'}
+                          severity={
+                            latestDelivery.status === 'DELIVERED'
+                              ? 'success'
+                              : ['FAILED', 'REJECTED'].includes(latestDelivery.status)
+                                ? 'error'
+                                : 'warning'
+                          }
                           sx={{ mb: 1.5 }}
                         >
-                          Última entrega: {latestDelivery.status}
+                          Última entrega:{' '}
+                          {deliveryStatusLabels[latestDelivery.status] || latestDelivery.status}
                           {latestDelivery.crc ? ` · CRC ${latestDelivery.crc}` : ''}
                           {latestDelivery.responseCode
                             ? ` · código ${latestDelivery.responseCode}`
                             : ''}
+                          {latestDelivery.errorMessage ? ` · ${latestDelivery.errorMessage}` : ''}
                         </Alert>
                       )}
                       {serverDevices.length === 0 ? (

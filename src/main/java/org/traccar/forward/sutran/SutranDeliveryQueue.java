@@ -38,12 +38,14 @@ public class SutranDeliveryQueue {
     private static final Logger LOGGER = LoggerFactory.getLogger(SutranDeliveryQueue.class);
     private static final int RECOVERY_LIMIT = 1000;
     private static final long MAXIMUM_RETRY_DELAY = 60000;
+    private static final long INVALID_ID_LOG_INTERVAL = 60000;
 
     private final Storage storage;
     private final ObjectMapper objectMapper;
     private final Sender sender;
     private final SutranPayloadMapper payloadMapper = new SutranPayloadMapper();
     private final AtomicBoolean recovered = new AtomicBoolean();
+    private final java.util.concurrent.atomic.AtomicLong invalidIdLogTime = new java.util.concurrent.atomic.AtomicLong();
     private final boolean transmissionAllowed;
 
     @Inject
@@ -110,8 +112,12 @@ public class SutranDeliveryQueue {
             return false;
         }
         long positionId = positionData.getPosition().getId();
-        if (positionId <= 0 || alreadyQueued(positionId, server.getId())) {
-            return positionId > 0;
+        if (positionId <= 0) {
+            logInvalidPositionId(server, positionData);
+            return false;
+        }
+        if (alreadyQueued(positionId, server.getId())) {
+            return true;
         }
 
         ForwardDelivery delivery = new ForwardDelivery();
@@ -139,6 +145,18 @@ public class SutranDeliveryQueue {
         } catch (StorageException e) {
             LOGGER.warn("SUTRAN delivery could not be queued for position {}", positionId);
             return alreadyQueued(positionId, server.getId());
+        }
+    }
+
+    private void logInvalidPositionId(ForwardServer server, PositionData positionData) {
+        long now = System.currentTimeMillis();
+        long previous = invalidIdLogTime.get();
+        if (now - previous >= INVALID_ID_LOG_INTERVAL && invalidIdLogTime.compareAndSet(previous, now)) {
+            LOGGER.warn(
+                    "SUTRAN delivery not queued: deviceId={}, device={}, serverId={}, reason=position has no persisted id",
+                    positionData.getDevice() != null ? positionData.getDevice().getId() : 0,
+                    positionData.getDevice() != null ? positionData.getDevice().getName() : "unknown",
+                    server.getId());
         }
     }
 

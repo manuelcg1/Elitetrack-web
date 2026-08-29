@@ -43,6 +43,7 @@ import org.traccar.handler.OutdatedHandler;
 import org.traccar.handler.PositionForwardingHandler;
 import org.traccar.handler.PostProcessHandler;
 import org.traccar.handler.SpeedLimitHandler;
+import org.traccar.handler.SutranForwardingHandler;
 import org.traccar.handler.TimeHandler;
 import org.traccar.handler.events.AlarmEventHandler;
 import org.traccar.handler.events.BaseEventHandler;
@@ -75,6 +76,28 @@ import java.util.stream.Stream;
 @ChannelHandler.Sharable
 public class ProcessingHandler extends ChannelInboundHandlerAdapter implements BufferingManager.Callback {
 
+    static final List<Class<? extends BasePositionHandler>> POSITION_HANDLER_CLASSES = List.of(
+            ComputedAttributesHandler.Early.class,
+            OutdatedHandler.class,
+            TimeHandler.class,
+            GeolocationHandler.class,
+            HemisphereHandler.class,
+            MapMatcherHandler.class,
+            DistanceHandler.class,
+            FilterHandler.class,
+            GeofenceHandler.class,
+            GeocoderHandler.class,
+            SpeedLimitHandler.class,
+            MotionHandler.class,
+            ComputedAttributesHandler.Late.class,
+            DriverHandler.class,
+            CopyAttributesHandler.class,
+            EngineHoursHandler.class,
+            PositionForwardingHandler.class,
+            DatabaseHandler.class,
+            SutranForwardingHandler.class,
+            AlertProcessor.class);
+
     private final CacheManager cacheManager;
     private final NotificationManager notificationManager;
     private final PositionLogger positionLogger;
@@ -100,26 +123,7 @@ public class ProcessingHandler extends ChannelInboundHandlerAdapter implements B
         bufferingManager = new BufferingManager(config, this);
         alertProcessor = injector.getInstance(AlertProcessor.class);
 
-        positionHandlers = Stream.of(
-                ComputedAttributesHandler.Early.class,
-                OutdatedHandler.class,
-                TimeHandler.class,
-                GeolocationHandler.class,
-                HemisphereHandler.class,
-                MapMatcherHandler.class,
-                DistanceHandler.class,
-                FilterHandler.class,
-                GeofenceHandler.class,
-                GeocoderHandler.class,
-                SpeedLimitHandler.class,
-                MotionHandler.class,
-                ComputedAttributesHandler.Late.class,
-                DriverHandler.class,
-                CopyAttributesHandler.class,
-                EngineHoursHandler.class,
-                PositionForwardingHandler.class,
-                DatabaseHandler.class,
-                AlertProcessor.class)
+        positionHandlers = POSITION_HANDLER_CLASSES.stream()
                 .map((clazz) -> (BasePositionHandler) injector.getInstance(clazz))
                 .filter(Objects::nonNull)
                 .toList();

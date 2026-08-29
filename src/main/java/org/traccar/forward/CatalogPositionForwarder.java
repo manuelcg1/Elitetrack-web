@@ -73,41 +73,19 @@ public class CatalogPositionForwarder implements PositionForwarder {
 
     @Override
     public void forward(PositionData positionData, ResultHandler resultHandler) {
-        List<DeviceForwardServer> assignments = deviceServers.getOrDefault(
-                positionData.getDevice().getId(), List.of());
-        List<ForwardServer> targets = assignments
+        List<DeviceForwardServer> assignments = getAssignments(positionData);
+        List<ForwardServer> jsonTargets = assignments
                 .stream()
                 .map(assignment -> servers.get(assignment.getServerId()))
-                .filter(server -> server != null)
-                .toList();
-        List<ForwardServer> sutranTargets = targets.stream()
-                .filter(server -> ForwardServer.TYPE_SUTRAN_V2.equals(server.getType())
-                        && server.getTransmissionEnabled()
-                        && sutranDeliveryQueue.isTransmissionAllowed())
-                .toList();
-        List<ForwardServer> jsonTargets = targets.stream()
-                .filter(server -> !ForwardServer.TYPE_SUTRAN_V2.equals(server.getType()))
+                .filter(server -> server != null && !ForwardServer.TYPE_SUTRAN_V2.equals(server.getType()))
                 .toList();
 
         PositionForwarder currentDelegate = delegate;
-        if (targets.isEmpty()) {
+        if (jsonTargets.isEmpty()) {
             if (currentDelegate != null) {
                 currentDelegate.forward(positionData, resultHandler);
             } else {
                 resultHandler.onResult(true, null);
-            }
-            return;
-        }
-
-        boolean sutranQueued = sutranTargets.stream()
-                .map(server -> sutranDeliveryQueue.enqueue(server, positionData))
-                .reduce(true, Boolean::logicalAnd);
-
-        if (jsonTargets.isEmpty()) {
-            if (currentDelegate != null && sutranQueued) {
-                currentDelegate.forward(positionData, resultHandler);
-            } else {
-                resultHandler.onResult(sutranQueued, sutranQueued ? null : new RuntimeException("SUTRAN queue failed"));
             }
             return;
         }
@@ -126,6 +104,25 @@ public class CatalogPositionForwarder implements PositionForwarder {
                         .filter(assignment -> assignment.getServerId() == server.getId())
                         .findFirst()
                         .ifPresent(assignment -> updateLastSent(assignment.getId())));
+    }
+
+    public void forwardSutran(PositionData positionData) {
+        if (!sutranDeliveryQueue.isTransmissionAllowed()) {
+            return;
+        }
+        getAssignments(positionData).stream()
+                .map(assignment -> servers.get(assignment.getServerId()))
+                .filter(server -> server != null
+                        && ForwardServer.TYPE_SUTRAN_V2.equals(server.getType())
+                        && server.getTransmissionEnabled())
+                .forEach(server -> sutranDeliveryQueue.enqueue(server, positionData));
+    }
+
+    private List<DeviceForwardServer> getAssignments(PositionData positionData) {
+        if (positionData.getDevice() == null) {
+            return List.of();
+        }
+        return deviceServers.getOrDefault(positionData.getDevice().getId(), List.of());
     }
 
     private void updateLastSent(long assignmentId) {

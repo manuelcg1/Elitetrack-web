@@ -15,6 +15,8 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -74,6 +76,74 @@ public class SutranDeliveryQueueTest {
         assertEquals(0, requests.get());
     }
 
+    @Test
+    public void testPositionWithoutPersistedIdIsNotQueued() {
+        MemoryStorage storage = new MemoryStorage();
+        SutranDeliveryQueue queue = new SutranDeliveryQueue(
+                storage, new ObjectMapper(), (server, request, handler) -> { });
+        PositionData positionData = positionData("CTM495");
+        positionData.getPosition().setId(0);
+
+        assertFalse(queue.enqueue(server(), positionData));
+        assertTrue(storage.getObjects(
+                ForwardDelivery.class, new Request(new Columns.All())).isEmpty());
+    }
+
+    @Test
+    public void testPendingChangesToProcessingBeforeHttpResult() {
+        MemoryStorage storage = new MemoryStorage();
+        AtomicReference<Consumer<SutranSendResult>> resultHandler = new AtomicReference<>();
+        SutranDeliveryQueue queue = new SutranDeliveryQueue(
+                storage, new ObjectMapper(),
+                (server, request, handler) -> resultHandler.set(handler));
+
+        assertTrue(queue.enqueue(server(), positionData("CTM495")));
+        ForwardDelivery processing = storage.getObjects(
+                ForwardDelivery.class, new Request(new Columns.All())).get(0);
+        assertEquals(ForwardDelivery.STATUS_PROCESSING, processing.getStatus());
+
+        resultHandler.get().accept(new SutranSendResult(new SutranDeliveryResult(
+                SutranDeliveryResult.Status.DELIVERED, 200, 2000, "ABC123", "OK"), 1));
+
+        ForwardDelivery delivered = storage.getObjects(
+                ForwardDelivery.class, new Request(new Columns.All())).get(0);
+        assertEquals(ForwardDelivery.STATUS_DELIVERED, delivered.getStatus());
+        assertEquals("ABC123", delivered.getCrc());
+    }
+
+    @Test
+    public void testRecoveryResendsProcessingDelivery() throws Exception {
+        MemoryStorage storage = new MemoryStorage();
+        ForwardServer server = server();
+        long serverId = storage.addObject(server, new Request(new Columns.Exclude("id")));
+        server.setId(serverId);
+
+        ObjectMapper objectMapper = new ObjectMapper();
+        ForwardDelivery delivery = new ForwardDelivery();
+        delivery.setPositionId(99);
+        delivery.setServerId(serverId);
+        delivery.setStatus(ForwardDelivery.STATUS_PROCESSING);
+        delivery.setPayload(objectMapper.writeValueAsString(
+                new SutranPayloadMapper().map(positionData("CTM495"))));
+        delivery.setCreatedTime(new Date());
+        delivery.setUpdatedTime(new Date());
+        long deliveryId = storage.addObject(delivery, new Request(new Columns.Exclude("id")));
+        delivery.setId(deliveryId);
+
+        AtomicInteger requests = new AtomicInteger();
+        SutranDeliveryQueue queue = new SutranDeliveryQueue(storage, objectMapper, (target, request, handler) -> {
+            requests.incrementAndGet();
+            handler.accept(new SutranSendResult(new SutranDeliveryResult(
+                    SutranDeliveryResult.Status.DELIVERED, 200, 2000, "ABC123", "OK"), 1));
+        });
+
+        queue.recover();
+
+        assertEquals(1, requests.get());
+        assertEquals(ForwardDelivery.STATUS_DELIVERED, storage.getObjects(
+                ForwardDelivery.class, new Request(new Columns.All())).get(0).getStatus());
+    }
+
     private ForwardServer server() {
         ForwardServer server = new ForwardServer();
         server.setId(7);
@@ -84,6 +154,8 @@ public class SutranDeliveryQueueTest {
         server.setReadTimeout(1000);
         server.setMaxAttempts(1);
         server.setRetryDelay(100);
+        server.setActive(true);
+        server.setTransmissionEnabled(true);
         return server;
     }
 

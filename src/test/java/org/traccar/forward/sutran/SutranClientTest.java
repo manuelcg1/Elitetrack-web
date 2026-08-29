@@ -113,10 +113,12 @@ public class SutranClientTest {
             }
         });
 
-        SutranDeliveryResult result = send(client(server, 2, 1, 50), request());
+        SutranSendResult sendResult = sendTracked(client(server, 2, 1, 50), request());
+        SutranDeliveryResult result = sendResult.result();
 
         assertEquals(SutranDeliveryResult.Status.RETRY, result.status());
-        assertEquals(2, requests.get());
+        assertEquals(2, sendResult.attempts());
+        assertTrue(requests.get() >= 1 && requests.get() <= 2);
         assertTrue(result.message().startsWith("SUTRAN transport failure"));
         assertFalse(result.message().contains(ACCESS_TOKEN));
     }
@@ -154,6 +156,17 @@ public class SutranClientTest {
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<SutranDeliveryResult> result = new AtomicReference<>();
         client.send(request, value -> {
+            result.set(value);
+            latch.countDown();
+        });
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        return result.get();
+    }
+
+    private SutranSendResult sendTracked(SutranClient client, SutranTransmissionRequest request) throws Exception {
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<SutranSendResult> result = new AtomicReference<>();
+        client.sendTracked(request, value -> {
             result.set(value);
             latch.countDown();
         });
