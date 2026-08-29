@@ -96,7 +96,7 @@ const DeviceForwardServersPage = () => {
           <Box sx={{ p: 2 }}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
               <DataObjectIcon color="primary" />
-              <Typography fontWeight={700}>Reenvio de posicion (JSON)</Typography>
+              <Typography fontWeight={700}>Retransmisión de posición</Typography>
             </Stack>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
               Destinos asignados
@@ -122,7 +122,11 @@ const DeviceForwardServersPage = () => {
                     />
                     <ListItemText
                       primary={<Typography fontWeight={700}>{server.name}</Typography>}
-                      secondary={server.ipDominio}
+                      secondary={
+                        server.type === 'SUTRAN_V2'
+                          ? `SUTRAN ${server.environment === 'PRODUCTION' ? 'producción' : 'desarrollo'}`
+                          : server.ipDominio
+                      }
                     />
                   </ListItemButton>
                 </ListItem>

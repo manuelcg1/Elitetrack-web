@@ -41,6 +41,7 @@
   <include file="changelog-alerts-production.xml" relativeToChangelogFile="true" />
   <include file="changelog-alert-recipients.xml" relativeToChangelogFile="true" />
   <include file="changelog-forward-servers.xml" relativeToChangelogFile="true" />
+  <include file="changelog-sutran-forwarding.xml" relativeToChangelogFile="true" />
   <include file="changelog-roles.xml" relativeToChangelogFile="true" />
   <include file="changelog-device-retention.xml" relativeToChangelogFile="true" />
   <include file="changelog-gps-inventory-traceability.xml" relativeToChangelogFile="true" />

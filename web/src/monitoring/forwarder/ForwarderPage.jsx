@@ -40,6 +40,7 @@ const ForwarderPage = () => {
 
   const [servers, setServers] = useState([]);
   const [assignments, setAssignments] = useState({});
+  const [deliveries, setDeliveries] = useState({});
   const [expandedId, setExpandedId] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -57,23 +58,32 @@ const ForwarderPage = () => {
     );
     const nextServers = await serversResponse.json();
     const nextAssignments = {};
+    const nextDeliveries = {};
     await Promise.all(
       nextServers.map(async (server) => {
-        const response = await fetchOrThrow(
+        const assignmentsResponse = await fetchOrThrow(
           `/api/forward/servers/${server.id}/devices?_ts=${timestamp}`,
           requestOptions,
         );
-        const serverAssignments = await response.json();
+        const serverAssignments = await assignmentsResponse.json();
         nextAssignments[server.id] = Array.from(
           new Map(
             serverAssignments.map((assignment) => [assignment.deviceId, assignment]),
           ).values(),
         );
+        if (server.type === 'SUTRAN_V2') {
+          const deliveriesResponse = await fetchOrThrow(
+            `/api/forward/servers/${server.id}/deliveries?_ts=${timestamp}`,
+            requestOptions,
+          );
+          nextDeliveries[server.id] = await deliveriesResponse.json();
+        }
       }),
     );
     if (isActive()) {
       setServers(nextServers);
       setAssignments(nextAssignments);
+      setDeliveries(nextDeliveries);
     }
   };
 
@@ -213,7 +223,7 @@ const ForwarderPage = () => {
                   variant="h6"
                   sx={{ fontSize: { xs: '1rem', sm: '1.25rem' }, lineHeight: 1.25 }}
                 >
-                  Destinos de reenvio JSON
+                  Destinos de retransmisión
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Configura cada servidor una sola vez y asignalo a tus dispositivos.
@@ -240,6 +250,14 @@ const ForwarderPage = () => {
             {servers.map((server) => {
               const open = expandedId === server.id;
               const serverDevices = getServerDevices(server.id);
+              const serverDeliveries = deliveries[server.id] || [];
+              const pendingDeliveries = serverDeliveries.filter((delivery) =>
+                ['PENDING', 'PROCESSING'].includes(delivery.status),
+              ).length;
+              const failedDeliveries = serverDeliveries.filter((delivery) =>
+                ['FAILED', 'REJECTED'].includes(delivery.status),
+              ).length;
+              const latestDelivery = serverDeliveries[0];
               return (
                 <Box key={server.id}>
                   <Box
@@ -291,8 +309,12 @@ const ForwarderPage = () => {
                             >
                               {[
                                 server.ipDominio,
-                                `usuario ${server.username || 'sin usuario'}`,
-                                server.apiKey ? 'API key configurada' : 'sin API key',
+                                server.type === 'SUTRAN_V2'
+                                  ? `SUTRAN ${server.environment === 'PRODUCTION' ? 'producción' : 'desarrollo'}`
+                                  : `usuario ${server.username || 'sin usuario'}`,
+                                server.apiKeyConfigured
+                                  ? 'credencial configurada'
+                                  : 'sin credencial',
                               ].join(' - ')}
                             </Typography>
                           }
@@ -312,6 +334,30 @@ const ForwarderPage = () => {
                           size="small"
                           sx={{ mr: { xs: 'auto', sm: 0 } }}
                         />
+                        {server.type === 'SUTRAN_V2' && (
+                          <Chip
+                            label={server.transmissionEnabled ? 'transmitiendo' : 'bloqueado'}
+                            color={server.transmissionEnabled ? 'warning' : 'default'}
+                            variant={server.transmissionEnabled ? 'filled' : 'outlined'}
+                            size="small"
+                          />
+                        )}
+                        {server.type === 'SUTRAN_V2' && (
+                          <Chip
+                            label={`${pendingDeliveries} pendientes`}
+                            color={pendingDeliveries ? 'warning' : 'default'}
+                            variant="outlined"
+                            size="small"
+                          />
+                        )}
+                        {server.type === 'SUTRAN_V2' && failedDeliveries > 0 && (
+                          <Chip
+                            label={`${failedDeliveries} con error`}
+                            color="error"
+                            variant="outlined"
+                            size="small"
+                          />
+                        )}
                         {manager && (
                           <>
                             <Tooltip title="Editar">
@@ -345,6 +391,18 @@ const ForwarderPage = () => {
                         py: { xs: 1.5, sm: 2 },
                       }}
                     >
+                      {server.type === 'SUTRAN_V2' && latestDelivery && (
+                        <Alert
+                          severity={latestDelivery.status === 'DELIVERED' ? 'success' : 'info'}
+                          sx={{ mb: 1.5 }}
+                        >
+                          Última entrega: {latestDelivery.status}
+                          {latestDelivery.crc ? ` · CRC ${latestDelivery.crc}` : ''}
+                          {latestDelivery.responseCode
+                            ? ` · código ${latestDelivery.responseCode}`
+                            : ''}
+                        </Alert>
+                      )}
                       {serverDevices.length === 0 ? (
                         <Typography variant="body2" color="text.secondary">
                           Sin GPS asignados a este destino.

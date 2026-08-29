@@ -35,6 +35,10 @@ Thumbs.db
 *.log
 logs/
 
+# Local backups and encryption keys
+backups/
+.secrets/
+
 # Local development artifacts
 schema/changelog-local-alerts.xml
 web/src/*-orig.jsx

@@ -1074,6 +1074,21 @@ public final class Keys {
             100);
 
     /**
+     * Base64 encoded 256-bit key used to encrypt SUTRAN access tokens at rest.
+     */
+    public static final ConfigKey<String> SUTRAN_ENCRYPTION_KEY = new StringConfigKey(
+            "sutran.encryptionKey",
+            List.of(KeyType.CONFIG));
+
+    /**
+     * Global safety switch for SUTRAN transmissions. Defaults to disabled and must be explicitly enabled per process.
+     */
+    public static final ConfigKey<Boolean> SUTRAN_TRANSMISSION_ENABLED = new BooleanConfigKey(
+            "sutran.transmissionEnabled",
+            List.of(KeyType.CONFIG),
+            false);
+
+    /**
      * Events forwarding format. Available options are "json" and "kafka". Default is "json".
      */
     public static final ConfigKey<String> EVENT_FORWARD_TYPE = new StringConfigKey(

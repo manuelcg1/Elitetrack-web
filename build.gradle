@@ -16,7 +16,24 @@ java {
 }
 
 compileJava.options.encoding = "UTF-8"
+compileJava.options.incremental = false
+compileTestJava.options.encoding = "UTF-8"
+compileTestJava.options.incremental = false
 jar.destinationDirectory = file("$projectDir/target")
+
+def testMainJar = tasks.register("testMainJar", Jar) {
+    archiveFileName = "main-for-tests.jar"
+    destinationDirectory = layout.buildDirectory.dir("tmp/testMainJar")
+    from sourceSets.main.output
+}
+
+compileTestJava {
+    dependsOn testMainJar
+    classpath = files(testMainJar) + configurations.testCompileClasspath
+    options.fork = true
+    def javacName = System.getProperty("os.name").startsWith("Windows") ? "javac.exe" : "javac"
+    options.forkOptions.executable = "${System.getProperty('java.home')}/bin/${javacName}"
+}
 
 processResources {
     from("schema") {

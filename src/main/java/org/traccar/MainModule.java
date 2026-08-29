@@ -114,6 +114,7 @@ import java.net.URISyntaxException;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
 public class MainModule extends AbstractModule {
 
@@ -134,6 +135,12 @@ public class MainModule extends AbstractModule {
     @Provides
     public static ExecutorService provideExecutorService() {
         return Executors.newCachedThreadPool();
+    }
+
+    @Singleton
+    @Provides
+    public static ScheduledExecutorService provideScheduledExecutorService() {
+        return Executors.newScheduledThreadPool(2);
     }
 
     @Singleton

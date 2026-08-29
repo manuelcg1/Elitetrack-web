@@ -52,6 +52,7 @@ public class ScheduleManager implements LifecycleObject {
                 TaskReports.class,
                 TaskDeviceInactivityCheck.class,
                 TaskWebSocketKeepalive.class,
+                TaskSutranDeliveryCleanup.class,
                 DeviceRetentionScheduler.class)
                 .forEachOrdered(taskClass -> {
                     var task = injector.getInstance(taskClass);

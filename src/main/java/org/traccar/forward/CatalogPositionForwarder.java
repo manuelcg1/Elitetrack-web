@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.traccar.model.DeviceForwardServer;
 import org.traccar.model.ForwardServer;
+import org.traccar.forward.sutran.SutranDeliveryQueue;
 import org.traccar.storage.Storage;
 import org.traccar.storage.StorageException;
 import org.traccar.storage.query.Columns;
@@ -27,6 +28,7 @@ public class CatalogPositionForwarder implements PositionForwarder {
 
     private final Storage storage;
     private final MultiDestinationJsonForwarder multiDestinationJsonForwarder;
+    private final SutranDeliveryQueue sutranDeliveryQueue;
 
     private volatile Map<Long, ForwardServer> servers = Map.of();
     private volatile Map<Long, List<DeviceForwardServer>> deviceServers = Map.of();
@@ -35,10 +37,14 @@ public class CatalogPositionForwarder implements PositionForwarder {
     private PositionForwarder delegate;
 
     @Inject
-    public CatalogPositionForwarder(Storage storage, MultiDestinationJsonForwarder multiDestinationJsonForwarder) {
+    public CatalogPositionForwarder(
+            Storage storage, MultiDestinationJsonForwarder multiDestinationJsonForwarder,
+            SutranDeliveryQueue sutranDeliveryQueue) {
         this.storage = storage;
         this.multiDestinationJsonForwarder = multiDestinationJsonForwarder;
+        this.sutranDeliveryQueue = sutranDeliveryQueue;
         reload();
+        sutranDeliveryQueue.recover();
     }
 
     public void setDelegate(@Nullable PositionForwarder delegate) {
@@ -74,6 +80,14 @@ public class CatalogPositionForwarder implements PositionForwarder {
                 .map(assignment -> servers.get(assignment.getServerId()))
                 .filter(server -> server != null)
                 .toList();
+        List<ForwardServer> sutranTargets = targets.stream()
+                .filter(server -> ForwardServer.TYPE_SUTRAN_V2.equals(server.getType())
+                        && server.getTransmissionEnabled()
+                        && sutranDeliveryQueue.isTransmissionAllowed())
+                .toList();
+        List<ForwardServer> jsonTargets = targets.stream()
+                .filter(server -> !ForwardServer.TYPE_SUTRAN_V2.equals(server.getType()))
+                .toList();
 
         PositionForwarder currentDelegate = delegate;
         if (targets.isEmpty()) {
@@ -85,8 +99,21 @@ public class CatalogPositionForwarder implements PositionForwarder {
             return;
         }
 
+        boolean sutranQueued = sutranTargets.stream()
+                .map(server -> sutranDeliveryQueue.enqueue(server, positionData))
+                .reduce(true, Boolean::logicalAnd);
+
+        if (jsonTargets.isEmpty()) {
+            if (currentDelegate != null && sutranQueued) {
+                currentDelegate.forward(positionData, resultHandler);
+            } else {
+                resultHandler.onResult(sutranQueued, sutranQueued ? null : new RuntimeException("SUTRAN queue failed"));
+            }
+            return;
+        }
+
         multiDestinationJsonForwarder.forward(
-                targets,
+                jsonTargets,
                 positionData,
                 (success, throwable) -> {
                     if (currentDelegate != null && success) {
