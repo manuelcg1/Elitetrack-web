@@ -1,5 +1,5 @@
 import './geocoder.css';
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
 import MaplibreGeocoder from '@maplibre/maplibre-gl-geocoder';
 import { useEffect } from 'react';
 import { useDispatch } from 'react-redux';

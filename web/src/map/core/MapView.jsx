@@ -1,5 +1,5 @@
 import 'maplibre-gl/dist/maplibre-gl.css';
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
 import { googleProtocol } from 'maplibre-google-maps';
 import { useRef, useLayoutEffect, useEffect, useState, useMemo } from 'react';
 import { useTheme } from '@mui/material';
@@ -80,7 +80,6 @@ const MapView = ({ children }) => {
     'selectedMapStyle',
     usePreference('map', 'locationIqStreets'),
   );
-  const mapboxAccessToken = useAttributePreference('mapboxAccessToken');
   const maxZoom = useAttributePreference('web.maxZoom');
 
   // ── Switcher memoizado ──────────────────────────────────────────────────────
@@ -163,11 +162,6 @@ const MapView = ({ children }) => {
   useEffect(() => {
     if (maxZoom) map.setMaxZoom(maxZoom);
   }, [maxZoom]);
-
-  // ── Token Mapbox ───────────────────────────────────────────────────────────
-  useEffect(() => {
-    maplibregl.accessToken = mapboxAccessToken;
-  }, [mapboxAccessToken]);
 
   // ── Actualizar estilos disponibles ─────────────────────────────────────────
   // Garantiza que el switcher ya esté agregado al mapa antes de llamar updateStyles
