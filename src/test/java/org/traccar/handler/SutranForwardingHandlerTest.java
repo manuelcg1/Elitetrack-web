@@ -24,6 +24,24 @@ import static org.mockito.Mockito.when;
 public class SutranForwardingHandlerTest {
 
     @Test
+    public void testGpsCallbackDoesNotWaitForSutranWork() {
+        var work = new java.util.ArrayList<Runnable>();
+        var cache = mock(CacheManager.class);
+        var catalog = mock(CatalogPositionForwarder.class);
+        var handler = new SutranForwardingHandler(cache, catalog, work::add);
+        var callbacks = new AtomicInteger();
+        var position = new Position();
+        position.setDeviceId(1);
+        position.setId(5);
+        handler.onPosition(position, ignored -> callbacks.incrementAndGet());
+        assertEquals(1, callbacks.get());
+        org.mockito.Mockito.verifyNoInteractions(catalog);
+        assertEquals(1, work.size());
+        work.get(0).run();
+        verify(catalog).forwardSutran(any(PositionData.class));
+    }
+
+    @Test
     public void testPositionIsStoredOnceBeforeSutranForwarding() throws Exception {
         Storage storage = mock(Storage.class);
         StatisticsManager statisticsManager = mock(StatisticsManager.class);

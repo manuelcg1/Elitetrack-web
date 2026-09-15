@@ -6,6 +6,7 @@ import java.util.Optional;
 public enum SutranResponseCode {
 
     DELIVERED(2000),
+    DELIVERED_HISTORICAL(2001),
     INVALID_JSON(4001),
     INVALID_DATA(4002),
     POSITION_TOO_OLD(4003),

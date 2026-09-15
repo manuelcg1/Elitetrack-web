@@ -46,5 +46,6 @@
   <include file="changelog-device-retention.xml" relativeToChangelogFile="true" />
   <include file="changelog-gps-inventory-traceability.xml" relativeToChangelogFile="true" />
   <include file="changelog-gps-inventory-identifier.xml" relativeToChangelogFile="true" />
+  <include file="changelog-sutran-crc.xml" relativeToChangelogFile="true" />
 
 </databaseChangeLog>

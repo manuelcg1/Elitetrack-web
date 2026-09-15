@@ -2,6 +2,7 @@ package org.traccar.forward.sutran;
 
 import java.util.List;
 
+@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public class SutranTransmissionResponse {
 
     public static class ValidationError {

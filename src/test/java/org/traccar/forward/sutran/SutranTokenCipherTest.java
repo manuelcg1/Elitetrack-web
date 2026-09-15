@@ -33,8 +33,9 @@ public class SutranTokenCipherTest {
     public void testTamperedCiphertextIsRejected() {
         SutranTokenCipher cipher = cipher(new byte[32]);
         String encrypted = cipher.encrypt(TOKEN);
-        char replacement = encrypted.endsWith("A") ? 'B' : 'A';
-        String tampered = encrypted.substring(0, encrypted.length() - 1) + replacement;
+        byte[] bytes = Base64.getUrlDecoder().decode(encrypted.substring("enc:v1:".length()));
+        bytes[bytes.length - 1] ^= 1;
+        String tampered = "enc:v1:" + Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
 
         assertThrows(IllegalArgumentException.class, () -> cipher.decrypt(tampered));
     }

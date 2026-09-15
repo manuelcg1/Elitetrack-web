@@ -1,0 +1,33 @@
+// Local validation only: keep logs held open by the user's existing test services.
+allprojects {
+    plugins.withId('java') {
+        tasks.withType(Test).configureEach {
+            def classpathFile = layout.buildDirectory.file('tmp/sutran-test-classpath.txt')
+            systemProperty 'sutran.test.classpathFile', classpathFile.get().asFile.absolutePath
+            doFirst {
+                classpathFile.get().asFile.parentFile.mkdirs()
+                classpathFile.get().asFile.text = sourceSets.test.runtimeClasspath.asPath
+            }
+        }
+        tasks.named('clean') {
+            setDelete(fileTree(layout.buildDirectory).matching {
+                exclude 'backend-update-backup/**', 'vite-recovery.*.log'
+            })
+        }
+    }
+    plugins.withId('checkstyle') {
+        tasks.register('checkstyleSutranChange', Checkstyle) {
+            configFile = file('gradle/checkstyle.xml')
+            checkstyleClasspath = configurations.checkstyle
+            classpath = files()
+            source = files(
+                'src/main/java/org/traccar/forward/sutran/SutranClient.java',
+                'src/main/java/org/traccar/forward/sutran/SutranDeliveryQueue.java',
+                'src/main/java/org/traccar/forward/sutran/SutranDeliveryResult.java',
+                'src/main/java/org/traccar/forward/sutran/SutranResponseCode.java',
+                'src/main/java/org/traccar/forward/sutran/SutranTransmissionResponse.java',
+                'src/main/java/org/traccar/forward/sutran/SutranOrderedDispatcher.java',
+                'src/main/java/org/traccar/handler/SutranForwardingHandler.java')
+        }
+    }
+}

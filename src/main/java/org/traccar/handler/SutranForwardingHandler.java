@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.traccar.forward.CatalogPositionForwarder;
 import org.traccar.forward.PositionData;
+import org.traccar.forward.sutran.SutranOrderedDispatcher;
 import org.traccar.model.Device;
 import org.traccar.model.Position;
 import org.traccar.session.cache.CacheManager;
@@ -18,7 +19,7 @@ public class SutranForwardingHandler extends BasePositionHandler {
 
     private final CacheManager cacheManager;
     private final CatalogPositionForwarder catalogPositionForwarder;
-    private final Executor executor;
+    private final SutranOrderedDispatcher<Long> dispatcher;
 
     @Inject
     public SutranForwardingHandler(
@@ -31,7 +32,7 @@ public class SutranForwardingHandler extends BasePositionHandler {
             CacheManager cacheManager, CatalogPositionForwarder catalogPositionForwarder, Executor executor) {
         this.cacheManager = cacheManager;
         this.catalogPositionForwarder = catalogPositionForwarder;
-        this.executor = executor;
+        this.dispatcher = new SutranOrderedDispatcher<>(executor);
     }
 
     @Override
@@ -40,9 +41,17 @@ public class SutranForwardingHandler extends BasePositionHandler {
         positionData.setPosition(position);
         positionData.setDevice(cacheManager.getObject(Device.class, position.getDeviceId()));
         try {
-            executor.execute(() -> catalogPositionForwarder.forwardSutran(positionData));
+            dispatcher.submit(position.getDeviceId(), completed -> {
+                try {
+                    catalogPositionForwarder.forwardSutran(positionData);
+                } catch (RuntimeException e) {
+                    LOGGER.warn("Unable to enqueue SUTRAN forwarding for device {}", position.getDeviceId());
+                } finally {
+                    completed.run();
+                }
+            });
         } catch (RuntimeException e) {
-            LOGGER.warn("Unable to schedule SUTRAN forwarding for device {}", position.getDeviceId(), e);
+            LOGGER.warn("Unable to schedule SUTRAN forwarding for device {}", position.getDeviceId());
         }
         callback.processed(false);
     }

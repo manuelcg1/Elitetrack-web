@@ -25,6 +25,35 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class SutranDeliveryQueueTest {
 
     @Test
+    public void testSamePlateWaitsForTerminalResultWhileOtherPlateContinues() {
+        var storage = new MemoryStorage();
+        var calls = new java.util.ArrayList<String>();
+        var callbacks = new java.util.ArrayList<Consumer<SutranSendResult>>();
+        var queue = new SutranDeliveryQueue(storage, new ObjectMapper(), (server, request, callback) -> {
+            calls.add(request.getPlate());
+            callbacks.add(callback);
+        });
+        var first = positionData("ABC123");
+        var second = positionData("ABC123");
+        second.getPosition().setId(100);
+        var other = positionData("XYZ789");
+        other.getPosition().setId(101);
+        queue.enqueue(server(), first);
+        queue.enqueue(server(), second);
+        queue.enqueue(server(), other);
+        assertEquals(java.util.List.of("ABC123", "XYZ789"), calls);
+        callbacks.get(0).accept(new SutranSendResult(new SutranDeliveryResult(
+                SutranDeliveryResult.Status.DELIVERED, 200, 2001, "S8J7e", null), 1));
+        assertEquals(java.util.List.of("ABC123", "XYZ789", "ABC123"), calls);
+        var delivery = storage.getObjects(ForwardDelivery.class, new Request(new Columns.All())).stream()
+                .filter(item -> item.getPositionId() == 99).findFirst().orElseThrow();
+        assertEquals("S8J7e", delivery.getCrc());
+        assertEquals(1, delivery.getAttempts());
+        org.junit.jupiter.api.Assertions.assertNull(delivery.getErrorMessage());
+        org.junit.jupiter.api.Assertions.assertNotNull(delivery.getSentTime());
+    }
+
+    @Test
     public void testDeliveredPositionIsPersistedOnce() throws Exception {
         AtomicInteger requests = new AtomicInteger();
         MemoryStorage storage = new MemoryStorage();
@@ -112,7 +141,49 @@ public class SutranDeliveryQueueTest {
     }
 
     @Test
-    public void testRecoveryResendsProcessingDelivery() throws Exception {
+    public void testRecoveryReadsBeyondFirstThousandDeliveries() throws Exception {
+        MemoryStorage storage = new MemoryStorage() {
+            @Override
+            public <T> java.util.List<T> getObjects(Class<T> type, Request request) {
+                var values = super.getObjects(type, request);
+                if (type == ForwardDelivery.class && request.getOrder() != null) {
+                    return values.stream().sorted(java.util.Comparator.comparingLong(
+                            value -> ((ForwardDelivery) value).getId()))
+                            .limit(request.getOrder().getLimit()).toList();
+                }
+                return values;
+            }
+        };
+        var server = server();
+        server.setId(storage.addObject(server, new Request(new Columns.Exclude("id"))));
+        var mapper = new ObjectMapper();
+        var payload = mapper.writeValueAsString(new SutranPayloadMapper().map(positionData("ABC123")));
+        for (int index = 1; index <= 1001; index++) {
+            var delivery = new ForwardDelivery();
+            delivery.setPositionId(index);
+            delivery.setServerId(server.getId());
+            delivery.setPayload(payload);
+            delivery.setCreatedTime(new Date(index));
+            delivery.setStatus(ForwardDelivery.STATUS_PENDING);
+            delivery.setId(storage.addObject(delivery, new Request(new Columns.Exclude("id"))));
+        }
+        var calls = new AtomicInteger();
+        var queue = new SutranDeliveryQueue(storage, mapper, (target, request, callback) -> {
+            calls.incrementAndGet();
+            callback.accept(new SutranSendResult(new SutranDeliveryResult(
+                    SutranDeliveryResult.Status.DELIVERED, 200, 2000, "ABC123", null), 1));
+        });
+        queue.recover();
+        assertEquals(1001, calls.get());
+    }
+
+    @Test
+    public void testRecoveryQuarantinesProcessingAndResumesPending() throws Exception {
+        testRecovery(ForwardDelivery.STATUS_PROCESSING);
+        testRecovery(ForwardDelivery.STATUS_PENDING);
+    }
+
+    private void testRecovery(String initialStatus) throws Exception {
         MemoryStorage storage = new MemoryStorage();
         ForwardServer server = server();
         long serverId = storage.addObject(server, new Request(new Columns.Exclude("id")));
@@ -122,7 +193,7 @@ public class SutranDeliveryQueueTest {
         ForwardDelivery delivery = new ForwardDelivery();
         delivery.setPositionId(99);
         delivery.setServerId(serverId);
-        delivery.setStatus(ForwardDelivery.STATUS_PROCESSING);
+        delivery.setStatus(initialStatus);
         delivery.setPayload(objectMapper.writeValueAsString(
                 new SutranPayloadMapper().map(positionData("CTM495"))));
         delivery.setCreatedTime(new Date());
@@ -138,10 +209,37 @@ public class SutranDeliveryQueueTest {
         });
 
         queue.recover();
+        queue.recover();
 
-        assertEquals(1, requests.get());
-        assertEquals(ForwardDelivery.STATUS_DELIVERED, storage.getObjects(
-                ForwardDelivery.class, new Request(new Columns.All())).get(0).getStatus());
+        var recoveredDelivery = storage.getObjects(
+                ForwardDelivery.class, new Request(new Columns.All())).get(0);
+        if (ForwardDelivery.STATUS_PROCESSING.equals(initialStatus)) {
+            assertEquals(0, requests.get());
+            assertEquals(ForwardDelivery.STATUS_FAILED, recoveredDelivery.getStatus());
+            assertEquals("SUTRAN_ACKNOWLEDGEMENT_UNKNOWN", recoveredDelivery.getErrorMessage());
+            org.junit.jupiter.api.Assertions.assertNull(recoveredDelivery.getSentTime());
+            org.junit.jupiter.api.Assertions.assertNull(recoveredDelivery.getCrc());
+            new SutranDeliveryQueue(storage, objectMapper, (target, request, handler) -> requests.incrementAndGet())
+                    .recover();
+            assertEquals(0, requests.get());
+        } else {
+            assertEquals(1, requests.get());
+            assertEquals(ForwardDelivery.STATUS_DELIVERED, recoveredDelivery.getStatus());
+        }
+    }
+
+    @Test
+    public void testCannotSendIfProcessingStateCannotBePersisted() throws Exception {
+        var storage = org.mockito.Mockito.mock(org.traccar.storage.Storage.class);
+        org.mockito.Mockito.when(storage.addObject(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(1L);
+        org.mockito.Mockito.doThrow(new org.traccar.storage.StorageException("Synthetic database failure"))
+                .when(storage).updateObject(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        var calls = new AtomicInteger();
+        var queue = new SutranDeliveryQueue(storage, new ObjectMapper(),
+                (server, request, handler) -> calls.incrementAndGet());
+        assertTrue(queue.enqueue(server(), positionData("ABC123")));
+        assertEquals(0, calls.get());
     }
 
     private ForwardServer server() {

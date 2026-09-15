@@ -35,11 +35,41 @@ public class SutranDeliveryResultTest {
     }
 
     @Test
-    public void testInvalidCrcIsNotDelivered() throws Exception {
+    public void testShortCrcIsPreserved() throws Exception {
         SutranDeliveryResult result = SutranDeliveryResult.classify(
                 200, response("{\"crc\":\"bad\",\"code\":2000,\"result\":\"OK\"}"));
 
-        assertEquals(SutranDeliveryResult.Status.RETRY, result.status());
+        assertEquals(SutranDeliveryResult.Status.DELIVERED, result.status());
+        assertEquals("bad", result.crc());
+        assertNull(result.message());
+    }
+
+    @Test
+    public void testHistoricalSuccessAndMissingCrcNeverRetry() throws Exception {
+        for (int code : new int[] {2000, 2001}) {
+            var delivered = SutranDeliveryResult.classify(200,
+                    response("{\"code\":" + code + ",\"crc\":\"S8J7e\",\"result\":\"OK\"}"));
+            assertEquals(SutranDeliveryResult.Status.DELIVERED, delivered.status());
+            assertEquals("S8J7e", delivered.crc());
+            assertNull(delivered.message());
+            var missing = SutranDeliveryResult.classify(200, response("{\"code\":" + code + "}"));
+            assertEquals(SutranDeliveryResult.Status.REJECTED, missing.status());
+            assertEquals(code, missing.responseCode());
+            assertNull(missing.crc());
+        }
+    }
+
+    @Test
+    public void testRemoteMessageIsNeverReflectedAndSuccessIsNotRetriedOnInconsistentHttp() throws Exception {
+        var rejected = SutranDeliveryResult.classify(400,
+                response("{\"code\":4002,\"result\":\"sensitive-synthetic-text\"}"));
+        org.junit.jupiter.api.Assertions.assertFalse(rejected.message().contains("sensitive-synthetic-text"));
+        for (int code : new int[] {2000, 2001}) {
+            var result = SutranDeliveryResult.classify(503,
+                    response("{\"code\":" + code + ",\"crc\":\"S8J7e\"}"));
+            assertEquals(SutranDeliveryResult.Status.REJECTED, result.status());
+            assertEquals("S8J7e", result.crc());
+        }
     }
 
     @Test

@@ -85,14 +85,60 @@ Compruebe que el master externo incluya `changelog-sutran-forwarding.xml`. No ed
 
 ### Alcance de reintentos y recuperación
 
-Cada entrega se persiste como `PENDING` antes de iniciar HTTP y cambia a `PROCESSING` al enviarse. Los
+Cada entrega se persiste como `PENDING` y debe guardar `PROCESSING` antes de iniciar HTTP. Si falla
+ese guardado, no sale ninguna petición. Los
 reintentos configurados por `maxAttempts` y `retryDelay` ocurren en memoria dentro de la misma ejecución.
-Si el proceso se reinicia mientras una entrega está `PENDING` o `PROCESSING`, se recupera al arrancar.
+En la instalación confirmada de una sola instancia, el arranque continúa las entregas `PENDING`.
+Las `PROCESSING` pasan a `FAILED` con `errormessage=SUTRAN_ACKNOWLEDGEMENT_UNKNOWN`: son resultados
+inciertos que requieren conciliación y nunca se reenvían automáticamente. Se conservan los demás
+datos disponibles, sin inventar CRC, senttime ni intentos. La interfaz distingue esta anomalía.
 Al agotar intentos queda `FAILED`; no existe un reintento diferido posterior de filas `FAILED`.
 
 La columna `nextAttempt` está reservada para una futura planificación persistente y permanece nula con
-la política actual. El CRC y `lastSent` solo se guardan cuando la respuesta es HTTP exitosa, contiene
-`code=2000` y un CRC válido de seis caracteres.
+la política actual. El CRC y `lastSent` se guardan cuando la respuesta es HTTP exitosa, contiene
+`code=2000` o `code=2001` y un CRC no vacío. `2001` es una entrega histórica: no actualiza los datos
+actuales de la placa. Ambos son terminales y no se reintentan. El CRC se conserva exactamente;
+una longitud/formato distinto al documentado genera un aviso sin imprimir el valor.
+
+Un acuse `2000`/`2001` sin CRC o con HTTP contradictorio queda como `REJECTED` por compatibilidad
+de almacenamiento, con código y diagnóstico de anomalía terminal; no significa rechazo remoto.
+La interfaz lo distingue con una advertencia y no reenvía. No se inventa un CRC ni se reclasifican
+automáticamente entregas antiguas. La migración aditiva `changelog-sutran-crc.xml` amplía la columna
+a texto para evitar truncar valores de longitud no documentada; `VARCHAR(6)` ya admitía cinco caracteres.
+
+El despachador mantiene FIFO por dispositivo para encolar y por destino/placa para enviar. Mantiene
+ocupada la segunda cola hasta terminar todos los reintentos de la entrega. Las placas distintas
+pueden continuar y el callback GPS no espera HTTP. Se reutiliza el ejecutor administrado de Traccar;
+no se crean hilos de aplicación adicionales. El cierre existente usa `shutdown`, sin garantía de
+drenaje completo. Las colas son locales al proceso: no constituyen un bloqueo distribuido.
+
+El orden es el de entrada, no una corrección de `time_device`: una posición atrasada recibida después
+puede legítimamente obtener `2001`. La recuperación recorre páginas de 1000 filas por ID ascendente,
+sin detenerse después de la primera página y sin usar offsets sensibles a cambios de estado.
+Cada inicio de intento se guarda antes de HTTP; si falla ese registro, no se hace la llamada.
+Un inicio registrado no prueba recepción remota y una caída puede dejar un acuse sin persistir.
+Sin idempotencia remota no se puede garantizar entrega
+exactamente una vez en esa ventana. La nueva recuperación bloquea su reenvío, incluso cuando la
+caída pudo ocurrir antes de enviar: se prioriza evitar duplicados frente al reenvío a ciegas.
+
+Los barridos se repiten cada 30 segundos. Reservan y releen cada entrega, excluyendo el trabajo
+activo de esta instancia. Un fallo conocido anterior a HTTP conserva su turno por placa mientras
+espera la recuperación de la base: las posiciones nuevas no lo adelantan. Los demás vehículos
+pueden seguir. lastSent solo se publica después del acuse durable; si falla su actualización,
+el indicador puede quedar atrasado y la entrega persistida es la evidencia autoritativa.
+
+Este procedimiento está diseñado para una instancia. No es válido arrancar otra instancia contra
+la misma cola: podría interpretar como interrumpido el trabajo activo de la primera. Si se cambia
+esa topología, se requiere coordinación distribuida antes de habilitar SUTRAN en el segundo proceso.
+
+En la primera actualización, revisar aparte las filas `PENDING` creadas por versiones antiguas:
+esas versiones podían enviar aunque fallara el guardado de `PROCESSING`. No se puede demostrar
+retroactivamente que ninguna de esas filas llegó al servicio. No se reclasifican automáticamente.
+
+Antes de iniciar una entrega encolada se vuelve a leer la configuración del destino. Una desactivación
+impide ese nuevo envío; una llamada o serie de reintentos ya iniciada conserva su configuración.
+Retirar una asignación impide nuevos encolamientos tras la recarga administrativa, pero no elimina
+entregas que ya estaban persistidas. No exponer los payloads de esas entregas en logs ni informes.
 
 ### Fuente de la placa
 

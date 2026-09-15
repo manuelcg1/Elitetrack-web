@@ -32,14 +32,7 @@ import fetchOrThrow from '../../common/util/fetchOrThrow';
 import { formatTime } from '../../common/util/formatter';
 import ForwardServerDialog from './ForwardServerDialog';
 import { useManager } from '../../common/util/permissions';
-
-const deliveryStatusLabels = {
-  PENDING: 'Pendiente',
-  PROCESSING: 'Procesando',
-  DELIVERED: 'Entregado',
-  REJECTED: 'Rechazado',
-  FAILED: 'Fallido',
-};
+import { sutranDeliveryPresentation } from './sutranDeliveryPresentation';
 
 const ForwarderPage = () => {
   const manager = useManager();
@@ -407,22 +400,18 @@ const ForwarderPage = () => {
                       )}
                       {server.type === 'SUTRAN_V2' && latestDelivery && (
                         <Alert
-                          severity={
-                            latestDelivery.status === 'DELIVERED'
-                              ? 'success'
-                              : ['FAILED', 'REJECTED'].includes(latestDelivery.status)
-                                ? 'error'
-                                : 'warning'
-                          }
+                          severity={sutranDeliveryPresentation(latestDelivery).severity}
                           sx={{ mb: 1.5 }}
                         >
-                          Última entrega:{' '}
-                          {deliveryStatusLabels[latestDelivery.status] || latestDelivery.status}
+                          Última entrega: {sutranDeliveryPresentation(latestDelivery).label}
+                          {` · intentos iniciados ${latestDelivery.attempts ?? 0}`}
                           {latestDelivery.crc ? ` · CRC ${latestDelivery.crc}` : ''}
                           {latestDelivery.responseCode
                             ? ` · código ${latestDelivery.responseCode}`
                             : ''}
-                          {latestDelivery.errorMessage ? ` · ${latestDelivery.errorMessage}` : ''}
+                          {sutranDeliveryPresentation(latestDelivery).error
+                            ? ` · ${sutranDeliveryPresentation(latestDelivery).error}`
+                            : ''}
                         </Alert>
                       )}
                       {serverDevices.length === 0 ? (

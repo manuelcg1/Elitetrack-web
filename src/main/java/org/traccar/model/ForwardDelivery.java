@@ -13,6 +13,7 @@ public class ForwardDelivery extends BaseModel {
     public static final String STATUS_RETRY = "RETRY";
     public static final String STATUS_REJECTED = "REJECTED";
     public static final String STATUS_FAILED = "FAILED";
+    public static final String ERROR_ACKNOWLEDGEMENT_UNKNOWN = "SUTRAN_ACKNOWLEDGEMENT_UNKNOWN";
 
     private long positionId;
 

@@ -27,6 +27,27 @@ public class SutranMigrationTest {
         }
 
         try (var connection = DriverManager.getConnection(url, "sa", "")) {
+            try (var statement = connection.createStatement()) {
+                statement.executeUpdate("INSERT INTO tc_forward_servers (id,name,ipdominio)"
+                        + " VALUES (9001,'Synthetic','http://127.0.0.1')");
+            }
+            try (var insert = connection.prepareStatement("INSERT INTO tc_forward_deliveries"
+                    + " (positionid,serverid,status,payload,crc,createdtime,updatedtime)"
+                    + " VALUES (?,9001,'DELIVERED','{}',?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)")) {
+                for (var crc : java.util.List.of("S8J7e", "ABC123", "SyntheticLongCrc")) {
+                    insert.setLong(1, crc.length());
+                    insert.setString(2, crc);
+                    insert.executeUpdate();
+                    try (var query = connection.prepareStatement(
+                            "SELECT crc FROM tc_forward_deliveries WHERE positionid=?")) {
+                        query.setLong(1, crc.length());
+                        try (var rows = query.executeQuery()) {
+                            assertTrue(rows.next());
+                            org.junit.jupiter.api.Assertions.assertEquals(crc, rows.getString(1));
+                        }
+                    }
+                }
+            }
             var metadata = connection.getMetaData();
             assertTrue(metadata.getTables(null, null, "TC_FORWARD_DELIVERIES", null).next());
             assertTrue(metadata.getColumns(null, null, "TC_FORWARD_SERVERS", "TYPE").next());

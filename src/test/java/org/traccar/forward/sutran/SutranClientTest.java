@@ -44,6 +44,66 @@ public class SutranClientTest {
     }
 
     @Test
+    public void testAttemptGuardRunsBeforeEveryHttpAndBlocksUnrecordedRetry() throws Exception {
+        var requests = new AtomicInteger();
+        var registered = new AtomicInteger();
+        var server = server(exchange -> {
+            assertEquals(1, registered.get());
+            requests.incrementAndGet();
+            respond(exchange, 503, "Unavailable");
+        });
+        var finished = new CountDownLatch(1);
+        var result = new AtomicReference<SutranSendResult>();
+        client(server, 3, 1, 1000).sendTracked(request(), attempt -> {
+            if (attempt == 2) {
+                return false;
+            }
+            registered.incrementAndGet();
+            return true;
+        }, value -> {
+            result.set(value);
+            finished.countDown();
+        });
+        assertTrue(finished.await(5, TimeUnit.SECONDS));
+        assertEquals(1, requests.get());
+        assertEquals(1, result.get().attempts());
+        assertEquals(SutranDeliveryResult.Status.RETRY, result.get().result().status());
+    }
+
+    @Test
+    public void testBothSuccessCodesAreTerminalWithOrWithoutCrc() throws Exception {
+        for (int code : new int[] {2000, 2001}) {
+            for (boolean withCrc : new boolean[] {true, false}) {
+                AtomicInteger requests = new AtomicInteger();
+                HttpServer server = server(exchange -> {
+                    requests.incrementAndGet();
+                    respond(exchange, 200, "{\"code\":" + code + ",\"result\":\"OK\""
+                            + (withCrc ? ",\"crc\":\"S8J7e\"" : "") + "}");
+                });
+                var sent = sendTracked(client(server, 3, 1, 1000), request());
+                assertEquals(1, sent.attempts());
+                assertEquals(1, requests.get());
+                assertEquals(code, sent.result().responseCode());
+                assertEquals(withCrc ? SutranDeliveryResult.Status.DELIVERED
+                        : SutranDeliveryResult.Status.REJECTED, sent.result().status());
+            }
+        }
+    }
+
+    @Test
+    public void testHttp5xxStopsAtMaximumAttempts() throws Exception {
+        AtomicInteger requests = new AtomicInteger();
+        var server = server(exchange -> {
+            requests.incrementAndGet();
+            respond(exchange, 503, "Unavailable");
+        });
+        var result = sendTracked(client(server, 2, 1, 1000), request());
+        assertEquals(2, requests.get());
+        assertEquals(2, result.attempts());
+        assertEquals(SutranDeliveryResult.Status.RETRY, result.result().status());
+    }
+
+    @Test
     public void testSuccessfulRequestContract() throws Exception {
         AtomicReference<String> token = new AtomicReference<>();
         AtomicReference<String> contentType = new AtomicReference<>();

@@ -80,17 +80,29 @@ public class SutranClient {
     }
 
     public void sendTracked(SutranTransmissionRequest request, Consumer<SutranSendResult> resultHandler) {
+        sendTracked(request, attempt -> true, resultHandler);
+    }
+
+    public void sendTracked(SutranTransmissionRequest request, java.util.function.IntPredicate beforeAttempt,
+            Consumer<SutranSendResult> resultHandler) {
         Objects.requireNonNull(request);
         Objects.requireNonNull(resultHandler);
         try {
-            send(objectMapper.writeValueAsString(request), 1, resultHandler);
+            send(objectMapper.writeValueAsString(request), 1, beforeAttempt, resultHandler);
         } catch (JsonProcessingException e) {
             resultHandler.accept(new SutranSendResult(new SutranDeliveryResult(
                     SutranDeliveryResult.Status.REJECTED, 0, null, null, "Unable to create SUTRAN JSON"), 0));
         }
     }
 
-    private void send(String payload, int attempt, Consumer<SutranSendResult> resultHandler) {
+    private void send(String payload, int attempt, java.util.function.IntPredicate beforeAttempt,
+            Consumer<SutranSendResult> resultHandler) {
+        if (!beforeAttempt.test(attempt)) {
+            resultHandler.accept(new SutranSendResult(new SutranDeliveryResult(
+                    SutranDeliveryResult.Status.RETRY, 0, null, null,
+                    "SUTRAN attempt could not be persisted; HTTP blocked"), attempt - 1));
+            return;
+        }
         try {
             client.target(endpoint)
                     .property(ClientProperties.CONNECT_TIMEOUT, connectTimeout)
@@ -104,7 +116,7 @@ public class SutranClient {
                             try {
                                 SutranDeliveryResult result = SutranDeliveryResult.classify(
                                         response.getStatus(), parseResponse(response));
-                                finish(payload, attempt, result, resultHandler);
+                                finish(payload, attempt, result, beforeAttempt, resultHandler);
                             } finally {
                                 response.close();
                             }
@@ -112,11 +124,11 @@ public class SutranClient {
 
                         @Override
                         public void failed(Throwable throwable) {
-                            finish(payload, attempt, transportFailure(throwable), resultHandler);
+                            finish(payload, attempt, transportFailure(throwable), beforeAttempt, resultHandler);
                         }
                     });
         } catch (RuntimeException e) {
-            finish(payload, attempt, transportFailure(e), resultHandler);
+            finish(payload, attempt, transportFailure(e), beforeAttempt, resultHandler);
         }
     }
 
@@ -126,18 +138,19 @@ public class SutranClient {
         }
         try {
             return objectMapper.readValue(response.readEntity(String.class), SutranTransmissionResponse.class);
-        } catch (JsonProcessingException | IllegalStateException e) {
+        } catch (JsonProcessingException | IllegalStateException | jakarta.ws.rs.ProcessingException e) {
             return null;
         }
     }
 
     private void finish(
             String payload, int attempt, SutranDeliveryResult result,
-            Consumer<SutranSendResult> resultHandler) {
+            java.util.function.IntPredicate beforeAttempt, Consumer<SutranSendResult> resultHandler) {
         if (result.status() == SutranDeliveryResult.Status.RETRY && attempt < maximumAttempts) {
             long delay = retryDelay(attempt);
             try {
-                scheduler.schedule(() -> send(payload, attempt + 1, resultHandler), delay, TimeUnit.MILLISECONDS);
+                scheduler.schedule(() -> send(payload, attempt + 1, beforeAttempt, resultHandler),
+                        delay, TimeUnit.MILLISECONDS);
             } catch (RuntimeException e) {
                 resultHandler.accept(new SutranSendResult(transportFailure(e), attempt));
             }

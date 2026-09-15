@@ -35,6 +35,13 @@ public class SutranDeliveryQueue {
                 java.util.function.Consumer<SutranSendResult> handler);
     }
 
+    @FunctionalInterface
+    interface TrackedSender {
+        void send(ForwardServer server, SutranTransmissionRequest request,
+                java.util.function.IntPredicate beforeAttempt,
+                java.util.function.Consumer<SutranSendResult> handler);
+    }
+
     private static final Logger LOGGER = LoggerFactory.getLogger(SutranDeliveryQueue.class);
     private static final int RECOVERY_LIMIT = 1000;
     private static final long MAXIMUM_RETRY_DELAY = 60000;
@@ -42,25 +49,52 @@ public class SutranDeliveryQueue {
 
     private final Storage storage;
     private final ObjectMapper objectMapper;
-    private final Sender sender;
+    private final TrackedSender sender;
+    private final ScheduledExecutorService scheduler;
+    private final java.util.Set<Long> activeDeliveries = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final java.util.Set<Long> knownUnsentDeliveries = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final java.util.Map<Long, Runnable> deferredDeliveries = new java.util.concurrent.ConcurrentHashMap<>();
+    private final AtomicBoolean recoveryScheduled = new AtomicBoolean();
     private final SutranPayloadMapper payloadMapper = new SutranPayloadMapper();
-    private final AtomicBoolean recovered = new AtomicBoolean();
-    private final java.util.concurrent.atomic.AtomicLong invalidIdLogTime = new java.util.concurrent.atomic.AtomicLong();
+    private final AtomicBoolean recovering = new AtomicBoolean();
+    private final java.util.concurrent.atomic.AtomicLong invalidIdLogTime =
+            new java.util.concurrent.atomic.AtomicLong();
     private final boolean transmissionAllowed;
+    private record Lane(long serverId, String plate) { }
+    private final SutranOrderedDispatcher<Lane> dispatcher;
 
     @Inject
     public SutranDeliveryQueue(
             Storage storage, Client client, ObjectMapper objectMapper, ScheduledExecutorService scheduler,
-            SutranTokenCipher tokenCipher, Config config) {
+            SutranTokenCipher tokenCipher, Config config, java.util.concurrent.ExecutorService executor) {
         this.storage = storage;
         this.objectMapper = objectMapper;
+        this.scheduler = scheduler;
+        this.dispatcher = new SutranOrderedDispatcher<>(executor);
         this.transmissionAllowed = config.getBoolean(Keys.SUTRAN_TRANSMISSION_ENABLED);
-        this.sender = (server, request, handler) -> {
+        this.sender = (server, request, beforeAttempt, handler) -> {
+            ForwardServer current;
+            try {
+                current = storage.getObject(ForwardServer.class,
+                        new Request(new Columns.All(), new Condition.Equals("id", server.getId())));
+            } catch (StorageException e) {
+                handler.accept(new SutranSendResult(new SutranDeliveryResult(
+                        SutranDeliveryResult.Status.RETRY, 0, null, null,
+                        "Unable to verify SUTRAN destination before sending"), 0));
+                return;
+            }
+            if (current == null || !current.getActive() || !current.getTransmissionEnabled()
+                    || !ForwardServer.TYPE_SUTRAN_V2.equals(current.getType())) {
+                handler.accept(new SutranSendResult(new SutranDeliveryResult(
+                        SutranDeliveryResult.Status.REJECTED, 0, null, null,
+                        "SUTRAN destination disabled before sending"), 0));
+                return;
+            }
             SutranClient sutranClient = new SutranClient(
-                    client, objectMapper, scheduler, SutranEnvironment.valueOf(server.getEnvironment()),
-                    tokenCipher.decrypt(server.getApiKey()), server.getConnectTimeout(), server.getReadTimeout(),
-                    server.getMaxAttempts(), server.getRetryDelay(), MAXIMUM_RETRY_DELAY);
-            sutranClient.sendTracked(request, handler);
+                    client, objectMapper, scheduler, SutranEnvironment.valueOf(current.getEnvironment()),
+                    tokenCipher.decrypt(current.getApiKey()), current.getConnectTimeout(), current.getReadTimeout(),
+                    current.getMaxAttempts(), current.getRetryDelay(), MAXIMUM_RETRY_DELAY);
+            sutranClient.sendTracked(request, beforeAttempt, handler);
         };
     }
 
@@ -69,9 +103,20 @@ public class SutranDeliveryQueue {
     }
 
     SutranDeliveryQueue(Storage storage, ObjectMapper objectMapper, Sender sender, boolean transmissionAllowed) {
+        this(storage, objectMapper, (server, request, beforeAttempt, handler) -> {
+            if (beforeAttempt.test(1)) {
+                sender.send(server, request, handler);
+            }
+        }, transmissionAllowed, null, Runnable::run);
+    }
+
+    SutranDeliveryQueue(Storage storage, ObjectMapper objectMapper, TrackedSender sender,
+            boolean transmissionAllowed, ScheduledExecutorService scheduler, java.util.concurrent.Executor executor) {
         this.storage = storage;
         this.objectMapper = objectMapper;
         this.sender = sender;
+        this.scheduler = scheduler;
+        this.dispatcher = new SutranOrderedDispatcher<>(executor);
         this.transmissionAllowed = transmissionAllowed;
     }
 
@@ -83,28 +128,105 @@ public class SutranDeliveryQueue {
         if (!transmissionAllowed) {
             return;
         }
-        if (!recovered.compareAndSet(false, true)) {
+        if (!recovering.compareAndSet(false, true)) {
             return;
         }
         try {
+            // Keep the lane occupied while a known-unsent predecessor waits for storage recovery.
+            // Snapshot prevents one failed retry from being attempted repeatedly in the same sweep.
+            for (var entry : new java.util.ArrayList<>(deferredDeliveries.entrySet())) {
+                if (deferredDeliveries.remove(entry.getKey(), entry.getValue())) {
+                    entry.getValue().run();
+                }
+            }
             Condition condition = new Condition.Or(
                     new Condition.Equals("status", ForwardDelivery.STATUS_PENDING),
                     new Condition.Equals("status", ForwardDelivery.STATUS_PROCESSING));
-            for (ForwardDelivery delivery : storage.getObjects(
-                    ForwardDelivery.class,
-                    new Request(new Columns.All(), condition, new Order("createdTime", false, RECOVERY_LIMIT)))) {
-                ForwardServer server = storage.getObject(
-                        ForwardServer.class,
-                        new Request(new Columns.All(), new Condition.Equals("id", delivery.getServerId())));
-                if (server != null && server.getActive()
-                        && server.getTransmissionEnabled()
-                        && ForwardServer.TYPE_SUTRAN_V2.equals(server.getType())) {
-                    send(server, delivery);
+            long lastId = 0;
+            while (true) {
+                // Keyset pagination stays stable while callbacks change delivery statuses.
+                var page = storage.getObjects(ForwardDelivery.class, new Request(new Columns.All(),
+                        new Condition.And(condition, new Condition.Compare("id", ">", lastId)),
+                        new Order("id", false, RECOVERY_LIMIT)));
+                if (page.isEmpty()) {
+                    break;
+                }
+                for (ForwardDelivery delivery : page) {
+                    lastId = Math.max(lastId, delivery.getId());
+                    recoverDelivery(delivery.getId());
                 }
             }
         } catch (StorageException e) {
             LOGGER.warn("SUTRAN delivery recovery failed");
+        } finally {
+            recovering.set(false);
+            scheduleRecovery();
         }
+    }
+
+    private void scheduleRecovery() {
+        if (scheduler != null && recoveryScheduled.compareAndSet(false, true)) {
+            try {
+                scheduler.schedule(() -> {
+                    recoveryScheduled.set(false);
+                    recover();
+                }, 30, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (java.util.concurrent.RejectedExecutionException e) {
+                recoveryScheduled.set(false);
+                LOGGER.warn("SUTRAN recovery scheduler unavailable; restart recovery required");
+            }
+        }
+    }
+
+    private void recoverDelivery(long id) throws StorageException {
+        if (!activeDeliveries.add(id)) {
+            return;
+        }
+        boolean dispatched = false;
+        try {
+            // Re-read after reserving: a callback may have committed since the page was read.
+            ForwardDelivery delivery = storage.getObject(ForwardDelivery.class,
+                    new Request(new Columns.All(), new Condition.Equals("id", id)));
+            if (delivery == null) {
+                knownUnsentDeliveries.remove(id);
+                return;
+            }
+            if (knownUnsentDeliveries.contains(id) && ForwardDelivery.STATUS_PROCESSING.equals(delivery.getStatus())) {
+                // This process observed the preflight failure before HTTP. After a restart this
+                // in-memory evidence is gone, so PROCESSING remains conservatively uncertain.
+                delivery.setStatus(ForwardDelivery.STATUS_PENDING);
+                if (!update(delivery, new Columns.Include("status"))) {
+                    return;
+                }
+            }
+            if (ForwardDelivery.STATUS_PROCESSING.equals(delivery.getStatus())) {
+                quarantineInterruptedDelivery(delivery);
+            } else if (ForwardDelivery.STATUS_PENDING.equals(delivery.getStatus())) {
+                ForwardServer server = storage.getObject(ForwardServer.class,
+                        new Request(new Columns.All(), new Condition.Equals("id", delivery.getServerId())));
+                if (server != null && server.getActive() && server.getTransmissionEnabled()
+                        && ForwardServer.TYPE_SUTRAN_V2.equals(server.getType())) {
+                    sendReserved(server, delivery);
+                    dispatched = true;
+                }
+            }
+        } finally {
+            if (!dispatched) {
+                activeDeliveries.remove(id);
+            }
+        }
+    }
+
+    private void quarantineInterruptedDelivery(ForwardDelivery delivery) {
+        // Single-instance startup only: the previous process may have sent this record.
+        // Keep all available evidence; lack of a durable acknowledgement is not proof of rejection.
+        delivery.setStatus(ForwardDelivery.STATUS_FAILED);
+        delivery.setErrorMessage(ForwardDelivery.ERROR_ACKNOWLEDGEMENT_UNKNOWN);
+        delivery.setNextAttempt(null);
+        delivery.setUpdatedTime(new Date());
+        update(delivery, new Columns.Include("status", "errorMessage", "nextAttempt", "updatedTime"));
+        LOGGER.warn("SUTRAN delivery {} requires acknowledgement reconciliation; automatic resend blocked",
+                delivery.getId());
     }
 
     public boolean enqueue(ForwardServer server, PositionData positionData) {
@@ -133,7 +255,7 @@ public class SutranDeliveryQueue {
         } catch (IllegalArgumentException | JsonProcessingException e) {
             delivery.setStatus(ForwardDelivery.STATUS_REJECTED);
             delivery.setPayload("{}");
-            delivery.setErrorMessage(safeMessage(e.getMessage()));
+            delivery.setErrorMessage("SUTRAN position validation or serialization failed");
         }
 
         try {
@@ -153,9 +275,8 @@ public class SutranDeliveryQueue {
         long previous = invalidIdLogTime.get();
         if (now - previous >= INVALID_ID_LOG_INTERVAL && invalidIdLogTime.compareAndSet(previous, now)) {
             LOGGER.warn(
-                    "SUTRAN delivery not queued: deviceId={}, device={}, serverId={}, reason=position has no persisted id",
+                    "SUTRAN delivery not queued: deviceId={}, serverId={}, reason=position has no persisted id",
                     positionData.getDevice() != null ? positionData.getDevice().getId() : 0,
-                    positionData.getDevice() != null ? positionData.getDevice().getName() : "unknown",
                     server.getId());
         }
     }
@@ -173,47 +294,130 @@ public class SutranDeliveryQueue {
     }
 
     private void send(ForwardServer server, ForwardDelivery delivery) {
+        if (!activeDeliveries.add(delivery.getId())) {
+            return;
+        }
+        try {
+            var current = storage.getObject(ForwardDelivery.class,
+                    new Request(new Columns.All(), new Condition.Equals("id", delivery.getId())));
+            if (current != null && ForwardDelivery.STATUS_PENDING.equals(current.getStatus())) {
+                sendReserved(server, current);
+                return;
+            }
+        } catch (StorageException e) {
+            LOGGER.warn("SUTRAN delivery could not be verified before dispatch");
+        }
+        activeDeliveries.remove(delivery.getId());
+    }
+
+    private void sendReserved(ForwardServer server, ForwardDelivery delivery) {
         SutranTransmissionRequest request;
         try {
             request = objectMapper.readValue(delivery.getPayload(), SutranTransmissionRequest.class);
         } catch (JsonProcessingException e) {
             updateRejected(delivery, "Stored SUTRAN payload is invalid");
+            activeDeliveries.remove(delivery.getId());
             return;
         }
 
+        dispatcher.submit(new Lane(server.getId(), request.getPlate()), laneCompleted -> {
+            Runnable completed = () -> {
+                deferredDeliveries.remove(delivery.getId());
+                activeDeliveries.remove(delivery.getId());
+                laneCompleted.run();
+            };
+            try {
+                sendOrdered(server, delivery, request, completed);
+            } catch (RuntimeException e) {
+                updateRejected(delivery, "SUTRAN dispatch failed before acknowledgement");
+                completed.run();
+            }
+        }, () -> activeDeliveries.remove(delivery.getId()));
+    }
+
+    private void sendOrdered(ForwardServer server, ForwardDelivery delivery,
+            SutranTransmissionRequest request, Runnable completed) {
         delivery.setStatus(ForwardDelivery.STATUS_PROCESSING);
         delivery.setUpdatedTime(new Date());
-        update(delivery, new Columns.Include("status", "updatedTime"));
+        if (!update(delivery, new Columns.Include("status", "updatedTime"))) {
+            // Never put an HTTP request on the wire without a durable in-flight marker.
+            deferUnsent(server, delivery, request, completed);
+            return;
+        }
 
         try {
-            sender.send(server, request, result -> updateResult(delivery, result));
+            int initialAttempts = delivery.getAttempts();
+            sender.send(server, request, attempt -> {
+                int previous = delivery.getAttempts();
+                delivery.setAttempts(initialAttempts + attempt);
+                delivery.setUpdatedTime(new Date());
+                if (!update(delivery, new Columns.Include("attempts", "updatedTime"))) {
+                    delivery.setAttempts(previous);
+                    return false;
+                }
+                knownUnsentDeliveries.remove(delivery.getId());
+                return true;
+            }, result -> {
+                try {
+                    updateResult(delivery, result);
+                } finally {
+                    if (result.result().status() == SutranDeliveryResult.Status.RETRY && result.attempts() == 0) {
+                        deferUnsent(server, delivery, request, completed);
+                    } else {
+                        completed.run();
+                    }
+                }
+            });
         } catch (IllegalArgumentException e) {
-            updateRejected(delivery, e.getMessage());
+            updateRejected(delivery, "SUTRAN configuration is invalid");
+            completed.run();
         }
+    }
+
+    private void deferUnsent(ForwardServer server, ForwardDelivery delivery,
+            SutranTransmissionRequest request, Runnable completed) {
+        knownUnsentDeliveries.add(delivery.getId());
+        deferredDeliveries.put(delivery.getId(), () -> {
+            try {
+                sendOrdered(server, delivery, request, completed);
+            } catch (RuntimeException e) {
+                updateRejected(delivery, "SUTRAN deferred dispatch failed before acknowledgement");
+                completed.run();
+            }
+        });
+        scheduleRecovery();
     }
 
     private void updateResult(ForwardDelivery delivery, SutranSendResult sendResult) {
         SutranDeliveryResult result = sendResult.result();
-        delivery.setAttempts(delivery.getAttempts() + sendResult.attempts());
         delivery.setHttpStatus(result.httpStatus() > 0 ? result.httpStatus() : null);
         delivery.setResponseCode(result.responseCode());
         delivery.setCrc(result.crc());
         delivery.setErrorMessage(safeMessage(result.message()));
         delivery.setNextAttempt(null);
         delivery.setUpdatedTime(new Date());
-        if (result.status() == SutranDeliveryResult.Status.DELIVERED) {
+        if (result.status() == SutranDeliveryResult.Status.RETRY && sendResult.attempts() == 0) {
+            // Zero attempts is supplied only by preflight/attempt-guard failures, before HTTP.
+            knownUnsentDeliveries.add(delivery.getId());
+            delivery.setStatus(ForwardDelivery.STATUS_PENDING);
+        } else if (result.status() == SutranDeliveryResult.Status.DELIVERED) {
             delivery.setStatus(ForwardDelivery.STATUS_DELIVERED);
             delivery.setSentTime(new Date());
             delivery.setErrorMessage(null);
-            updateLastSent(delivery);
         } else if (result.status() == SutranDeliveryResult.Status.REJECTED) {
             delivery.setStatus(ForwardDelivery.STATUS_REJECTED);
         } else {
             delivery.setStatus(ForwardDelivery.STATUS_FAILED);
         }
-        update(delivery, new Columns.Include(
+        boolean saved = update(delivery, new Columns.Include(
                 "status", "attempts", "nextAttempt", "httpStatus", "responseCode", "crc",
                 "errorMessage", "sentTime", "updatedTime"));
+        if (saved) {
+            knownUnsentDeliveries.remove(delivery.getId());
+        }
+        if (saved && ForwardDelivery.STATUS_DELIVERED.equals(delivery.getStatus())) {
+            updateLastSent(delivery);
+        }
     }
 
     private void updateLastSent(ForwardDelivery delivery) {
@@ -230,7 +434,7 @@ public class SutranDeliveryQueue {
             DeviceForwardServer assignment = storage.getObject(
                     DeviceForwardServer.class, new Request(new Columns.Include("id"), assignmentCondition));
             if (assignment != null) {
-                assignment.setLastSent(new Date());
+                assignment.setLastSent(delivery.getSentTime());
                 storage.updateObject(
                         assignment,
                         new Request(new Columns.Include("lastSent"), new Condition.Equals("id", assignment.getId())));
@@ -247,11 +451,13 @@ public class SutranDeliveryQueue {
         update(delivery, new Columns.Include("status", "errorMessage", "updatedTime"));
     }
 
-    private void update(ForwardDelivery delivery, Columns columns) {
+    private boolean update(ForwardDelivery delivery, Columns columns) {
         try {
             storage.updateObject(delivery, new Request(columns, new Condition.Equals("id", delivery.getId())));
+            return true;
         } catch (StorageException e) {
             LOGGER.warn("SUTRAN delivery status update failed for delivery {}", delivery.getId());
+            return false;
         }
     }
 
