@@ -14,6 +14,7 @@ import {
   updateSmartVehicleMarkerElement,
 } from './SmartVehicleMarker';
 import { getVehicleStatus } from './utils/vehicleStatus';
+import { getVisibleDeviceIds } from './utils/markerVisibility';
 import './SmartVehicleMarker.css';
 
 const DEBUG_MARKER_ANCHOR = false;
@@ -93,11 +94,9 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, selectedPosition }
   const mapCluster = useAttributePreference('mapCluster', true);
   const directionType = useAttributePreference('mapDirection', 'selected');
   const selectedDeviceIdRef = useRef(selectedDeviceId);
-  const mapClusterRef = useRef(mapCluster);
   const onMarkerClickRef = useRef(onMarkerClick);
 
   selectedDeviceIdRef.current = selectedDeviceId;
-  mapClusterRef.current = mapCluster;
   onMarkerClickRef.current = onMarkerClick;
 
   const showDirection = useCallback(
@@ -175,45 +174,16 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, selectedPosition }
 
     const detail = getSmartMarkerDetail(map.getZoom());
     const currentSelectedDeviceId = selectedDeviceIdRef.current;
-    const currentMapCluster = mapClusterRef.current;
-    const wanted = new Set();
     const bounds = map.getBounds();
     const isVisible = (item) => {
       const lngLat = getMarkerLngLat(item);
       return !!lngLat && bounds.contains(lngLat);
     };
 
-    try {
-      map
-        .querySourceFeatures(id)
-        .filter((feature) => !feature.properties?.point_count)
-        .forEach((feature) => {
-          const featureLngLat = getMarkerLngLat(feature);
-          const deviceId = Number(feature.properties?.deviceId);
-          const data = markerDataRef.current.get(deviceId);
-          if (featureLngLat && data && isVisible(data.position)) {
-            wanted.add(deviceId);
-          }
-        });
-    } catch {
-      markerDataRef.current.forEach((_, deviceId) => {
-        const data = markerDataRef.current.get(deviceId);
-        if (
-          data &&
-          isVisible(data.position) &&
-          (!currentMapCluster || deviceId !== currentSelectedDeviceId)
-        ) {
-          wanted.add(deviceId);
-        }
-      });
-    }
-    if (!wanted.size && (!currentMapCluster || map.getZoom() >= 14)) {
-      markerDataRef.current.forEach((data, deviceId) => {
-        if (isVisible(data.position) && deviceId !== currentSelectedDeviceId) {
-          wanted.add(deviceId);
-        }
-      });
-    }
+    const wanted = getVisibleDeviceIds({
+      markerData: markerDataRef.current,
+      isVisible,
+    });
 
     if (currentSelectedDeviceId && markerDataRef.current.has(currentSelectedDeviceId)) {
       const data = markerDataRef.current.get(currentSelectedDeviceId);
