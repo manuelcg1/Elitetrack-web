@@ -169,9 +169,7 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, selectedPosition }
 
   const updateSmartMarkers = useCallback(() => {
     const source = map.getSource(id);
-    // Conservar la ultima visibilidad mientras MapLibre reconstruye la fuente.
-    // Consultarla durante ese intervalo produce resultados parciales y parpadeos.
-    if (!source || !map.isSourceLoaded(id)) {
+    if (!source) {
       return;
     }
 
