@@ -1,9 +1,10 @@
 import { Autocomplete, Snackbar, TextField } from '@mui/material';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useCatchCallback, useEffectAsync } from '../../reactHelper';
 import { snackBarDurationShortMs } from '../util/duration';
 import { useTranslation } from './LocalizationProvider';
 import fetchOrThrow from '../util/fetchOrThrow';
+import savePermissionChanges from '../util/savePermissionChanges';
 
 const LinkField = ({
   label,
@@ -20,6 +21,9 @@ const LinkField = ({
   const [items, setItems] = useState();
   const [linked, setLinked] = useState();
   const [updated, setUpdated] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [savedWithWarning, setSavedWithWarning] = useState(false);
 
   useEffectAsync(async () => {
     if (active) {
@@ -35,54 +39,51 @@ const LinkField = ({
     }
   }, [active]);
 
-  const createBody = (linkId) => {
-    const body = {};
-    body[keyBase] = baseId;
-    body[keyLink] = linkId;
-    return body;
-  };
-
   const onChange = useCatchCallback(
     async (value) => {
+      if (savingRef.current || !linked) {
+        return;
+      }
       const oldValue = linked.map((it) => keyGetter(it));
       const newValue = value.map((it) => keyGetter(it));
       if (!newValue.find((it) => it < 0)) {
-        const results = [];
-        newValue
-          .filter((it) => !oldValue.includes(it))
-          .forEach((added) => {
-            results.push(
-              fetchOrThrow('/api/permissions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(createBody(added)),
-              }),
-            );
+        savingRef.current = true;
+        setSaving(true);
+        try {
+          const response = await savePermissionChanges({
+            previous: oldValue,
+            next: newValue,
+            baseId,
+            keyBase,
+            keyLink,
           });
-        oldValue
-          .filter((it) => !newValue.includes(it))
-          .forEach((removed) => {
-            results.push(
-              fetchOrThrow('/api/permissions', {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(createBody(removed)),
-              }),
-            );
-          });
-        await Promise.all(results);
-        setUpdated(results.length > 0);
-        setLinked(value);
+          setSavedWithWarning(
+            response?.headers.get('X-Permission-Refresh') === 'pending' ||
+              response?.headers.get('X-Permission-Audit') === 'pending',
+          );
+          setUpdated(Boolean(response));
+          setLinked(value);
+        } catch (error) {
+          // A lost response can happen after commit. Reload the authoritative list before retrying.
+          setActive(false);
+          setItems(undefined);
+          setLinked(undefined);
+          throw error;
+        } finally {
+          savingRef.current = false;
+          setSaving(false);
+        }
       }
     },
-    [linked, setUpdated, setLinked],
+    [linked, baseId, keyBase, keyLink, keyGetter],
   );
 
   return (
     <>
       <Autocomplete
         size="small"
-        loading={active && !items}
+        loading={saving || (active && (!items || !linked))}
+        disabled={saving}
         isOptionEqualToValue={(i1, i2) => keyGetter(i1) === keyGetter(i2)}
         options={items || []}
         getOptionLabel={(item) => titleGetter(item)}
@@ -110,7 +111,7 @@ const LinkField = ({
         open={Boolean(updated)}
         onClose={() => setUpdated(false)}
         autoHideDuration={snackBarDurationShortMs}
-        message={t('sharedSaved')}
+        message={t(savedWithWarning ? 'sharedSavedWithWarning' : 'sharedSaved')}
       />
     </>
   );

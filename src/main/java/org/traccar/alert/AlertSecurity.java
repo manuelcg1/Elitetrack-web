@@ -1,6 +1,7 @@
 package org.traccar.alert;
 
 import jakarta.inject.Inject;
+import org.traccar.api.security.GeofenceReadAccessService;
 import org.traccar.model.Alert;
 import org.traccar.model.AlertDevice;
 import org.traccar.model.AlertEvent;
@@ -21,10 +22,12 @@ import java.util.List;
 public class AlertSecurity {
 
     private final Storage storage;
+    private final GeofenceReadAccessService geofenceReadAccessService;
 
     @Inject
-    public AlertSecurity(Storage storage) {
+    public AlertSecurity(Storage storage, GeofenceReadAccessService geofenceReadAccessService) {
         this.storage = storage;
+        this.geofenceReadAccessService = geofenceReadAccessService;
     }
 
     public boolean isAdmin(long userId) throws StorageException {
@@ -85,6 +88,33 @@ public class AlertSecurity {
             return alert != null && canAccessAlert(userId, alert);
         }
         return false;
+    }
+
+    /** Read authorization is separate from the existing event-management policy. */
+    public boolean canReadEvent(long userId, AlertEvent event) throws StorageException {
+        if (userId <= 0) {
+            return false;
+        }
+        User user = storage.getObject(User.class, new Request(
+                new Columns.Include("id", "administrator", "disabled", "expirationTime"),
+                new Condition.Equals("id", userId)));
+        if (user == null) {
+            return false;
+        }
+        try {
+            user.checkDisabled();
+        } catch (SecurityException e) {
+            return false;
+        }
+        if (event.getGeofenceId() > 0) {
+            if (!geofenceReadAccessService.canReadGeofence(userId, event.getGeofenceId())) {
+                return false;
+            }
+            if (event.getDeviceId() <= 0 && event.getGroupId() <= 0) {
+                return true;
+            }
+        }
+        return canAccessEvent(userId, event);
     }
 
     public boolean canAccessDevice(long userId, long deviceId) throws StorageException {

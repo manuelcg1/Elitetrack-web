@@ -65,6 +65,7 @@ public class AlertNotificationServiceTest {
         try {
             when(repository.getUserIds(anyLong())).thenReturn(List.of(7L));
             when(security.canAccessDevice(anyLong(), anyLong())).thenReturn(true);
+            when(security.canReadEvent(anyLong(), any(AlertEvent.class))).thenReturn(true);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -263,6 +264,7 @@ public class AlertNotificationServiceTest {
         when(repository.getUserIds(9)).thenReturn(List.of(1L, 4L, 4L));
         when(storage.getObjects(eq(User.class), any(Request.class))).thenReturn(List.of(first, second));
         when(security.canAccessDevice(anyLong(), eq(10L))).thenReturn(true);
+        when(security.canReadEvent(anyLong(), any(AlertEvent.class))).thenReturn(true);
         Notificator telegram = mock(Notificator.class);
         when(manager.getNotificator("telegram")).thenReturn(telegram);
         doThrow(new RuntimeException("recipient failure")).when(telegram)
@@ -313,5 +315,18 @@ public class AlertNotificationServiceTest {
         service.sendAsync(alert, event);
 
         verify(manager, never()).getNotificator("telegram");
+        when(security.canAccessDevice(7, 10)).thenReturn(true);
+        event.setId(31);
+        event.setGeofenceId(100);
+        service.sendAsync(alert, event);
+        verify(security).canReadEvent(7, event);
+        verify(manager, never()).getNotificator("telegram");
+
+        var telegram = mock(Notificator.class);
+        when(manager.getNotificator("telegram")).thenReturn(telegram);
+        when(security.canReadEvent(7, event)).thenReturn(true);
+        event.setId(32);
+        service.sendAsync(alert, event);
+        verify(telegram).send(eq(user), any(NotificationMessage.class), eq(null), any());
     }
 }

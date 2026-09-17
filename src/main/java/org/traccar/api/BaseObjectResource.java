@@ -23,9 +23,10 @@ import org.traccar.model.ObjectOperation;
 import org.traccar.helper.LogAction;
 import org.traccar.model.BaseModel;
 import org.traccar.model.Group;
+import org.traccar.model.Geofence;
+import org.traccar.model.GeofenceFolder;
 import org.traccar.model.Permission;
 import org.traccar.model.User;
-import org.traccar.session.ConnectionManager;
 import org.traccar.session.cache.CacheManager;
 import org.traccar.storage.StorageException;
 import org.traccar.storage.query.Columns;
@@ -45,9 +46,6 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
 
     @Inject
     private CacheManager cacheManager;
-
-    @Inject
-    private ConnectionManager connectionManager;
 
     @Inject
     private LogAction actionLogger;
@@ -84,10 +82,12 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
         if (getUserId() != ServiceAccountUser.ID) {
             storage.addPermission(new Permission(User.class, getUserId(), baseClass, entity.getId()));
             cacheManager.invalidatePermission(true, User.class, getUserId(), baseClass, entity.getId(), true);
-            connectionManager.invalidatePermission(true, User.class, getUserId(), baseClass, entity.getId(), true);
             actionLogger.link(request, getUserId(), User.class, getUserId(), baseClass, entity.getId());
         }
 
+        if (entity instanceof Geofence || entity instanceof GeofenceFolder) {
+            cacheManager.invalidateObject(true, baseClass, entity.getId(), ObjectOperation.ADD);
+        }
         return Response.ok(entity).build();
     }
 

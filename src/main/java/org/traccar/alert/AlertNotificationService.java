@@ -142,7 +142,8 @@ public class AlertNotificationService {
                     continue;
                 }
                 try {
-                    if (!alertSecurity.canAccessDevice(user.getId(), alertEvent.getDeviceId())) {
+                    if (!alertSecurity.canAccessDevice(user.getId(), alertEvent.getDeviceId())
+                            || !alertSecurity.canReadEvent(user.getId(), alertEvent)) {
                         skippedNoPermission++;
                         continue;
                     }

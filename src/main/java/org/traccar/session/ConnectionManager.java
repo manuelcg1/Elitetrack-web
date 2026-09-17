@@ -21,6 +21,7 @@ import io.netty.util.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.traccar.Protocol;
+import org.traccar.api.security.GeofenceReadAccessService;
 import org.traccar.broadcast.BroadcastInterface;
 import org.traccar.broadcast.BroadcastService;
 import org.traccar.config.Config;
@@ -32,8 +33,12 @@ import org.traccar.model.BaseModel;
 import org.traccar.model.Device;
 import org.traccar.model.Event;
 import org.traccar.model.Geofence;
+import org.traccar.model.GeofenceFolder;
+import org.traccar.model.Group;
 import org.traccar.model.LogRecord;
+import org.traccar.model.ObjectOperation;
 import org.traccar.model.Position;
+import org.traccar.model.Permission;
 import org.traccar.model.User;
 import org.traccar.session.cache.CacheManager;
 import org.traccar.storage.Storage;
@@ -47,11 +52,13 @@ import jakarta.inject.Singleton;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -78,11 +85,22 @@ public class ConnectionManager implements BroadcastInterface {
     private final Timer timer;
     private final BroadcastService broadcastService;
     private final DeviceLookupService deviceLookupService;
+    private final GeofenceReadAccessService geofenceReadAccessService;
 
     private final Map<Long, Set<UpdateListener>> listeners = new HashMap<>();
     private final Map<Long, Set<Long>> userDevices = new HashMap<>();
     private final Map<Long, Set<Long>> deviceUsers = new HashMap<>();
     private final Map<Long, Set<Long>> userGeofences = new HashMap<>();
+    private final Map<Long, Long> permissionRefreshTimes = new HashMap<>();
+    private final Map<Long, Long> permissionGenerations = new HashMap<>();
+    private long nextPermissionGeneration;
+    private static final long PERMISSION_REFRESH_INTERVAL = 30000;
+
+    private record PermissionReload(long userId, long generation) {
+    }
+
+    private record PermissionSnapshot(Set<Long> devices, Set<Long> geofences, long refreshTime) {
+    }
 
     private final Map<Long, Timeout> timeouts = new ConcurrentHashMap<>();
 
@@ -90,7 +108,7 @@ public class ConnectionManager implements BroadcastInterface {
     public ConnectionManager(
             Config config, CacheManager cacheManager, Storage storage,
             NotificationManager notificationManager, Timer timer, BroadcastService broadcastService,
-            DeviceLookupService deviceLookupService) {
+            DeviceLookupService deviceLookupService, GeofenceReadAccessService geofenceReadAccessService) {
         this.config = config;
         this.cacheManager = cacheManager;
         this.storage = storage;
@@ -98,6 +116,7 @@ public class ConnectionManager implements BroadcastInterface {
         this.timer = timer;
         this.broadcastService = broadcastService;
         this.deviceLookupService = deviceLookupService;
+        this.geofenceReadAccessService = geofenceReadAccessService;
         deviceTimeout = config.getLong(Keys.STATUS_TIMEOUT);
         showUnknownDevices = config.getBoolean(Keys.WEB_SHOW_UNKNOWN_DEVICES);
         broadcastService.registerListener(this);
@@ -282,7 +301,12 @@ public class ConnectionManager implements BroadcastInterface {
         updateDevice(true, device);
     }
 
-    public synchronized void sendKeepalive() {
+    public void sendKeepalive() {
+        refreshExpiredPermissions();
+        dispatchKeepalive();
+    }
+
+    private synchronized void dispatchKeepalive() {
         for (Set<UpdateListener> userListeners : listeners.values()) {
             for (UpdateListener listener : userListeners) {
                 listener.onKeepalive();
@@ -291,7 +315,12 @@ public class ConnectionManager implements BroadcastInterface {
     }
 
     @Override
-    public synchronized void updateDevice(boolean local, Device device) {
+    public void updateDevice(boolean local, Device device) {
+        refreshExpiredPermissions();
+        dispatchDevice(local, device);
+    }
+
+    private synchronized void dispatchDevice(boolean local, Device device) {
         if (local) {
             broadcastService.updateDevice(true, device);
         } else if (Device.STATUS_ONLINE.equals(device.getStatus())) {
@@ -308,7 +337,12 @@ public class ConnectionManager implements BroadcastInterface {
     }
 
     @Override
-    public synchronized void updatePosition(boolean local, Position position) {
+    public void updatePosition(boolean local, Position position) {
+        refreshExpiredPermissions();
+        dispatchPosition(local, position);
+    }
+
+    private synchronized void dispatchPosition(boolean local, Position position) {
         if (local) {
             broadcastService.updatePosition(true, position);
         }
@@ -334,7 +368,12 @@ public class ConnectionManager implements BroadcastInterface {
     }
 
     @Override
-    public synchronized void updateAlertEvent(boolean local, AlertEvent event) {
+    public void updateAlertEvent(boolean local, AlertEvent event) {
+        refreshExpiredPermissions();
+        dispatchAlertEvent(local, event);
+    }
+
+    private synchronized void dispatchAlertEvent(boolean local, AlertEvent event) {
         if (local) {
             broadcastService.updateAlertEvent(true, event);
         }
@@ -350,17 +389,135 @@ public class ConnectionManager implements BroadcastInterface {
     }
 
     @Override
-    public synchronized <T1 extends BaseModel, T2 extends BaseModel> void invalidatePermission(
+    public <T1 extends BaseModel, T2 extends BaseModel> void invalidatePermission(
             boolean local, Class<T1> clazz1, long id1, Class<T2> clazz2, long id2, boolean link) {
-        if (link && clazz1.equals(User.class) && clazz2.equals(Device.class)) {
-            if (listeners.containsKey(id1)) {
-                userDevices.get(id1).add(id2);
-                deviceUsers.put(id2, new HashSet<>(List.of(id1)));
+        if (clazz1.equals(User.class) && (clazz2.equals(Device.class) || clazz2.equals(Group.class)
+                || clazz2.equals(Geofence.class) || clazz2.equals(GeofenceFolder.class))) {
+            refreshPermissions(List.of(id1), false);
+        }
+    }
+
+    public void invalidatePermissions(Collection<Permission> changes) {
+        Set<Long> users = new HashSet<>();
+        for (Permission permission : changes) {
+            Class<?> property = permission.getPropertyClass();
+            if (permission.getOwnerClass().equals(User.class) && (property.equals(Device.class)
+                    || property.equals(Group.class) || property.equals(Geofence.class)
+                    || property.equals(GeofenceFolder.class))) {
+                users.add(permission.getOwnerId());
+            }
+        }
+        refreshPermissions(users, false);
+    }
+
+    @Override
+    public <T extends BaseModel> void invalidateObject(
+            boolean local, Class<T> clazz, long id, ObjectOperation operation) {
+        if (clazz.equals(User.class)) {
+            refreshPermissions(List.of(id), false);
+        } else if (clazz.equals(Geofence.class) || clazz.equals(GeofenceFolder.class)
+                || clazz.equals(Device.class) || clazz.equals(Group.class)) {
+            refreshPermissions(connectedUserIds(), false);
+        }
+    }
+
+    private void refreshExpiredPermissions() {
+        refreshPermissions(connectedUserIds(), true);
+    }
+
+    private synchronized List<Long> connectedUserIds() {
+        return List.copyOf(listeners.keySet());
+    }
+
+    private synchronized List<PermissionReload> beginPermissionReloads(Collection<Long> userIds, boolean expiredOnly) {
+        List<PermissionReload> reloads = new ArrayList<>();
+        long now = System.currentTimeMillis();
+        for (long userId : userIds) {
+            if (listeners.containsKey(userId)
+                    && (!expiredOnly || now >= permissionRefreshTimes.getOrDefault(userId, 0L))) {
+                // Revoke all affected snapshots before starting any SQL.
+                clearPermissions(userId);
+                long generation = ++nextPermissionGeneration;
+                permissionGenerations.put(userId, generation);
+                permissionRefreshTimes.put(userId, Long.MAX_VALUE);
+                reloads.add(new PermissionReload(userId, generation));
+            }
+        }
+        return reloads;
+    }
+
+    private void clearPermissions(long userId) {
+        for (long deviceId : userDevices.getOrDefault(userId, Set.of())) {
+            deviceUsers.computeIfPresent(deviceId, (id, users) -> {
+                users.remove(userId);
+                return users.isEmpty() ? null : users;
+            });
+        }
+        userDevices.remove(userId);
+        userGeofences.remove(userId);
+        permissionRefreshTimes.remove(userId);
+    }
+
+    private PermissionSnapshot readPermissions(long userId) throws StorageException {
+        // No session monitor is held during database access.
+        User user = storage.getObject(User.class, new Request(
+                new Columns.All(), new Condition.Equals("id", userId)));
+        if (user == null) {
+            throw new SecurityException("User access required");
+        }
+        user.checkDisabled();
+        var devices = storage.getObjects(Device.class, new Request(
+                new Columns.Include("id"), new Condition.Permission(User.class, userId, Device.class)));
+        Set<Long> geofences = geofenceReadAccessService.getReadableGeofenceIds(userId);
+        user.checkDisabled();
+        long refreshTime = System.currentTimeMillis() + PERMISSION_REFRESH_INTERVAL;
+        if (user.getExpirationTime() != null) {
+            refreshTime = Math.min(refreshTime, user.getExpirationTime().getTime());
+        }
+        return new PermissionSnapshot(devices.stream().map(BaseModel::getId).collect(Collectors.toUnmodifiableSet()),
+                Set.copyOf(geofences), refreshTime);
+    }
+
+    private synchronized void completePermissionReload(PermissionReload reload, PermissionSnapshot snapshot) {
+        long userId = reload.userId();
+        if (listeners.containsKey(userId) && permissionGenerations.getOrDefault(userId, 0L) == reload.generation()) {
+            if (snapshot != null && snapshot.refreshTime() > System.currentTimeMillis()) {
+                userDevices.put(userId, snapshot.devices());
+                snapshot.devices().forEach(deviceId ->
+                        deviceUsers.computeIfAbsent(deviceId, id -> new HashSet<>()).add(userId));
+                userGeofences.put(userId, snapshot.geofences());
+                permissionRefreshTimes.put(userId, snapshot.refreshTime());
+            } else {
+                permissionRefreshTimes.put(userId, System.currentTimeMillis() + PERMISSION_REFRESH_INTERVAL);
             }
         }
     }
 
-    public synchronized void updateLog(LogRecord record) {
+    private void reloadPermissions(PermissionReload reload) throws StorageException {
+        try {
+            completePermissionReload(reload, readPermissions(reload.userId()));
+        } catch (StorageException | RuntimeException e) {
+            completePermissionReload(reload, null);
+            throw e;
+        }
+    }
+
+    private void refreshPermissions(Collection<Long> userIds, boolean expiredOnly) {
+        for (var reload : beginPermissionReloads(userIds, expiredOnly)) {
+            try {
+                reloadPermissions(reload);
+            } catch (StorageException | RuntimeException e) {
+                LOGGER.warn("Session permissions unavailable for user {}", reload.userId(), e);
+            }
+        }
+    }
+
+    public void updateLog(LogRecord record) {
+        refreshExpiredPermissions();
+        dispatchLog(record);
+    }
+
+    private synchronized void dispatchLog(LogRecord record) {
         var sessions = sessionsByEndpoint.getOrDefault(record.getConnectionKey(), Map.of());
         if (sessions.isEmpty()) {
             String unknownUniqueId = unknownByEndpoint.get(record.getConnectionKey());
@@ -391,34 +548,33 @@ public class ConnectionManager implements BroadcastInterface {
         void onUpdateLog(LogRecord record);
     }
 
-    public synchronized void addListener(long userId, UpdateListener listener) throws StorageException {
-        var set = listeners.get(userId);
-        if (set == null) {
-            set = new HashSet<>();
-            listeners.put(userId, set);
-
-            var devices = storage.getObjects(Device.class, new Request(
-                    new Columns.Include("id"), new Condition.Permission(User.class, userId, Device.class)));
-            userDevices.put(userId, devices.stream().map(BaseModel::getId).collect(Collectors.toSet()));
-            devices.forEach(device -> deviceUsers.computeIfAbsent(device.getId(), id -> new HashSet<>()).add(userId));
-            var geofences = storage.getObjects(Geofence.class, new Request(
-                    new Columns.Include("id"), new Condition.Permission(User.class, userId, Geofence.class)));
-            userGeofences.put(userId, geofences.stream().map(BaseModel::getId).collect(Collectors.toSet()));
+    public void addListener(long userId, UpdateListener listener) throws StorageException {
+        List<PermissionReload> reloads;
+        synchronized (this) {
+            listeners.computeIfAbsent(userId, id -> new HashSet<>()).add(listener);
+            reloads = beginPermissionReloads(List.of(userId), true);
         }
-        set.add(listener);
+        try {
+            for (var reload : reloads) {
+                reloadPermissions(reload);
+            }
+        } catch (StorageException | RuntimeException e) {
+            removeListener(userId, listener);
+            throw e;
+        }
     }
 
     public synchronized void removeListener(long userId, UpdateListener listener) {
         var set = listeners.get(userId);
+        if (set == null) {
+            return;
+        }
         set.remove(listener);
         if (set.isEmpty()) {
             listeners.remove(userId);
 
-            userDevices.remove(userId).forEach(deviceId -> deviceUsers.computeIfPresent(deviceId, (x, userIds) -> {
-                userIds.remove(userId);
-                return userIds.isEmpty() ? null : userIds;
-            }));
-            userGeofences.remove(userId);
+            clearPermissions(userId);
+            permissionGenerations.remove(userId);
         }
     }
 

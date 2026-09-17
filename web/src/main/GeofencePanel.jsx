@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box,
+  Button,
+  Chip,
   Checkbox,
   Collapse,
   IconButton,
@@ -20,6 +22,8 @@ import { errorsActions, geofencesActions } from '../store';
 import fetchOrThrow from '../common/util/fetchOrThrow';
 import { map } from '../map/core/MapView';
 import { geofenceToFeature } from '../map/core/mapUtil';
+import { readView } from '../common/util/geofenceReadView';
+import { useTranslation } from '../common/components/LocalizationProvider';
 
 const ROOT_ID = 0;
 
@@ -72,7 +76,15 @@ const getGeofenceIds = (node) => [
 const getCoordinates = (coordinates) =>
   coordinates.flatMap((value) => (Array.isArray(value?.[0]) ? getCoordinates(value) : [value]));
 
-const TreeNode = ({ node, level = 0, visibleIds, onToggleOne, onToggleMany }) => {
+const TreeNode = ({
+  node,
+  level = 0,
+  visibleIds,
+  onToggleOne,
+  onToggleMany,
+  searching = false,
+}) => {
+  const t = useTranslation();
   const [open, setOpen] = useState(true);
   const root = node.id === ROOT_ID;
   const ids = getGeofenceIds(node);
@@ -83,10 +95,19 @@ const TreeNode = ({ node, level = 0, visibleIds, onToggleOne, onToggleMany }) =>
     <Box>
       {!root && (
         <Box sx={{ display: 'flex', alignItems: 'center', minHeight: 44, pl: level * 2, pr: 1 }}>
-          <IconButton size="small" onClick={() => setOpen((value) => !value)}>
-            {open ? <ExpandMoreIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
+          <IconButton
+            size="small"
+            aria-label={node.name}
+            aria-expanded={searching || open}
+            onClick={() => setOpen((value) => !value)}
+          >
+            {searching || open ? (
+              <ExpandMoreIcon fontSize="small" />
+            ) : (
+              <ChevronRightIcon fontSize="small" />
+            )}
           </IconButton>
-          {open ? (
+          {searching || open ? (
             <FolderOpenIcon color="primary" fontSize="small" />
           ) : (
             <FolderIcon color="action" fontSize="small" />
@@ -100,11 +121,11 @@ const TreeNode = ({ node, level = 0, visibleIds, onToggleOne, onToggleMany }) =>
             indeterminate={someVisible && !allVisible}
             onChange={(event) => onToggleMany(ids, event.target.checked)}
             disabled={!ids.length}
-            inputProps={{ 'aria-label': `Mostrar carpeta ${node.name}` }}
+            slotProps={{ input: { 'aria-label': `Mostrar carpeta ${node.name}` } }}
           />
         </Box>
       )}
-      <Collapse in={root || open} timeout={150}>
+      <Collapse in={root || searching || open} timeout={150}>
         {node.children.map((child) => (
           <TreeNode
             key={child.id}
@@ -113,6 +134,7 @@ const TreeNode = ({ node, level = 0, visibleIds, onToggleOne, onToggleMany }) =>
             visibleIds={visibleIds}
             onToggleOne={onToggleOne}
             onToggleMany={onToggleMany}
+            searching={searching}
           />
         ))}
         {node.geofences.map((geofence) => (
@@ -133,6 +155,7 @@ const TreeNode = ({ node, level = 0, visibleIds, onToggleOne, onToggleMany }) =>
               <Typography variant="body2" noWrap>
                 {geofence.name}
               </Typography>
+              {geofence.readInherited && <Chip size="small" label={t('geofenceInherited')} />}
               <Typography variant="caption" color="text.secondary">
                 {getGeometryLabel(geofence.area)}
               </Typography>
@@ -141,7 +164,7 @@ const TreeNode = ({ node, level = 0, visibleIds, onToggleOne, onToggleMany }) =>
               size="small"
               checked={visibleIds.includes(geofence.id)}
               onChange={(event) => onToggleOne(geofence.id, event.target.checked)}
-              inputProps={{ 'aria-label': `Mostrar geocerca ${geofence.name}` }}
+              slotProps={{ input: { 'aria-label': `Mostrar geocerca ${geofence.name}` } }}
             />
           </Box>
         ))}
@@ -151,25 +174,42 @@ const TreeNode = ({ node, level = 0, visibleIds, onToggleOne, onToggleMany }) =>
 };
 
 const GeofencePanel = () => {
+  const t = useTranslation();
   const dispatch = useDispatch();
   const theme = useTheme();
   const geofences = useSelector((state) => state.geofences.items);
   const visibleIds = useSelector((state) => state.geofences.visibleIds);
   const [folders, setFolders] = useState([]);
   const [keyword, setKeyword] = useState('');
-
-  const loadData = useCallback(async () => {
-    const [foldersResponse, geofencesResponse] = await Promise.all([
-      fetchOrThrow('/api/geofenceFolders'),
-      fetchOrThrow('/api/geofences'),
-    ]);
-    setFolders(await foldersResponse.json());
-    dispatch(geofencesActions.refresh(await geofencesResponse.json()));
-  }, [dispatch]);
+  const [revision, setRevision] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const userId = useSelector((state) => state.session.user?.id);
 
   useEffect(() => {
-    loadData().catch((error) => dispatch(errorsActions.push(error.message)));
-  }, [dispatch, loadData]);
+    let active = true;
+    setLoading(true);
+    setFolders([]);
+    dispatch(geofencesActions.refresh([]));
+    fetchOrThrow('/api/geofences/read-access')
+      .then((response) => response.json())
+      .then(readView)
+      .then((data) => {
+        if (!active) return;
+        setFolders(data.folders);
+        dispatch(geofencesActions.refresh(data.geofences));
+      })
+      .catch((error) => {
+        if (!active) return;
+        dispatch(geofencesActions.clearVisible());
+        dispatch(errorsActions.push(error.message));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [dispatch, userId, revision]);
 
   const tree = useMemo(
     () => filterTree(buildTree(folders, Object.values(geofences)), keyword),
@@ -218,18 +258,24 @@ const GeofencePanel = () => {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%', minHeight: 0 }}>
       <Box sx={{ p: 1.25, borderBottom: 1, borderColor: 'divider' }}>
+        <Button disabled={loading} onClick={() => setRevision((value) => value + 1)}>
+          {t('geofenceRetry')}
+        </Button>
+        {loading && <Typography role="status">{t('sharedLoading')}</Typography>}
         <TextField
           size="small"
           fullWidth
           placeholder="Buscar geocercas"
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon fontSize="small" color="disabled" />
-              </InputAdornment>
-            ),
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" color="disabled" />
+                </InputAdornment>
+              ),
+            },
           }}
           sx={{ '& .MuiInputBase-root': { height: 40, borderRadius: 2 } }}
         />
@@ -243,7 +289,7 @@ const GeofencePanel = () => {
             indeterminate={someVisible && !allVisible}
             onChange={(event) => toggleMany(allIds, event.target.checked)}
             disabled={!allIds.length}
-            inputProps={{ 'aria-label': 'Mostrar todas las geocercas' }}
+            slotProps={{ input: { 'aria-label': 'Mostrar todas las geocercas' } }}
           />
         </Box>
       </Box>
@@ -254,6 +300,7 @@ const GeofencePanel = () => {
             visibleIds={visibleIds}
             onToggleOne={toggleOne}
             onToggleMany={toggleMany}
+            searching={Boolean(keyword)}
           />
         )}
       </Box>
