@@ -1,0 +1,9 @@
+allprojects {
+    plugins.withId('java') {
+        tasks.register('geofenceBrowserServer', JavaExec) {
+            dependsOn tasks.named('testClasses')
+            classpath = sourceSets.test.runtimeClasspath
+            mainClass = 'org.traccar.api.resource.GeofenceBrowserServer'
+        }
+    }
+}

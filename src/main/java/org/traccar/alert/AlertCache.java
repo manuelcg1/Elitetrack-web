@@ -4,6 +4,7 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.traccar.helper.model.GeofenceFolderHierarchy;
 import org.traccar.model.Alert;
 import org.traccar.model.AlertDevice;
 import org.traccar.model.AlertGeofence;
@@ -16,7 +17,6 @@ import org.traccar.storage.query.Condition;
 import org.traccar.storage.query.Request;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -37,13 +37,16 @@ public class AlertCache {
     private static final long CACHE_TTL = 30000;
 
     private final Storage storage;
+    private final AlertGeofenceStateManager stateManager;
+    private Set<Long> folderScopedAlertIds = Set.of();
 
     private volatile long cacheTime;
     private volatile List<CachedAlert> alerts;
 
     @Inject
-    public AlertCache(Storage storage) {
+    public AlertCache(Storage storage, AlertGeofenceStateManager stateManager) {
         this.storage = storage;
+        this.stateManager = stateManager;
     }
 
     public List<CachedAlert> getAlerts() throws StorageException {
@@ -54,6 +57,9 @@ public class AlertCache {
                 cached = alerts;
                 if (cached == null || now - cacheTime > CACHE_TTL) {
                     cached = loadAlerts();
+                    folderScopedAlertIds = cached.stream()
+                            .filter(alert -> !alert.geofenceGroupIds().isEmpty())
+                            .map(alert -> alert.alert().getId()).collect(Collectors.toUnmodifiableSet());
                     alerts = cached;
                     cacheTime = now;
                 }
@@ -62,9 +68,15 @@ public class AlertCache {
         return cached;
     }
 
-    public void invalidate() {
+    public synchronized void invalidate() {
         alerts = null;
         cacheTime = 0;
+    }
+
+    public synchronized void invalidateGeofenceFolders() {
+        // A new scope starts a new transition baseline; unrelated alerts keep their state.
+        folderScopedAlertIds.forEach(stateManager::removeByAlertId);
+        invalidate();
     }
 
     private List<CachedAlert> loadAlerts() throws StorageException {
@@ -95,19 +107,11 @@ public class AlertCache {
 
         Map<Long, Set<Long>> geofenceFolders = new LinkedHashMap<>();
         if (hasGeofenceGroupScope) {
-            Map<Long, GeofenceFolder> folders = new LinkedHashMap<>();
-            for (GeofenceFolder folder : storage.getObjects(GeofenceFolder.class, new Request(
-                    new Columns.Include("id", "parentid")))) {
-                folders.put(folder.getId(), folder);
-            }
+            var hierarchy = new GeofenceFolderHierarchy(storage.getObjects(GeofenceFolder.class, new Request(
+                    new Columns.Include("id", "parentid"))));
             for (Geofence geofence : geofences.values()) {
-                Set<Long> folderIds = new HashSet<>();
-                long folderId = geofence.getLong("folderId");
-                while (folderId > 0 && folderIds.add(folderId)) {
-                    GeofenceFolder folder = folders.get(folderId);
-                    folderId = folder != null ? folder.getParentid() : 0;
-                }
-                geofenceFolders.put(geofence.getId(), folderIds);
+                geofenceFolders.put(geofence.getId(),
+                        hierarchy.withAncestors(List.of(GeofenceFolderHierarchy.folderId(geofence))));
             }
         }
 

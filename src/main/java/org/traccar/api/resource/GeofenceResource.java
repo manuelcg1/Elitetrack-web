@@ -18,20 +18,48 @@ package org.traccar.api.resource;
 import java.util.List;
 
 import org.traccar.api.ExtendedObjectResource;
+import org.traccar.api.security.GeofenceReadAccessService;
 import org.traccar.model.Geofence;
+import org.traccar.storage.StorageException;
 
+import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 
 @Path("geofences")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class GeofenceResource extends ExtendedObjectResource<Geofence> {
 
+    @Inject
+    protected GeofenceReadAccessService readAccessService;
+
     public GeofenceResource() {
         super(Geofence.class, "name", List.of("name"));
+    }
+
+    // Separate from the direct-assignment list used by the Connections editor.
+    @GET
+    @Path("read-access")
+    public Response getReadAccess() throws StorageException {
+        return Response.ok(readAccessService.getReadAccess(getUserId()))
+                .header("Cache-Control", "no-store").build();
+    }
+
+    @GET
+    @Path("read-access/{id}")
+    public Response getReadableGeofence(@PathParam("id") long id) throws StorageException {
+        Geofence result = readAccessService.getReadAccess(getUserId()).geofences().stream()
+                .map(GeofenceReadAccessService.GeofenceEntry::geofence)
+                .filter(geofence -> geofence.getId() == id)
+                .findFirst().orElseThrow(NotFoundException::new);
+        return Response.ok(result).header("Cache-Control", "no-store").build();
     }
 
 }

@@ -15,6 +15,7 @@ import org.traccar.alert.AlertSecurity;
 import org.traccar.api.BaseResource;
 import org.traccar.api.security.MenuKeys;
 import org.traccar.model.AlertEvent;
+import org.traccar.model.UserRestrictions;
 import org.traccar.storage.StorageException;
 import org.traccar.storage.query.Columns;
 import org.traccar.storage.query.Condition;
@@ -57,7 +58,7 @@ public class AlertEventResource extends BaseResource {
                 new Order("eventTime", true, safeLimit, safeOffset)));
         List<AlertEvent> result = new java.util.ArrayList<>();
         for (AlertEvent event : events) {
-            if (alertSecurity.canAccessEvent(getUserId(), event)) {
+            if (alertSecurity.canReadEvent(getUserId(), event)) {
                 result.add(event);
             }
         }
@@ -105,7 +106,7 @@ public class AlertEventResource extends BaseResource {
         if (event == null) {
             throw new NotFoundException();
         }
-        if (!alertSecurity.canAccessEvent(getUserId(), event)) {
+        if (!alertSecurity.canReadEvent(getUserId(), event)) {
             throw new SecurityException("Alert event access denied");
         }
         return event;
@@ -134,12 +135,14 @@ public class AlertEventResource extends BaseResource {
 
     private void updateStatus(long id, String status) throws StorageException {
         checkAlertsAccess();
+        permissionsService.checkRestriction(getUserId(), UserRestrictions::getReadonly);
         AlertEvent event = storage.getObject(AlertEvent.class, new Request(
                 new Columns.All(), new Condition.Equals("id", id)));
         if (event == null) {
             throw new NotFoundException();
         }
-        if (!alertSecurity.canAccessEvent(getUserId(), event)) {
+        if (!alertSecurity.canReadEvent(getUserId(), event)
+                || !alertSecurity.canAccessEvent(getUserId(), event)) {
             throw new SecurityException("Alert event access denied");
         }
 

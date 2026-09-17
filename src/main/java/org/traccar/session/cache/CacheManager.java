@@ -16,12 +16,14 @@
 package org.traccar.session.cache;
 
 import jakarta.inject.Inject;
+import jakarta.inject.Provider;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.traccar.broadcast.BroadcastInterface;
 import org.traccar.broadcast.BroadcastService;
 import org.traccar.alert.AlertGeofenceStateManager;
+import org.traccar.alert.AlertCache;
 import org.traccar.config.Config;
 import org.traccar.config.Keys;
 import org.traccar.helper.model.AttributeUtil;
@@ -32,6 +34,7 @@ import org.traccar.model.Calendar;
 import org.traccar.model.Device;
 import org.traccar.model.Driver;
 import org.traccar.model.Geofence;
+import org.traccar.model.GeofenceFolder;
 import org.traccar.model.Group;
 import org.traccar.model.GroupedModel;
 import org.traccar.model.LinkedDevice;
@@ -43,6 +46,7 @@ import org.traccar.model.Position;
 import org.traccar.model.Schedulable;
 import org.traccar.model.Server;
 import org.traccar.model.User;
+import org.traccar.session.ConnectionManager;
 import org.traccar.storage.Storage;
 import org.traccar.storage.StorageException;
 import org.traccar.storage.query.Columns;
@@ -50,6 +54,8 @@ import org.traccar.storage.query.Condition;
 import org.traccar.storage.query.Request;
 
 import java.util.Date;
+import java.util.List;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.Map;
@@ -71,6 +77,8 @@ public class CacheManager implements BroadcastInterface {
     private final Storage storage;
     private final BroadcastService broadcastService;
     private final AlertGeofenceStateManager alertGeofenceStateManager;
+    private final Provider<ConnectionManager> connectionManager;
+    private final AlertCache alertCache;
 
     private final CacheGraph graph = new CacheGraph();
 
@@ -81,11 +89,14 @@ public class CacheManager implements BroadcastInterface {
     @Inject
     public CacheManager(
             Config config, Storage storage, BroadcastService broadcastService,
-            AlertGeofenceStateManager alertGeofenceStateManager) throws StorageException {
+            AlertGeofenceStateManager alertGeofenceStateManager,
+            Provider<ConnectionManager> connectionManager, AlertCache alertCache) throws StorageException {
         this.config = config;
         this.storage = storage;
         this.broadcastService = broadcastService;
         this.alertGeofenceStateManager = alertGeofenceStateManager;
+        this.connectionManager = connectionManager;
+        this.alertCache = alertCache;
         server = storage.getObject(Server.class, new Request(new Columns.All()));
         broadcastService.registerListener(this);
     }
@@ -211,7 +222,14 @@ public class CacheManager implements BroadcastInterface {
     @Override
     public <T extends BaseModel> void invalidateObject(
             boolean local, Class<T> clazz, long id, ObjectOperation operation) throws Exception {
+        if (clazz.equals(GeofenceFolder.class)) {
+            alertCache.invalidateGeofenceFolders();
+        } else if (clazz.equals(Geofence.class)) {
+            alertCache.invalidate();
+        }
         if (local) {
+            // NullBroadcastService does not loop notifications back into local listeners.
+            connectionManager.get().invalidateObject(false, clazz, id, operation);
             broadcastService.invalidateObject(true, clazz, id, operation);
         }
 
@@ -279,6 +297,7 @@ public class CacheManager implements BroadcastInterface {
     public <T1 extends BaseModel, T2 extends BaseModel> void invalidatePermission(
             boolean local, Class<T1> clazz1, long id1, Class<T2> clazz2, long id2, boolean link) throws Exception {
         if (local) {
+            connectionManager.get().invalidatePermission(false, clazz1, id1, clazz2, id2, link);
             broadcastService.invalidatePermission(true, clazz1, id1, clazz2, id2, link);
         }
 
@@ -288,6 +307,33 @@ public class CacheManager implements BroadcastInterface {
             } else {
                 invalidatePermission(clazz1, id1, clazz2, id2, link);
             }
+        }
+    }
+
+    /** One local session refresh per affected user, even when a transaction changes many relations. */
+    public void invalidatePermissions(List<Permission> additions, List<Permission> removals) throws Exception {
+        List<Permission> changes = new ArrayList<>(removals);
+        changes.addAll(additions);
+        connectionManager.get().invalidatePermissions(changes);
+        Exception failure = null;
+        for (boolean link : List.of(false, true)) {
+            for (Permission permission : link ? additions : removals) {
+                try {
+                    invalidatePermission(false, permission.getOwnerClass(), permission.getOwnerId(),
+                            permission.getPropertyClass(), permission.getPropertyId(), link);
+                } catch (Exception e) {
+                    failure = e;
+                }
+                try {
+                    broadcastService.invalidatePermission(true, permission.getOwnerClass(), permission.getOwnerId(),
+                            permission.getPropertyClass(), permission.getPropertyId(), link);
+                } catch (Exception e) {
+                    failure = e;
+                }
+            }
+        }
+        if (failure != null) {
+            throw failure;
         }
     }
 

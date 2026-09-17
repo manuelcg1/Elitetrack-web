@@ -16,25 +16,38 @@
 package org.traccar.api;
 
 import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.ExceptionMapper;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ResourceErrorHandler implements ExceptionMapper<Exception> {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(ResourceErrorHandler.class);
+
     @Override
     public Response toResponse(Exception exception) {
-        StringWriter stringWriter = new StringWriter();
-        PrintWriter printWriter = new PrintWriter(stringWriter);
-        exception.printStackTrace(printWriter);
-
+        Response.ResponseBuilder builder;
+        String message;
         if (exception instanceof WebApplicationException webException) {
-            return Response.fromResponse(webException.getResponse()).entity(stringWriter.toString()).build();
+            builder = Response.fromResponse(webException.getResponse());
+            var status = Response.Status.fromStatusCode(webException.getResponse().getStatus());
+            message = status != null ? status.getReasonPhrase() : "Request failed";
         } else {
-            return Response.status(Response.Status.BAD_REQUEST).entity(stringWriter.toString()).build();
+            // Preserve the existing HTTP contract while removing implementation details.
+            builder = Response.status(Response.Status.BAD_REQUEST);
+            message = "Request failed";
         }
+        if (exception instanceof SecurityException) {
+            message = "Write access denied".equals(exception.getMessage())
+                    ? "Write access denied" : "User access denied";
+        }
+        LOGGER.warn("API request failed", exception);
+        return builder.entity(message).type(MediaType.TEXT_PLAIN_TYPE)
+                .header("Cache-Control", "no-store").header("Content-Length", null)
+                .header("Content-Encoding", null).build();
     }
 
 }

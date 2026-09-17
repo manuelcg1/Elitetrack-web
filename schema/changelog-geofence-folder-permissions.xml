@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.1.xsd">
+
+  <!-- This relation grants explicit folder access only. Descendant inheritance is not enabled here. -->
+  <changeSet author="elitetrack" id="geofence-folder-permissions-create-relation">
+    <preConditions onFail="MARK_RAN" onError="HALT">
+      <not><tableExists tableName="tc_user_geofencefolder" /></not>
+    </preConditions>
+    <createTable tableName="tc_user_geofencefolder">
+      <column name="userid" type="INT"><constraints nullable="false" /></column>
+      <column name="geofencefolderid" type="INT"><constraints nullable="false" /></column>
+    </createTable>
+  </changeSet>
+
+  <!-- Never repair invalid grants by deleting data or silently choosing one row. -->
+  <changeSet author="elitetrack" id="geofence-folder-permissions-validate-existing-grants">
+    <preConditions onFail="HALT" onError="HALT"
+        onFailMessage="Invalid user-folder grants: check null IDs, duplicates and missing users/folders before retrying.">
+      <sqlCheck expectedResult="0">SELECT COUNT(*) FROM tc_user_geofencefolder
+        WHERE userid IS NULL OR geofencefolderid IS NULL</sqlCheck>
+      <sqlCheck expectedResult="0">SELECT COUNT(*) FROM (
+        SELECT userid, geofencefolderid FROM tc_user_geofencefolder
+        GROUP BY userid, geofencefolderid HAVING COUNT(*) &gt; 1
+      ) duplicate_grants</sqlCheck>
+      <sqlCheck expectedResult="0">SELECT COUNT(*) FROM tc_user_geofencefolder r
+        LEFT JOIN tc_users u ON u.id = r.userid
+        LEFT JOIN tc_geofence_folders f ON f.id = r.geofencefolderid
+        WHERE u.id IS NULL OR f.id IS NULL</sqlCheck>
+    </preConditions>
+    <sql>SELECT 1</sql>
+  </changeSet>
+
+  <!-- PostgreSQL is the deployment target; H2 exercises the migration in isolated tests.
+       Do not specify a replacement type: existing BIGINT identifiers must not be narrowed. -->
+  <changeSet author="elitetrack" id="geofence-folder-permissions-required-ids" dbms="postgresql,h2">
+    <preConditions onFail="MARK_RAN" onError="HALT">
+      <not><primaryKeyExists tableName="tc_user_geofencefolder" /></not>
+    </preConditions>
+    <addNotNullConstraint tableName="tc_user_geofencefolder" columnName="userid" />
+    <addNotNullConstraint tableName="tc_user_geofencefolder" columnName="geofencefolderid" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="geofence-folder-permissions-primary-key">
+    <preConditions onFail="MARK_RAN" onError="HALT">
+      <not><primaryKeyExists tableName="tc_user_geofencefolder" /></not>
+    </preConditions>
+    <addPrimaryKey tableName="tc_user_geofencefolder" columnNames="userid,geofencefolderid"
+        constraintName="pk_user_geofencefolder" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="geofence-folder-permissions-user-reference">
+    <preConditions onFail="MARK_RAN" onError="HALT">
+      <not><foreignKeyConstraintExists foreignKeyTableName="tc_user_geofencefolder"
+          foreignKeyName="fk_user_geofencefolder_user" /></not>
+    </preConditions>
+    <addForeignKeyConstraint baseTableName="tc_user_geofencefolder" baseColumnNames="userid"
+        constraintName="fk_user_geofencefolder_user" referencedTableName="tc_users"
+        referencedColumnNames="id" onDelete="CASCADE" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="geofence-folder-permissions-folder-reference">
+    <preConditions onFail="MARK_RAN" onError="HALT">
+      <not><foreignKeyConstraintExists foreignKeyTableName="tc_user_geofencefolder"
+          foreignKeyName="fk_user_geofencefolder_folder" /></not>
+    </preConditions>
+    <addForeignKeyConstraint baseTableName="tc_user_geofencefolder" baseColumnNames="geofencefolderid"
+        constraintName="fk_user_geofencefolder_folder" referencedTableName="tc_geofence_folders"
+        referencedColumnNames="id" onDelete="CASCADE" />
+  </changeSet>
+
+  <changeSet author="elitetrack" id="geofence-folder-permissions-folder-index">
+    <preConditions onFail="MARK_RAN" onError="HALT">
+      <not><indexExists tableName="tc_user_geofencefolder" indexName="idx_user_geofencefolder_folder" /></not>
+    </preConditions>
+    <createIndex tableName="tc_user_geofencefolder" indexName="idx_user_geofencefolder_folder">
+      <column name="geofencefolderid" />
+    </createIndex>
+  </changeSet>
+
+  <changeSet author="elitetrack" id="geofence-folder-permissions-parent-index">
+    <preConditions onFail="MARK_RAN" onError="HALT">
+      <not><indexExists tableName="tc_geofence_folders" indexName="idx_geofence_folders_parentid" /></not>
+    </preConditions>
+    <createIndex tableName="tc_geofence_folders" indexName="idx_geofence_folders_parentid">
+      <column name="parentid" />
+    </createIndex>
+  </changeSet>
+</databaseChangeLog>

@@ -8,6 +8,7 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import LinkField from '../common/components/LinkField';
+import GeofenceAssignments from '../common/components/GeofenceAssignments';
 import { useTranslation } from '../common/components/LocalizationProvider';
 import SettingsMenu from './components/SettingsMenu';
 import { formatNotificationTitle } from '../common/util/formatter';
@@ -48,14 +49,7 @@ const UserConnectionsPage = () => {
               keyLink="groupId"
               label={t('settingsGroups')}
             />
-            <LinkField
-              endpointAll="/api/geofences?all=true"
-              endpointLinked={`/api/geofences?userId=${id}`}
-              baseId={id}
-              keyBase="userId"
-              keyLink="geofenceId"
-              label={t('sharedGeofences')}
-            />
+            <GeofenceAssignments key={id} userId={id} />
             <LinkField
               endpointAll="/api/notifications?all=true"
               endpointLinked={`/api/notifications?userId=${id}`}

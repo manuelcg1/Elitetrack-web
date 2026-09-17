@@ -31,6 +31,7 @@ import org.traccar.storage.query.Request;
 import jakarta.inject.Inject;
 import javax.sql.DataSource;
 import java.sql.SQLException;
+import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Collections;
@@ -208,6 +209,48 @@ public class DatabaseStorage extends Storage {
             builder.executeUpdate();
         } catch (SQLException e) {
             throw new StorageException(e);
+        }
+    }
+
+    @Override
+    public void updatePermissions(List<Permission> additions, List<Permission> removals) throws StorageException {
+        try (var connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                for (Permission permission : removals) {
+                    updatePermission(connection, permission, false);
+                }
+                for (Permission permission : additions) {
+                    updatePermission(connection, permission, true);
+                }
+                connection.commit();
+            } catch (SQLException | RuntimeException e) {
+                try {
+                    connection.rollback();
+                } catch (SQLException rollbackError) {
+                    e.addSuppressed(rollbackError);
+                }
+                throw e;
+            }
+            // Closing returns the connection to its pool, which restores its configured state.
+        } catch (SQLException | RuntimeException e) {
+            throw new StorageException("Atomic permission update failed", e);
+        }
+    }
+
+    private void updatePermission(Connection connection, Permission permission, boolean link) throws SQLException {
+        // Table and column identifiers come from registered model classes, never from raw request keys.
+        String ownerKey = Permission.getKey(permission.getOwnerClass());
+        String propertyKey = Permission.getKey(permission.getPropertyClass());
+        String query = link
+                ? "INSERT INTO " + permission.getStorageName()
+                        + " (" + ownerKey + ", " + propertyKey + ") VALUES (?, ?)"
+                : "DELETE FROM " + permission.getStorageName()
+                        + " WHERE " + ownerKey + " = ? AND " + propertyKey + " = ?";
+        try (var statement = connection.prepareStatement(query)) {
+            statement.setLong(1, permission.getOwnerId());
+            statement.setLong(2, permission.getPropertyId());
+            statement.executeUpdate();
         }
     }
 

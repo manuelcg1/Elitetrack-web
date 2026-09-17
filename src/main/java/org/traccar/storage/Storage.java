@@ -42,6 +42,11 @@ public abstract class Storage {
 
     public abstract void removePermission(Permission permission) throws StorageException;
 
+    /** All removals and additions must commit together. Never fall back to sequential writes. */
+    public void updatePermissions(List<Permission> additions, List<Permission> removals) throws StorageException {
+        throw new StorageException("Atomic permission updates are not supported by this storage");
+    }
+
     public List<Permission> getPermissions(
             Class<? extends BaseModel> ownerClass,
             Class<? extends BaseModel> propertyClass) throws StorageException {
