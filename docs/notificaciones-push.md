@@ -17,25 +17,31 @@ a Telegram y a SMS; la parte HTML se usa en el correo.
 
 1. **Idioma del servidor.** Traccar elige la carpeta de plantillas con el atributo `language`
    del servidor o del usuario. Si no existe, usa `en/` y nada de esto se aplica.
-   En Ajustes → Servidor → Atributos debe existir `language = es`.
-2. **Las plantillas no se copian con `deploy.sh`.** El script compila el JAR y el frontend,
-   pero Traccar lee las plantillas de su propia carpeta (por defecto `/opt/traccar/templates`,
-   o lo que diga `templates.root` en `/opt/traccar/conf/traccar.xml`).
-3. Las plantillas se leen en cada envío: copiarlas no requiere reiniciar Traccar.
+   En Ajustes → Servidor → Atributos debe existir un atributo con nombre `language` y valor `es`.
+2. **Rutas reales de producción.** Traccar arranca en `/opt/traccar` con `/opt/traccar/traccar.xml`:
+   - Web: `/opt/traccar/web` (`web.path` = `./web`). Nginx no sirve `/var/www/elitetrack`.
+   - Plantillas: `/opt/traccar/templates/notifications` (valor por defecto de `templates.root`).
+   - Traducciones del servidor: `/opt/traccar/templates/translations` (valor por defecto de `web.localizationPath`).
+3. Las plantillas se leen en cada envío. Las traducciones del servidor se cargan una vez y
+   necesitan reiniciar Traccar para tomar claves nuevas.
 
 ## Despliegue
 
+`deploy.sh` publica en esas rutas:
+
 ```bash
 cd /home/elitetrack/traccar
-./deploy.sh frontend          # trae main y publica la web con la traducción alarmInput1On
-
-grep -n "templates.root" /opt/traccar/conf/traccar.xml   # si no aparece, la ruta es /opt/traccar/templates
-DEST=/opt/traccar/templates/notifications/es
-sudo cp -a "$DEST" "$DEST.bak-$(date +%Y%m%d%H%M)"
-sudo cp templates/notifications/es/{_comun,_pie,alarm,deviceOverspeed,geofenceEnter,geofenceExit}.vm "$DEST/"
+bash deploy.sh frontend    # web + plantillas, sin reiniciar Traccar
+bash deploy.sh templates   # solo plantillas y traducciones
+bash deploy.sh backend     # plantillas + JAR + reinicio de Traccar
 ```
 
-Para volver atrás: copiar de nuevo los archivos desde la carpeta `.bak-…`.
+Antes de reemplazar la web guarda `/opt/traccar/web-backup-deploy-AAAAMMDD_HHMMSS.tar.gz`
+(conserva los 5 más recientes). Para volver atrás:
+
+```bash
+cd /opt/traccar && sudo rm -rf web/* && sudo tar -xzf web-backup-deploy-AAAAMMDD_HHMMSS.tar.gz
+```
 
 ## Configuración por equipo FMC130 (desde la web)
 
