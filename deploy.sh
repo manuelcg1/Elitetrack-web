@@ -1,15 +1,23 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────
 # deploy.sh — Script de actualización de EliteTrack en producción
-# Uso: ./deploy.sh [frontend|backend|all]
+# Uso: ./deploy.sh [frontend|backend|templates|all]
+#   frontend  → web en /opt/traccar/web + plantillas
+#   backend   → JAR + plantillas + reinicio de Traccar
+#   templates → solo plantillas de notificación y traducciones
 # ─────────────────────────────────────────────────────────────
 
 set -e
 
 PROJECT_DIR="/home/elitetrack/traccar"
 WEB_DIR="$PROJECT_DIR/web"
-DIST_DIR="/var/www/elitetrack"
 JAR_DIR="/opt/traccar"
+# Traccar sirve la web desde web.path (./web en /opt/traccar/traccar.xml)
+DIST_DIR="$JAR_DIR/web"
+# Traccar busca templates/ en su WorkingDirectory (/opt/traccar)
+TEMPLATES_DIR="$JAR_DIR/templates"
+# Cantidad de respaldos de la web que se conservan
+BACKUP_KEEP=5
 
 # ── Archivos de producción que NUNCA deben sobreescribirse ────
 # Solo archivos dentro del repo — los de /etc/ y /opt/ ya están
@@ -92,11 +100,30 @@ deploy_frontend() {
 
     npm run build || error "Falló npm run build"
 
-    info "Copiando build a Nginx..."
-    sudo rm -rf "$DIST_DIR"/*
+    [ -f build/index.html ] || error "El build no generó build/index.html — no se toca la web publicada"
+
+    info "Respaldando la web publicada..."
+    local backup="$JAR_DIR/web-backup-deploy-$(date +%Y%m%d_%H%M%S).tar.gz"
+    sudo tar -czf "$backup" -C "$JAR_DIR" web
+    log "Respaldo: $backup"
+    # Conserva solo los $BACKUP_KEEP respaldos más recientes de este script
+    ls -1t "$JAR_DIR"/web-backup-deploy-*.tar.gz 2>/dev/null | tail -n +$((BACKUP_KEEP + 1)) | xargs -r sudo rm -f
+
+    info "Publicando build en $DIST_DIR..."
+    sudo rm -rf "${DIST_DIR:?}"/*
     sudo cp -r build/* "$DIST_DIR/"
-    sudo chown -R www-data:www-data "$DIST_DIR"
     log "Frontend desplegado correctamente"
+}
+
+# ── Deploy plantillas de notificación ─────────────────────────
+deploy_templates() {
+    info "Actualizando plantillas de notificación y traducciones..."
+    cd "$PROJECT_DIR"
+    sudo mkdir -p "$TEMPLATES_DIR/translations"
+    sudo cp -r templates/notifications "$TEMPLATES_DIR/"
+    sudo cp web/src/resources/l10n/*.json "$TEMPLATES_DIR/translations/"
+    log "Plantillas actualizadas en $TEMPLATES_DIR (se leen en cada envío)"
+    warn "Las traducciones del servidor se recargan al reiniciar Traccar"
 }
 
 # ── Deploy Backend ────────────────────────────────────────────
@@ -129,21 +156,32 @@ verify_services() {
 }
 
 # ── Ejecutar ──────────────────────────────────────────────────
+case $DEPLOY_TARGET in
+    frontend|backend|templates|all) ;;
+    *) error "Uso: ./deploy.sh [frontend|backend|templates|all]" ;;
+esac
+
 pull_changes
 
 case $DEPLOY_TARGET in
     frontend)
         deploy_frontend
+        deploy_templates
         ;;
     backend)
+        deploy_templates
         deploy_backend
+        ;;
+    templates)
+        deploy_templates
         ;;
     all)
         deploy_frontend
+        deploy_templates
         deploy_backend
         ;;
     *)
-        error "Uso: ./deploy.sh [frontend|backend|all]"
+        error "Uso: ./deploy.sh [frontend|backend|templates|all]"
         ;;
 esac
 
