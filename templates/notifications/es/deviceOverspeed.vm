@@ -1,22 +1,22 @@
-#set($subject = "$esc.html($device.name): excede la velocidad")
-#if($speedUnit == "kmh")
-#set($speedValue = $position.speed * 1.852)
-#set($speedString = $numberTool.format('0.0 km/h', $speedValue))
-#elseif($speedUnit == "mph")
-#set($speedValue = $position.speed * 1.15078)
-#set($speedString = $numberTool.format('0.0 mph', $speedValue))
-#else
-#set($speedString = $numberTool.format('0.0 kn', $position.speed))
-#end
-#set($digest = "$device.name excede la velocidad $speedString#{if}($geofence) en $geofence.name#{else}#{end} a las $dateTool.format('yyyy-MM-dd HH:mm:ss', $event.eventTime, $locale, $timezone)")
+#parse("notifications/es/_comun.vm")
+#set($tipo = "Exceso de velocidad")
+#if($speedUnit == "mph")#set($factor = 1.15078)#set($unidad = "mph")#elseif($speedUnit == "kn")#set($factor = 1.0)#set($unidad = "kn")#else#set($factor = 1.852)#set($unidad = "km/h")#end
+#if($position)#set($velocidad = $numberTool.format('0', $position.speed * $factor) + " " + $unidad)#else#set($velocidad = "-")#end
+#set($limiteNudos = $event.getDouble('speedLimit'))
+#if($limiteNudos > 0)#set($limite = $numberTool.format('0', $limiteNudos * $factor) + " " + $unidad)#else#set($limite = "-")#end
+#if($geofence)#set($lineaGeocerca = "${nl}Geocerca: $geofence.name")#else#set($lineaGeocerca = "")#end
+#set($subject = "⚠️ $tipo | $dispositivo")
+#set($digest = "Dispositivo: $dispositivo${nl}Evento: $tipo${nl}Velocidad: $velocidad (límite $limite)${nl}Fecha y hora: $fechaHora${lineaGeocerca}${nl}Ubicación: $ubicacion${nl}Mapa: $mapa")
 <!DOCTYPE html>
 <html>
 <body>
-Dispositivo: $esc.html($device.name)<br>
-Excede la velocidad: $speedString#{if}($geofence) en $esc.html($geofence.name)#{else}#{end}<br>
-Hora: $dateTool.format('yyyy-MM-dd HH:mm:ss', $event.eventTime, $locale, $timezone)<br>
-Punto: <a href="$webUrl/event/$event.id">#{if}($position.address)$position.address#{else}$position.latitude&deg;, $position.longitude&deg;#{end}</a><br>
-<br>
-<a href="$webUrl/settings/notifications?token=$token">Cancelar suscripción</a>
+<b>$esc.html($tipo)</b><br>
+Dispositivo: $esc.html($dispositivo)<br>
+Velocidad: $velocidad (límite $limite)<br>
+Fecha y hora: $fechaHora<br>
+#if($geofence)Geocerca: $esc.html($geofence.name)<br>
+#end
+Ubicación: <a href="$mapa">$esc.html($ubicacion)</a><br>
+#parse("notifications/es/_pie.vm")
 </body>
 </html>

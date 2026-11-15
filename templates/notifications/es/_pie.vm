@@ -1,0 +1,3 @@
+<br>
+<a href="$webUrl/event/$event.id">Ver evento en la plataforma</a><br>
+<a href="$webUrl/settings/notifications?token=$token">Cancelar suscripción</a>

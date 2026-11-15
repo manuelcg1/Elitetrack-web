@@ -1,15 +1,27 @@
-#set($subject = "$esc.html($device.name): ¡alarma!")
+#parse("notifications/es/_comun.vm")
 #set($alarmKey = $event.getString('alarm'))
-#set($alarmName = $translations.get("alarm${alarmKey.substring(0, 1).toUpperCase()}${alarmKey.substring(1)}"))
-#set($digest = "Alarma de $device.name: $alarmName a las $dateTool.format('yyyy-MM-dd HH:mm:ss', $event.eventTime, $locale, $timezone)")
+#if($alarmKey == "powerCut")
+#set($icono = "⚡")#set($tipo = "Desconexión de batería")#set($detalle = "Desconexión de batería")
+#elseif($alarmKey == "powerRestored")
+#set($icono = "🔌")#set($tipo = "Batería reconectada")#set($detalle = "Batería reconectada")
+#elseif($alarmKey == "input1On")
+#set($icono = "🔔")#set($tipo = "Entrada 1 activada")#set($detalle = "Entrada 1: NO → SÍ")
+#else
+#set($icono = "🚨")
+#if($alarmKey && $translations)#set($tipo = $translations.get("alarm${alarmKey.substring(0, 1).toUpperCase()}${alarmKey.substring(1)}"))#end
+#if(!$tipo)#set($tipo = "Alarma $!alarmKey")#end
+#set($detalle = $tipo)
+#end
+#set($subject = "$icono $tipo | $dispositivo")
+#set($digest = "Dispositivo: $dispositivo${nl}Evento: $detalle${nl}Fecha y hora: $fechaHora${nl}Ubicación: $ubicacion${nl}Mapa: $mapa")
 <!DOCTYPE html>
 <html>
 <body>
-Dispositivo: $esc.html($device.name)<br>
-Alarma: $esc.html($alarmName)<br>
-Hora: $dateTool.format('yyyy-MM-dd HH:mm:ss', $event.eventTime, $locale, $timezone)<br>
-Punto: <a href="$webUrl/event/$event.id">#{if}($position.address)$position.address#{else}$position.latitude&deg;, $position.longitude&deg;#{end}</a><br>
-<br>
-<a href="$webUrl/settings/notifications?token=$token">Cancelar suscripción</a>
+<b>$esc.html($tipo)</b><br>
+Dispositivo: $esc.html($dispositivo)<br>
+Evento: $esc.html($detalle)<br>
+Fecha y hora: $fechaHora<br>
+Ubicación: <a href="$mapa">$esc.html($ubicacion)</a><br>
+#parse("notifications/es/_pie.vm")
 </body>
 </html>
