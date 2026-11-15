@@ -1,0 +1,7 @@
+#set($nl = "
+")
+#set($dispositivo = $device.name)
+#set($fechaHora = $dateTool.format('dd/MM/yyyy HH:mm:ss', $event.eventTime, $locale, $timezone))
+#if($position && $position.address)#set($ubicacion = $position.address)#elseif($position)#set($ubicacion = $numberTool.format('0.000000', $position.latitude) + ", " + $numberTool.format('0.000000', $position.longitude))#else#set($ubicacion = "-")#end
+#if($position)#set($mapa = "https://maps.google.com/?q=" + $numberTool.format('0.000000', $position.latitude) + "," + $numberTool.format('0.000000', $position.longitude))#else#set($mapa = "")#end
+#if($geofence)#set($geocerca = $geofence.name)#else#set($geocerca = "-")#end
