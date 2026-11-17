@@ -1,0 +1,2 @@
+# Los scripts de shell deben tener LF también en Windows (core.autocrlf=true)
+*.sh text eol=lf
