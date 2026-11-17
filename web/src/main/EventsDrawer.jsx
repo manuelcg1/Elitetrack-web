@@ -14,6 +14,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { formatNotificationTitle, formatTime } from '../common/util/formatter';
 import { useTranslation } from '../common/components/LocalizationProvider';
 import { eventsActions } from '../store';
+import { dismissAllRecentEvents, dismissRecentEvent } from '../common/util/recentEvents';
 
 const useStyles = makeStyles()((theme) => ({
   drawer: {
@@ -35,6 +36,7 @@ const EventsDrawer = ({ open, onClose }) => {
   const t = useTranslation();
 
   const devices = useSelector((state) => state.devices.items);
+  const userId = useSelector((state) => state.session.user?.id);
 
   const events = useSelector((state) => state.events.items);
 
@@ -55,7 +57,10 @@ const EventsDrawer = ({ open, onClose }) => {
         <IconButton
           size="small"
           color="inherit"
-          onClick={() => dispatch(eventsActions.deleteAll())}
+          onClick={() => {
+            dismissAllRecentEvents(userId);
+            dispatch(eventsActions.deleteAll());
+          }}
         >
           <DeleteIcon fontSize="small" />
         </IconButton>
@@ -75,6 +80,7 @@ const EventsDrawer = ({ open, onClose }) => {
               size="small"
               onClick={(e) => {
                 e.stopPropagation();
+                dismissRecentEvent(userId, event);
                 dispatch(eventsActions.delete(event));
               }}
             >

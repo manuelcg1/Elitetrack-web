@@ -66,8 +66,11 @@ con `tools/replicar_notificaciones.sh` (usa la API, es idempotente):
      - `web` envía el evento a la web: aviso emergente y lista de la **campana roja del
        mapa** (`EventsDrawer`). Al pulsar un evento se abre `/event/{id}` con el mapa en el
        punto donde se generó. Sin `web`, el push llega pero la campana queda vacía.
-     - La lista de la campana vive en el navegador (hasta 50 eventos) y se vacía al
-       recargar la página; el historial completo está en Reportes → Eventos.
+     - La campana conserva los eventos al recargar: al iniciar sesión la web carga del
+       servidor los eventos de las últimas 24 horas que generan una notificación web para
+       el usuario (máximo 50; `web/src/common/util/recentEvents.js`). Lo que el usuario
+       borra de la campana se recuerda en su navegador y no vuelve a aparecer.
+       El historial completo sigue en Reportes → Eventos.
    - Ensayo y local: canal `web`. Un canal que no está en `notificator.types` hace fallar
      todas las notificaciones del evento.
    - Si la notificación ya existe, el script le agrega los canales que falten sin quitar
