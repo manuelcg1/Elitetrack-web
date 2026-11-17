@@ -16,10 +16,12 @@
 #   BASE_URL     obligatoria. Producción: https://app.elitetrack.site
 #                Ensayo (desde el VPS): http://127.0.0.1:8083 · Local: http://localhost:8082
 #   EMAIL        obligatoria. Usuario administrador de ESE entorno.
-#   NOTIFICATOR  canal de la notificación. Por defecto "web".
-#                Producción usa "traccar" (push). En ensayo y local NO uses "traccar":
-#                si el canal no está activo en el servidor, Traccar lanza una excepción
-#                y se pierden todas las notificaciones de ese evento.
+#   NOTIFICATOR  canal o canales de la notificación, separados por coma. Por defecto "web".
+#                Producción usa "traccar,web": traccar = push al celular; web = aviso y
+#                lista de la campana del mapa (sin "web" la campana queda vacía).
+#                En ensayo y local NO uses "traccar": si un canal no está activo en el
+#                servidor, Traccar lanza una excepción y se pierden todas las
+#                notificaciones de ese evento.
 #   IMEI         por defecto 865124073074769 (prueba-jammer)
 #   MODEL        por defecto FMC130
 
@@ -52,12 +54,16 @@ curl -sS -f -c "$JAR" --data-urlencode "email=$EMAIL" --data-urlencode "password
   "$BASE_URL/api/session" >/dev/null || { echo "   No se pudo iniciar sesión."; exit 1; }
 unset PASSWORD
 
-echo "== 0. Canal '$NOTIFICATOR' disponible en este servidor"
-if ! api "$BASE_URL/api/notifications/notificators" | jq -e --arg n "$NOTIFICATOR" 'any(.[]; .type == $n)' >/dev/null; then
-  echo "   El canal '$NOTIFICATOR' no está activo aquí (notificator.types). Canales disponibles:"
-  api "$BASE_URL/api/notifications/notificators" | jq -r '.[].type' | sed 's/^/     - /'
-  exit 1
-fi
+NOTIFICATOR="$(tr -d ' ' <<<"$NOTIFICATOR")"
+echo "== 0. Canales '$NOTIFICATOR' disponibles en este servidor"
+DISPONIBLES="$(api "$BASE_URL/api/notifications/notificators" | jq -r '.[].type')"
+for canal in ${NOTIFICATOR//,/ }; do
+  if ! grep -qx "$canal" <<<"$DISPONIBLES"; then
+    echo "   El canal '$canal' no está activo aquí (notificator.types). Canales disponibles:"
+    sed 's/^/     - /' <<<"$DISPONIBLES"
+    exit 1
+  fi
+done
 echo "   OK."
 
 echo "== 1. Dispositivo $IMEI -> modelo $MODEL"
@@ -97,7 +103,7 @@ fi
 echo "== 3. Notificación de alarma ($ALARMS)"
 # Compara el conjunto de alarmas, sin importar el orden en que se eligieron en la web.
 NOTIF="$(api "$BASE_URL/api/notifications?all=true" | jq --arg a "$ALARMS" '
-  def set(s): s | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(. != "")) | sort;
+  def set(s): s | gsub(" "; "") | split(",") | map(select(. != "")) | sort;
   [.[] | select(.type == "alarm" and set(.attributes.alarms // "") == set($a))][0]')"
 if [ "$NOTIF" = "null" ]; then
   NOTIF_ID="$(api -X POST "$BASE_URL/api/notifications" -d "$(jq -n --arg a "$ALARMS" --arg n "$NOTIFICATOR" \
@@ -106,9 +112,17 @@ if [ "$NOTIF" = "null" ]; then
 else
   NOTIF_ID="$(jq -r .id <<<"$NOTIF")"
   CANALES="$(jq -r '.notificators // ""' <<<"$NOTIF")"
-  echo "   Ya existía (id $NOTIF_ID), canales: '$CANALES'. No se modifica."
-  if ! tr ', ' '\n\n' <<<"$CANALES" | grep -qx "$NOTIFICATOR"; then
-    echo "   AVISO: no incluye '$NOTIFICATOR'. Revísala en Ajustes → Notificaciones."
+  # Agrega los canales que falten; no quita los que ya tenga.
+  NUEVOS="$(jq -rn --arg a "$CANALES" --arg b "$NOTIFICATOR" '
+    ($a | gsub(" "; "") | split(",") | map(select(. != ""))) as $ya
+    | ($b | split(",") | map(select(. != ""))) as $req
+    | ($ya + ($req - $ya)) | join(",")')"
+  if [ "$NUEVOS" = "$CANALES" ]; then
+    echo "   Ya existía (id $NOTIF_ID) con canales '$CANALES'."
+  else
+    api -X PUT "$BASE_URL/api/notifications/$NOTIF_ID" \
+      -d "$(jq --arg n "$NUEVOS" '.notificators = $n' <<<"$NOTIF")" >/dev/null
+    echo "   Ya existía (id $NOTIF_ID); canales '$CANALES' -> '$NUEVOS'."
   fi
 fi
 

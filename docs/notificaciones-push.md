@@ -61,13 +61,21 @@ con `tools/replicar_notificaciones.sh` (usa la API, es idempotente):
      Conserva las alarmas que manda el equipo, por ejemplo `powerCut,input1On`.
 3. **Notificación** de tipo Alarma con "Energía desconectada" y "Salida 1 activada",
    vinculada a los mismos dispositivos.
-   - Producción: canal `traccar` (Notificación Push).
+   - Producción: canales `traccar,web` (Notificación Push + Web).
+     - `traccar` envía el push al celular.
+     - `web` envía el evento a la web: aviso emergente y lista de la **campana roja del
+       mapa** (`EventsDrawer`). Al pulsar un evento se abre `/event/{id}` con el mapa en el
+       punto donde se generó. Sin `web`, el push llega pero la campana queda vacía.
+     - La lista de la campana vive en el navegador (hasta 50 eventos) y se vacía al
+       recargar la página; el historial completo está en Reportes → Eventos.
    - Ensayo y local: canal `web`. Un canal que no está en `notificator.types` hace fallar
      todas las notificaciones del evento.
+   - Si la notificación ya existe, el script le agrega los canales que falten sin quitar
+     los que ya tenga.
 
 ```bash
 # Producción (desde tu PC o el VPS)
-BASE_URL=https://app.elitetrack.site EMAIL=admin@elitetrack.site NOTIFICATOR=traccar ./tools/replicar_notificaciones.sh
+BASE_URL=https://app.elitetrack.site EMAIL=admin@elitetrack.site NOTIFICATOR=traccar,web ./tools/replicar_notificaciones.sh
 # Ensayo (en el VPS)
 BASE_URL=http://127.0.0.1:8083 EMAIL=admin@elitetrack.site NOTIFICATOR=web ./tools/replicar_notificaciones.sh
 # Local (Git Bash)
