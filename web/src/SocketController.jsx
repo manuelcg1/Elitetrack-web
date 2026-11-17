@@ -28,6 +28,8 @@ const eventTitles = {
   hardAcceleration: 'Aceleración brusca',
   batteryLow: 'Voltaje bajo',
   powerCut: 'Energía desconectada',
+  powerRestored: 'Energía restaurada',
+  input1On: 'Salida 1 activada',
   ignitionOn: 'Motor encendido',
   ignitionOff: 'Motor apagado',
   deviceMoving: 'Vehículo en movimiento',

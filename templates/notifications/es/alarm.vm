@@ -5,7 +5,8 @@
 #elseif($alarmKey == "powerRestored")
 #set($icono = "🔌")#set($tipo = "Batería reconectada")#set($detalle = "Batería reconectada")
 #elseif($alarmKey == "input1On")
-#set($icono = "🔔")#set($tipo = "Entrada 1 activada")#set($detalle = "Entrada 1: NO → SÍ")
+## input1On lo genera el atributo calculado cuando la salida DOUT1 (out1) pasa a activa
+#set($icono = "🔔")#set($tipo = "Salida 1 activada")#set($detalle = "Salida 1: NO → SÍ")
 #else
 #set($icono = "🚨")
 #if($alarmKey && $translations)#set($tipo = $translations.get("alarm${alarmKey.substring(0, 1).toUpperCase()}${alarmKey.substring(1)}"))#end

@@ -1,4 +1,4 @@
-# Notificaciones push: formato nuevo y alarma de Entrada 1
+# Notificaciones push: formato nuevo y alarma de Salida 1
 
 Plantillas en `templates/notifications/es/`:
 
@@ -6,7 +6,7 @@ Plantillas en `templates/notifications/es/`:
 | --- | --- |
 | `_comun.vm` | Variables compartidas: dispositivo, fecha y hora, ubicación, mapa, geocerca |
 | `_pie.vm` | Pie del correo: enlace al evento y "Cancelar suscripción" |
-| `alarm.vm` | Alarmas. Texto propio para `powerCut`, `powerRestored` e `input1On`; el resto usa la traducción `alarmXxx` |
+| `alarm.vm` | Alarmas. Texto propio para `powerCut`, `powerRestored` e `input1On` (Salida 1); el resto usa la traducción `alarmXxx` |
 | `deviceOverspeed.vm` | Exceso de velocidad. Respeta la unidad del usuario; la línea de geocerca solo aparece si el límite vino de una geocerca |
 | `geofenceEnter.vm`, `geofenceExit.vm` | Ingreso y salida de geocerca |
 
@@ -43,29 +43,60 @@ Antes de reemplazar la web guarda `/opt/traccar/web-backup-deploy-AAAAMMDD_HHMMS
 cd /opt/traccar && sudo rm -rf web/* && sudo tar -xzf web-backup-deploy-AAAAMMDD_HHMMSS.tar.gz
 ```
 
-## Configuración por equipo FMC130 (desde la web)
+## Configuración por equipo FMC130
 
-1. **Atributo calculado** (Ajustes → Atributos calculados):
-   - Descripción: `Entrada 1 activada (alarma)`
+Estos son datos de la base, no código: `deploy.sh` no los copia. Se replican en cada entorno
+con `tools/replicar_notificaciones.sh` (usa la API, es idempotente):
+
+1. **Modelo `FMC130`** en el dispositivo. El decodificador de Teltonika solo convierte el
+   IO 252 (Unplug Detection) en `alarm = powerCut` para modelos FMB/FMC. El modelo se toma
+   cuando el equipo abre su conexión: basta con que se reconecte, no hay que reiniciar Traccar.
+2. **Atributo calculado** `Salida 1 activada (alarma)`:
    - Atributo: `alarm` · Tipo: `Cadena`
-   - Expresión: `in1 == true ? (alarm ? alarm + ",input1On" : "input1On") : alarm`
-   - Vincularlo a los dispositivos FMC130.
-
-   No se repite mientras la entrada siga activa porque `event.ignoreDuplicateAlerts`
-   (activo por defecto) descarta una alarma que ya estaba en la posición anterior.
-   Conserva las alarmas que manda el equipo, por ejemplo `powerCut,input1On`.
-2. **Notificación** de tipo Alarma con los subtipos "Energía desconectada" y
-   "Entrada 1 activada", canal Notificación Push, vinculada a los mismos dispositivos.
-
-## Prueba en local sin equipo
-
-Con el servidor local (`debug.xml`, OsmAnd en el puerto 5055) y un dispositivo de prueba:
+   - Expresión: `(out1 ?? false) ? ((alarm ?? "") == "" ? "input1On" : alarm + ",input1On") : (alarm ?? null)`
+   - Vigila la **salida DOUT1** (`out1`). La clave de la alarma sigue siendo `input1On`
+     porque ya existe así en producción; el texto que ve el usuario es "Salida 1 activada".
+   - No se repite mientras la salida siga activa porque `event.ignoreDuplicateAlerts`
+     (activo por defecto) descarta una alarma que ya estaba en la posición anterior.
+     Conserva las alarmas que manda el equipo, por ejemplo `powerCut,input1On`.
+3. **Notificación** de tipo Alarma con "Energía desconectada" y "Salida 1 activada",
+   vinculada a los mismos dispositivos.
+   - Producción: canal `traccar` (Notificación Push).
+   - Ensayo y local: canal `web`. Un canal que no está en `notificator.types` hace fallar
+     todas las notificaciones del evento.
 
 ```bash
-curl "http://127.0.0.1:5055/?id=IMEI&lat=-8.109&lon=-79.0187&speed=0&timestamp=$(date +%s)&in1=false"
-curl "http://127.0.0.1:5055/?id=IMEI&lat=-8.109&lon=-79.0187&speed=0&timestamp=$(date +%s)&in1=true"
-curl "http://127.0.0.1:5055/?id=IMEI&lat=-8.109&lon=-79.0187&speed=0&timestamp=$(date +%s)&in1=false&alarm=powerCut"
+# Producción (desde tu PC o el VPS)
+BASE_URL=https://app.elitetrack.site EMAIL=admin@elitetrack.site NOTIFICATOR=traccar ./tools/replicar_notificaciones.sh
+# Ensayo (en el VPS)
+BASE_URL=http://127.0.0.1:8083 EMAIL=admin@elitetrack.site NOTIFICATOR=web ./tools/replicar_notificaciones.sh
+# Local (Git Bash)
+BASE_URL=http://localhost:8082 EMAIL=admin NOTIFICATOR=web ./tools/replicar_notificaciones.sh
 ```
 
-Resultado esperado: un aviso "Entrada 1" y uno "Desconexión de batería"; si se repite
-`in1=true`, no hay un segundo aviso.
+La contraseña se pide sin mostrarla. Requiere `jq`.
+
+## Prueba sin el equipo
+
+El FMC130 solo transmite a producción. En ensayo y local se prueba con OsmAnd:
+
+| Entorno | Puerto OsmAnd | Dónde ejecutar |
+| --- | --- | --- |
+| Local | `5055` | Tu PC |
+| Ensayo | `15055` (solo 127.0.0.1) | El VPS |
+
+**En el VPS no uses `5055` ni `systemctl restart traccar` para pruebas:** son de producción.
+El ensayo no es un servicio; se reinicia matando el PID de `/tmp/elitetrack-map-test.pid`
+y volviéndolo a lanzar con `debug-ensayo.xml`.
+
+```bash
+PUERTO=5055   # 15055 en el ensayo
+U="http://127.0.0.1:$PUERTO/?id=865124073074769&lat=-12.05&lon=-77.04"
+curl -s "$U&out1=false"; sleep 3
+curl -s "$U&out1=true"; sleep 3                  # → Salida 1 activada
+curl -s "$U&out1=true"; sleep 3                  # → nada (no se repite)
+curl -s "$U&out1=false&alarm=powerCut"           # → Desconexión de batería
+```
+
+No uses las plantillas de `prototipos/`: son una versión anterior, sin el pie del correo
+y con km/h fijo. Las vigentes son las de `templates/notifications/es/`.
