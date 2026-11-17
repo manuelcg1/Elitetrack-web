@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Replica en un entorno Traccar (producción, ensayo o local) la configuración de
-# la alarma de Salida 1 del FMC130 probada en producción el 16/11/2026:
+# la alarma "Jammer Detectado" (Salida 1) del FMC130 probada en producción el 16/11/2026:
 #   1. Modelo del dispositivo = FMC130 (para que IO 252 se decodifique como powerCut)
 #   2. Atributo calculado "alarm": out1 (salida DOUT1) activa -> agrega input1On
 #   3. Notificación de tipo Alarma (powerCut, input1On) por el canal indicado
@@ -34,7 +34,7 @@ IMEI="${IMEI:-865124073074769}"
 MODEL="${MODEL:-FMC130}"
 NOTIFICATOR="${NOTIFICATOR:-web}"
 
-ATTR_DESC="Salida 1 activada (alarma)"
+ATTR_DESC="Jammer Detectado (Salida 1)"
 ATTR_EXPR='(out1 ?? false) ? ((alarm ?? "") == "" ? "input1On" : alarm + ",input1On") : (alarm ?? null)'
 ALARMS="powerCut,input1On"
 

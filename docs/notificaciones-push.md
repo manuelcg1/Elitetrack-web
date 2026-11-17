@@ -1,4 +1,4 @@
-# Notificaciones push: formato nuevo y alarma de Salida 1
+# Notificaciones push: formato nuevo y alarma Jammer Detectado (Salida 1)
 
 Plantillas en `templates/notifications/es/`:
 
@@ -6,7 +6,7 @@ Plantillas en `templates/notifications/es/`:
 | --- | --- |
 | `_comun.vm` | Variables compartidas: dispositivo, fecha y hora, ubicación, mapa, geocerca |
 | `_pie.vm` | Pie del correo: enlace al evento y "Cancelar suscripción" |
-| `alarm.vm` | Alarmas. Texto propio para `powerCut`, `powerRestored` e `input1On` (Salida 1); el resto usa la traducción `alarmXxx` |
+| `alarm.vm` | Alarmas. Texto propio para `powerCut`, `powerRestored` e `input1On` (Jammer Detectado); el resto usa la traducción `alarmXxx` |
 | `deviceOverspeed.vm` | Exceso de velocidad. Respeta la unidad del usuario; la línea de geocerca solo aparece si el límite vino de una geocerca |
 | `geofenceEnter.vm`, `geofenceExit.vm` | Ingreso y salida de geocerca |
 
@@ -51,15 +51,17 @@ con `tools/replicar_notificaciones.sh` (usa la API, es idempotente):
 1. **Modelo `FMC130`** en el dispositivo. El decodificador de Teltonika solo convierte el
    IO 252 (Unplug Detection) en `alarm = powerCut` para modelos FMB/FMC. El modelo se toma
    cuando el equipo abre su conexión: basta con que se reconecte, no hay que reiniciar Traccar.
-2. **Atributo calculado** `Salida 1 activada (alarma)`:
+2. **Atributo calculado** `Jammer Detectado (Salida 1)`:
    - Atributo: `alarm` · Tipo: `Cadena`
    - Expresión: `(out1 ?? false) ? ((alarm ?? "") == "" ? "input1On" : alarm + ",input1On") : (alarm ?? null)`
-   - Vigila la **salida DOUT1** (`out1`). La clave de la alarma sigue siendo `input1On`
-     porque ya existe así en producción; el texto que ve el usuario es "Salida 1 activada".
+   - Vigila la **salida DOUT1** (`out1`), que el FMC130 activa al detectar interferencia GNSS.
+     La clave de la alarma sigue siendo `input1On` porque ya existe así en producción;
+     el texto que ve el usuario es **"Jammer Detectado"**, sin el prefijo "Alarma"
+     (`standaloneAlarms` en `web/src/common/util/formatter.js`).
    - No se repite mientras la salida siga activa porque `event.ignoreDuplicateAlerts`
      (activo por defecto) descarta una alarma que ya estaba en la posición anterior.
      Conserva las alarmas que manda el equipo, por ejemplo `powerCut,input1On`.
-3. **Notificación** de tipo Alarma con "Energía desconectada" y "Salida 1 activada",
+3. **Notificación** de tipo Alarma con "Energía desconectada" y "Jammer Detectado",
    vinculada a los mismos dispositivos.
    - Producción: canales `traccar,web` (Notificación Push + Web).
      - `traccar` envía el push al celular.
@@ -104,7 +106,7 @@ y volviéndolo a lanzar con `debug-ensayo.xml`.
 PUERTO=5055   # 15055 en el ensayo
 U="http://127.0.0.1:$PUERTO/?id=865124073074769&lat=-12.05&lon=-77.04"
 curl -s "$U&out1=false"; sleep 3
-curl -s "$U&out1=true"; sleep 3                  # → Salida 1 activada
+curl -s "$U&out1=true"; sleep 3                  # → Jammer Detectado
 curl -s "$U&out1=true"; sleep 3                  # → nada (no se repite)
 curl -s "$U&out1=false&alarm=powerCut"           # → Desconexión de batería
 ```

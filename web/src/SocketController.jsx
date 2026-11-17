@@ -30,7 +30,7 @@ const eventTitles = {
   batteryLow: 'Voltaje bajo',
   powerCut: 'Energía desconectada',
   powerRestored: 'Energía restaurada',
-  input1On: 'Salida 1 activada',
+  input1On: 'Jammer Detectado',
   ignitionOn: 'Motor encendido',
   ignitionOff: 'Motor apagado',
   deviceMoving: 'Vehículo en movimiento',
