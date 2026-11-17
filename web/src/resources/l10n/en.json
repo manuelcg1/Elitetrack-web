@@ -570,7 +570,7 @@
   "alarmFatigueDriving": "Fatigue Driving",
   "alarmPowerCut": "Power Cut",
   "alarmPowerRestored": "Power Restored",
-  "alarmInput1On": "Input 1 Activated",
+  "alarmInput1On": "Jammer Detected",
   "alarmJamming": "Jamming",
   "alarmTemperature": "Temperature",
   "alarmParking": "Parking",

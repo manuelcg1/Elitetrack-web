@@ -13,6 +13,7 @@ import {
 } from './common/components/NativeInterface';
 import fetchOrThrow from './common/util/fetchOrThrow';
 import AlertPopupStack from './common/components/AlertPopupStack';
+import { loadRecentEvents } from './common/util/recentEvents';
 
 const logoutCode = 4000;
 const reconnectDelayMs = 3000;
@@ -28,6 +29,8 @@ const eventTitles = {
   hardAcceleration: 'Aceleración brusca',
   batteryLow: 'Voltaje bajo',
   powerCut: 'Energía desconectada',
+  powerRestored: 'Energía restaurada',
+  input1On: 'Jammer Detectado',
   ignitionOn: 'Motor encendido',
   ignitionOff: 'Motor apagado',
   deviceMoving: 'Vehículo en movimiento',
@@ -54,6 +57,7 @@ const SocketController = () => {
   const navigate = useNavigate();
 
   const authenticated = useSelector((state) => Boolean(state.session.user));
+  const userId = useSelector((state) => state.session.user?.id);
   const includeLogs = useSelector((state) => state.session.includeLogs);
   const devices = useSelector((state) => state.devices.items);
   const positions = useSelector((state) => state.session.positions);
@@ -264,9 +268,19 @@ const SocketController = () => {
   useEffectAsync(async () => {
     if (authenticated) {
       const response = await fetchOrThrow('/api/devices');
-      dispatch(devicesActions.refresh(await response.json()));
+      const deviceList = await response.json();
+      dispatch(devicesActions.refresh(deviceList));
       nativePostMessage('authenticated');
       connectSocketRef.current?.();
+      if (!features.disableEvents) {
+        // Recupera los eventos recientes de la campana para que no se pierdan al recargar.
+        loadRecentEvents({
+          userId,
+          devices: Object.fromEntries(deviceList.map((device) => [device.id, device])),
+        })
+          .then((recent) => recent.length && dispatch(eventsActions.merge(recent)))
+          .catch(() => {});
+      }
       return () => {
         clearReconnectTimeout();
         socketRef.current?.close(logoutCode);

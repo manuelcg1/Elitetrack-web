@@ -160,6 +160,10 @@ export const getBatteryStatus = (batteryLevel) => {
   return 'error';
 };
 
+// Alarmas cuyo nombre se muestra solo, sin el prefijo "Alarma"
+// (input1On = "Jammer Detectado", generado por la salida DOUT1 del FMC130).
+const standaloneAlarms = new Set(['input1On']);
+
 export const formatNotificationTitle = (t, notification, includeId) => {
   if (notification.description) {
     return notification.description;
@@ -171,6 +175,8 @@ export const formatNotificationTitle = (t, notification, includeId) => {
       const alarms = alarmString.split(',');
       if (alarms.length > 1) {
         title += ` (${alarms.length})`;
+      } else if (standaloneAlarms.has(alarms[0])) {
+        title = formatAlarm(alarms[0], t);
       } else {
         title += ` ${formatAlarm(alarms[0], t)}`;
       }
