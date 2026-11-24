@@ -150,9 +150,11 @@ const GeofenceTreeNode = ({
   onDeleteFolder,
   onDeleteGeofence,
   onEditCircle,
+  searching = false,
 }) => {
   const navigate = useNavigate();
-  const [open, setOpen] = useState(true);
+  const [openState, setOpen] = useState(false);
+  const open = searching || openState;
 
   const isRoot = node.id === ROOT_PARENT_ID;
   const geofenceIds = getFolderGeofenceIds(node);
@@ -172,7 +174,13 @@ const GeofenceTreeNode = ({
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, minWidth: 0, flex: 1 }}>
-            <IconButton size="small" onClick={() => setOpen((prev) => !prev)} sx={treeIconButtonSx}>
+            <IconButton
+              size="small"
+              aria-label={node.name}
+              aria-expanded={open}
+              onClick={() => setOpen((prev) => !prev)}
+              sx={treeIconButtonSx}
+            >
               {open ? <ExpandMoreIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
             </IconButton>
 
@@ -209,7 +217,10 @@ const GeofenceTreeNode = ({
             <Tooltip title="Crear subcarpeta">
               <IconButton
                 size="small"
-                onClick={() => onCreateFolder(node.id)}
+                onClick={() => {
+                  setOpen(true);
+                  onCreateFolder(node.id);
+                }}
                 sx={treeIconButtonSx}
               >
                 <CreateNewFolderIcon fontSize="small" />
@@ -260,6 +271,7 @@ const GeofenceTreeNode = ({
             onDeleteFolder={onDeleteFolder}
             onDeleteGeofence={onDeleteGeofence}
             onEditCircle={onEditCircle}
+            searching={searching}
           />
         ))}
 
@@ -593,6 +605,7 @@ const GeofenceTreeList = ({ onGeofenceSelected, onEditCircle }) => {
         onDeleteFolder={handleDeleteFolder}
         onDeleteGeofence={handleDeleteGeofence}
         onEditCircle={onEditCircle}
+        searching={Boolean(search)}
       />
 
       <GeofenceFolderDialog

@@ -7,7 +7,7 @@ import { SpeedLegendControl } from './legend/MapSpeedLegend';
 import { useTranslation } from '../common/components/LocalizationProvider';
 import { useAttributePreference } from '../common/util/preferences';
 
-const MapRoutePoints = ({ positions, onClick, showSpeedControl }) => {
+const MapRoutePoints = ({ positions, onClick, showSpeedControl, color, progress }) => {
   const id = useId();
   const theme = useTheme();
   const t = useTranslation();
@@ -90,12 +90,19 @@ const MapRoutePoints = ({ positions, onClick, showSpeedControl }) => {
           index,
           id: position.id,
           rotation: position.course,
-          color: getSpeedColor(position.speed, minSpeed, maxSpeed),
+          color: color || getSpeedColor(position.speed, minSpeed, maxSpeed),
         },
       })),
     });
     return () => map.removeControl(control);
-  }, [onMarkerClick, positions, showSpeedControl]);
+  }, [onMarkerClick, positions, showSpeedControl, color]);
+
+  useEffect(() => {
+    if (progress == null || !map.getLayer(id)) {
+      return;
+    }
+    map.setPaintProperty(id, 'text-opacity', ['case', ['>', ['get', 'index'], progress], 0.35, 1]);
+  }, [id, progress, onMarkerClick]);
 
   return null;
 };

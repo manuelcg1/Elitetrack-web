@@ -85,7 +85,7 @@ const TreeNode = ({
   searching = false,
 }) => {
   const t = useTranslation();
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const root = node.id === ROOT_ID;
   const ids = getGeofenceIds(node);
   const allVisible = ids.length > 0 && ids.every((id) => visibleIds.includes(id));

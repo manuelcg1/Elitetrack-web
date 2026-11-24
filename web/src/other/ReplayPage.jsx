@@ -1,19 +1,15 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { IconButton, Paper, Slider, Toolbar, Typography } from '@mui/material';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { IconButton, Paper, Toolbar, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { makeStyles } from 'tss-react/mui';
 import TuneIcon from '@mui/icons-material/Tune';
 import DownloadIcon from '@mui/icons-material/Download';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import PauseIcon from '@mui/icons-material/Pause';
-import FastForwardIcon from '@mui/icons-material/FastForward';
-import FastRewindIcon from '@mui/icons-material/FastRewind';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import MapView from '../map/core/MapView';
+import MapView, { map } from '../map/core/MapView';
 import MapRoutePath from '../map/MapRoutePath';
 import MapRoutePoints from '../map/MapRoutePoints';
 import MapPositions from '../map/MapPositions';
-import { formatTime } from '../common/util/formatter';
+import MapRouteStops from '../map/MapRouteStops';
 import ReportFilter, { updateReportParams } from '../reports/components/ReportFilter';
 import { useTranslation } from '../common/components/LocalizationProvider';
 import { useCatch } from '../reactHelper';
@@ -25,10 +21,33 @@ import BackIcon from '../common/components/BackIcon';
 import fetchOrThrow from '../common/util/fetchOrThrow';
 import MapOverlay from '../map/overlay/MapOverlay';
 import { useRestriction } from '../common/util/permissions';
+import usePersistedState from '../common/util/usePersistedState';
+import { findStops, nextIndex } from '../common/util/routeReplay';
+import { isRouteColor } from '../reports/components/RouteColorSelect';
+import ReplayPlayer, { replayRates } from './ReplayPlayer';
+
+const POINT_INTERVAL = 500;
+const MIN_INTERVAL = 62.5;
+const FOLLOW_ZOOM = 14;
+const PANEL_SPACE = 360;
 
 const useStyles = makeStyles()((theme) => ({
   root: {
     height: '100%',
+    position: 'relative',
+    [theme.breakpoints.down('md')]: {
+      display: 'flex',
+      flexDirection: 'column',
+    },
+  },
+  map: {
+    height: '100%',
+    [theme.breakpoints.down('md')]: {
+      order: 2,
+      flex: '1 1 0',
+      height: 'auto',
+      minHeight: 0,
+    },
   },
   sidebar: {
     display: 'flex',
@@ -38,48 +57,56 @@ const useStyles = makeStyles()((theme) => ({
     left: 0,
     top: 0,
     margin: theme.spacing(1.5),
+    maxHeight: `calc(100% - ${theme.spacing(3)})`,
     width: theme.dimensions.drawerWidthDesktop,
     [theme.breakpoints.down('md')]: {
-      width: '100%',
-      margin: 0,
+      display: 'contents',
+    },
+  },
+  header: {
+    flexShrink: 0,
+    [theme.breakpoints.down('md')]: {
+      order: 1,
+      zIndex: 1,
     },
   },
   title: {
     flexGrow: 1,
   },
-  slider: {
-    width: '100%',
-  },
-  controls: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  formControlLabel: {
-    height: '100%',
-    width: '100%',
-    paddingRight: theme.spacing(1),
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
   content: {
     display: 'flex',
     flexDirection: 'column',
     padding: theme.spacing(2),
+    overflowX: 'hidden',
+    overflowY: 'auto',
+    '& > *': {
+      flexShrink: 0,
+    },
     [theme.breakpoints.down('md')]: {
-      margin: theme.spacing(1),
+      order: 1,
+      flexShrink: 0,
+      maxHeight: '70%',
     },
     [theme.breakpoints.up('md')]: {
       marginTop: theme.spacing(1),
+    },
+  },
+  player: {
+    [theme.breakpoints.down('md')]: {
+      order: 3,
+      maxHeight: '58%',
+      zIndex: 1,
+      borderRadius: '16px 16px 0 0',
     },
   },
 }));
 
 const ReplayPage = () => {
   const t = useTranslation();
-  const { classes } = useStyles();
+  const { classes, cx } = useStyles();
+  const theme = useTheme();
+  const desktop = useMediaQuery(theme.breakpoints.up('md'));
   const navigate = useNavigate();
-  const timerRef = useRef();
   const disableReports = useRestriction('disableReports');
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -95,6 +122,15 @@ const ReplayPage = () => {
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const [storedColor, setLineColor] = usePersistedState('reportPositionsLineColor', null);
+  const lineColor = isRouteColor(storedColor) ? storedColor : null;
+  const [storedRate, setRate] = usePersistedState('replayRate', 1);
+  const rate = replayRates.includes(storedRate) ? storedRate : 1;
+  const [follow, setFollow] = usePersistedState('replayFollow', false);
+  const [skipStops, setSkipStops] = usePersistedState('replaySkipStops', false);
+
+  const stops = useMemo(() => findStops(positions), [positions]);
+
   const loaded = Boolean(from && to && !loading && positions.length);
 
   useEffect(() => {
@@ -103,40 +139,117 @@ const ReplayPage = () => {
     }
   }, [disableReports, navigate]);
 
-  const deviceName = useSelector((state) => {
-    if (selectedDeviceId) {
-      const device = state.devices.items[selectedDeviceId];
-      if (device) {
-        return device.name;
-      }
-    }
-    return null;
-  });
-
   useEffect(() => {
     if (!from && !to) {
       setPositions([]);
+      setIndex(0);
+      setPlaying(false);
     }
   }, [from, to, setPositions]);
 
   useEffect(() => {
-    if (playing && positions.length > 0) {
-      timerRef.current = setInterval(() => {
-        setIndex((index) => index + 1);
-      }, 500);
-    } else {
-      clearInterval(timerRef.current);
+    if (!playing || !positions.length) {
+      return undefined;
     }
-
-    return () => clearInterval(timerRef.current);
-  }, [playing, positions]);
+    // A velocidades altas se avanzan varios puntos por ciclo en vez de redibujar más seguido.
+    const interval = Math.max(POINT_INTERVAL / rate, MIN_INTERVAL);
+    const steps = Math.round((interval * rate) / POINT_INTERVAL);
+    const timer = setInterval(() => {
+      setIndex((current) => {
+        let next = current;
+        for (let i = 0; i < steps; i += 1) {
+          next = nextIndex(positions, next, skipStops);
+        }
+        return next;
+      });
+    }, interval);
+    return () => clearInterval(timer);
+  }, [playing, positions, rate, skipStops]);
 
   useEffect(() => {
     if (index >= positions.length - 1) {
-      clearInterval(timerRef.current);
       setPlaying(false);
     }
   }, [index, positions]);
+
+  const goTo = useCallback(
+    (value) => setIndex(Math.max(0, Math.min(value, positions.length - 1))),
+    [positions],
+  );
+
+  const togglePlay = useCallback(() => {
+    if (!playing && index >= positions.length - 1) {
+      setIndex(0);
+    }
+    setPlaying(!playing && positions.length > 1);
+  }, [playing, index, positions]);
+
+  useEffect(() => {
+    if (!loaded) {
+      return undefined;
+    }
+    const onKeyDown = (event) => {
+      const { target } = event;
+      if (
+        event.defaultPrevented ||
+        event.ctrlKey ||
+        event.altKey ||
+        event.metaKey ||
+        target.closest?.(
+          'input, textarea, select, [role="combobox"], [role="slider"], .MuiModal-root, .maplibregl-map',
+        ) ||
+        (event.key === ' ' && target.closest?.('button, a'))
+      ) {
+        return;
+      }
+      switch (event.key) {
+        case ' ':
+          togglePlay();
+          break;
+        case 'ArrowLeft':
+          goTo(index - 1);
+          break;
+        case 'ArrowRight':
+          goTo(index + 1);
+          break;
+        case 'Home':
+          goTo(0);
+          break;
+        case 'End':
+          goTo(positions.length - 1);
+          break;
+        default:
+          return;
+      }
+      event.preventDefault();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [loaded, togglePlay, goTo, index, positions]);
+
+  const current = positions[index];
+
+  // El mapa solo se mueve al cambiar de punto o al activar el seguimiento.
+  useEffect(() => {
+    if (loaded && follow && current) {
+      map.easeTo({
+        center: [current.longitude, current.latitude],
+        zoom: Math.max(map.getZoom(), FOLLOW_ZOOM),
+        offset: desktop ? [PANEL_SPACE / 2, 0] : [0, 0],
+        duration: playing ? Math.min(300, POINT_INTERVAL / rate) : 0,
+      });
+    }
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
+  }, [loaded, follow, current, desktop]);
+
+  const getPadding = useCallback(
+    (width, height) => {
+      const margin = Math.min(width, height) * 0.1;
+      const left = desktop ? PANEL_SPACE : 0;
+      return { top: margin, bottom: margin, right: margin, left: left + margin };
+    },
+    [desktop],
+  );
 
   const onPointClick = useCallback(
     (_, index) => {
@@ -162,6 +275,7 @@ const ReplayPage = () => {
     const query = new URLSearchParams({ deviceId, from, to });
     try {
       const response = await fetchOrThrow(`/api/positions?${query.toString()}`);
+      setPlaying(false);
       setIndex(0);
       const positions = await response.json();
       setPositions(positions);
@@ -180,23 +294,32 @@ const ReplayPage = () => {
 
   return (
     <div className={classes.root}>
-      <MapView>
-        <MapOverlay />
-        <MapGeofence />
-        <MapRoutePath positions={positions} />
-        <MapRoutePoints positions={positions} onClick={onPointClick} showSpeedControl />
-        {index < positions.length && (
-          <MapPositions
-            positions={[positions[index]]}
-            onMarkerClick={onMarkerClick}
-            titleField="fixTime"
+      <div className={classes.map}>
+        <MapView>
+          <MapOverlay />
+          <MapGeofence />
+          <MapRoutePath positions={positions} color={lineColor} progress={index} />
+          <MapRoutePoints
+            positions={positions}
+            onClick={onPointClick}
+            showSpeedControl={!lineColor}
+            color={lineColor}
+            progress={index}
           />
-        )}
-      </MapView>
-      <MapScale />
-      <MapCamera positions={positions} />
+          <MapRouteStops positions={stops} />
+          {current && (
+            <MapPositions
+              positions={[current]}
+              onMarkerClick={onMarkerClick}
+              titleField="fixTime"
+            />
+          )}
+        </MapView>
+        <MapScale />
+        <MapCamera positions={positions} getPadding={getPadding} />
+      </div>
       <div className={classes.sidebar}>
-        <Paper elevation={3} square>
+        <Paper elevation={3} square className={classes.header}>
           <Toolbar>
             <IconButton edge="start" sx={{ mr: 2 }} onClick={() => navigate(-1)}>
               <BackIcon />
@@ -219,46 +342,29 @@ const ReplayPage = () => {
             )}
           </Toolbar>
         </Paper>
-        <Paper className={classes.content} square>
+        <Paper
+          className={cx(classes.content, loaded && classes.player)}
+          square={desktop || !loaded}
+        >
           {loaded && (
-            <>
-              <Typography variant="subtitle1" align="center">
-                {deviceName}
-              </Typography>
-              <Slider
-                className={classes.slider}
-                max={positions.length - 1}
-                step={null}
-                marks={positions.map((_, index) => ({ value: index }))}
-                value={index}
-                onChange={(_, index) => setIndex(index)}
-              />
-              <div className={classes.controls}>
-                {`${index + 1}/${positions.length}`}
-                <IconButton
-                  onClick={() => setIndex((index) => index - 1)}
-                  disabled={playing || index <= 0}
-                >
-                  <FastRewindIcon />
-                </IconButton>
-                <IconButton
-                  onClick={() => setPlaying(!playing)}
-                  disabled={index >= positions.length - 1}
-                >
-                  {playing ? <PauseIcon /> : <PlayArrowIcon />}
-                </IconButton>
-                <IconButton
-                  onClick={() => setIndex((index) => index + 1)}
-                  disabled={playing || index >= positions.length - 1}
-                >
-                  <FastForwardIcon />
-                </IconButton>
-                {formatTime(positions[index].fixTime, 'seconds')}
-              </div>
-            </>
+            <ReplayPlayer
+              positions={positions}
+              index={index}
+              onIndex={goTo}
+              playing={playing}
+              onToggle={togglePlay}
+              rate={rate}
+              onRate={setRate}
+              follow={follow}
+              onFollow={setFollow}
+              skipStops={skipStops}
+              onSkipStops={setSkipStops}
+              color={lineColor}
+              onColor={setLineColor}
+            />
           )}
           <div style={{ display: loaded ? 'none' : 'block' }}>
-            <ReportFilter onShow={onShow} deviceType="single" loading={loading} />
+            <ReportFilter onShow={onShow} deviceType="single" loading={loading} vertical />
           </div>
         </Paper>
       </div>

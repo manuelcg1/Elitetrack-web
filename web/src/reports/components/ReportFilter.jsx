@@ -27,8 +27,17 @@ export const updateReportParams = (searchParams, setSearchParams, key, values) =
   setSearchParams(newParams, { replace: true });
 };
 
-const ReportFilter = ({ children, onShow, onExport, onSchedule, deviceType, loading }) => {
-  const { classes } = useReportStyles();
+const ReportFilter = ({
+  children,
+  onShow,
+  onExport,
+  onSchedule,
+  deviceType,
+  loading,
+  wrap,
+  vertical,
+}) => {
+  const { classes, cx } = useReportStyles();
   const t = useTranslation();
   const navigate = useNavigate();
 
@@ -177,7 +186,14 @@ const ReportFilter = ({ children, onShow, onExport, onSchedule, deviceType, load
   };
 
   return (
-    <div className={classes.filter}>
+    <div
+      className={cx(
+        classes.filter,
+        vertical && classes.filterVertical,
+        wrap && classes.filterWrap,
+        wrap && (period === 'custom' || selectedOption === 'schedule') && classes.filterWrapAlways,
+      )}
+    >
       {deviceType !== 'none' && (
         <div className={classes.filterDevice}>
           <SelectField
