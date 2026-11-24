@@ -5,7 +5,7 @@ import { map } from './core/MapView';
 import getSpeedColor from '../common/util/colors';
 import { useAttributePreference } from '../common/util/preferences';
 
-const MapRoutePath = ({ positions }) => {
+const MapRoutePath = ({ positions, color, progress }) => {
   const id = useId();
 
   const theme = useTheme();
@@ -78,7 +78,8 @@ const MapRoutePath = ({ positions }) => {
           ],
         },
         properties: {
-          color: reportColor || getSpeedColor(positions[i + 1].speed, minSpeed, maxSpeed),
+          index: i,
+          color: color || reportColor || getSpeedColor(positions[i + 1].speed, minSpeed, maxSpeed),
           width: mapLineWidth,
           opacity: mapLineOpacity,
         },
@@ -88,7 +89,27 @@ const MapRoutePath = ({ positions }) => {
       type: 'FeatureCollection',
       features,
     });
-  }, [theme, positions, reportColor, mapLineWidth, mapLineOpacity]);
+  }, [theme, positions, color, reportColor, mapLineWidth, mapLineOpacity]);
+
+  // Con progress se resalta el tramo recorrido y se atenúa el pendiente.
+  useEffect(() => {
+    if (progress == null || !map.getLayer(`${id}-line`)) {
+      return;
+    }
+    const pending = ['>=', ['get', 'index'], progress];
+    map.setPaintProperty(`${id}-line`, 'line-opacity', [
+      'case',
+      pending,
+      ['*', ['get', 'opacity'], 0.35],
+      ['get', 'opacity'],
+    ]);
+    map.setPaintProperty(`${id}-line`, 'line-width', [
+      'case',
+      pending,
+      ['get', 'width'],
+      ['+', ['get', 'width'], 2],
+    ]);
+  }, [id, progress]);
 
   return null;
 };

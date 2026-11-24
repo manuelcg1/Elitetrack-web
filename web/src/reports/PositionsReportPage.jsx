@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { useSelector } from 'react-redux';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   IconButton,
@@ -17,6 +18,7 @@ import PageLayout from '../common/components/PageLayout';
 import ReportsMenu from './components/ReportsMenu';
 import PositionValue from '../common/components/PositionValue';
 import ColumnSelect from './components/ColumnSelect';
+import RouteColorSelect, { isRouteColor } from './components/RouteColorSelect';
 import usePositionAttributes from '../common/attributes/usePositionAttributes';
 import { useCatch } from '../reactHelper';
 import MapView from '../map/core/MapView';
@@ -32,6 +34,7 @@ import MapScale from '../map/MapScale';
 import fetchOrThrow from '../common/util/fetchOrThrow';
 import SelectField from '../common/components/SelectField';
 import ReportMapSplit from './components/ReportMapSplit';
+import usePersistedState from '../common/util/usePersistedState';
 import exportExcel from '../common/util/exportExcel';
 import { useAttributePreference, usePreference } from '../common/util/preferences';
 import { speedToKnots } from '../common/util/converter';
@@ -72,6 +75,12 @@ const PositionsReportPage = () => {
 
   const [available, setAvailable] = useState([]);
   const [columns, setColumns] = useState(['fixTime', 'latitude', 'longitude', 'speed', 'address']);
+  const [storedColor, setLineColor] = usePersistedState('reportPositionsLineColor', null);
+  const lineColor = isRouteColor(storedColor) ? storedColor : null;
+  const deviceId = searchParams.get('deviceId');
+  const deviceColor = useSelector(
+    (state) => state.devices.items[deviceId]?.attributes?.['web.reportColor'],
+  );
   const [items, setItems] = useState([]);
   const geofenceId = searchParams.has('geofenceId')
     ? parseInt(searchParams.get('geofenceId'))
@@ -231,8 +240,8 @@ const PositionsReportPage = () => {
           const positions = items.filter((position) => position.deviceId === deviceId);
           return (
             <Fragment key={deviceId}>
-              <MapRoutePath positions={positions} />
-              <MapRoutePoints positions={positions} onClick={onMapPointClick} />
+              <MapRoutePath positions={positions} color={lineColor} />
+              <MapRoutePoints positions={positions} onClick={onMapPointClick} color={lineColor} />
             </Fragment>
           );
         })}
@@ -260,6 +269,7 @@ const PositionsReportPage = () => {
           onSchedule={onSchedule}
           deviceType="single"
           loading={loading}
+          wrap
         >
           <div className={classes.filterGeofence}>
             <SelectField
@@ -280,6 +290,7 @@ const PositionsReportPage = () => {
             rawValues
             disabled={!items.length}
           />
+          <RouteColorSelect value={lineColor} onChange={setLineColor} deviceColor={deviceColor} />
         </ReportFilter>
       </div>
       <Table className={classes.compactTable}>

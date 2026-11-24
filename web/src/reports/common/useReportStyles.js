@@ -50,6 +50,31 @@ export default makeStyles()((theme) => ({
       display: 'none !important',
     },
   },
+  filterWrap: {
+    [theme.breakpoints.down('lg')]: {
+      flexWrap: 'wrap',
+    },
+  },
+  filterWrapAlways: {
+    flexWrap: 'wrap',
+  },
+  filterVertical: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    flexWrap: 'nowrap',
+    gap: theme.spacing(2),
+    padding: theme.spacing(1, 0, 0),
+    '&& > *': {
+      flex: '0 0 auto',
+    },
+    [theme.breakpoints.down('lg')]: {
+      gap: theme.spacing(2),
+      padding: theme.spacing(1, 0, 0),
+    },
+    [theme.breakpoints.down('sm')]: {
+      flexWrap: 'nowrap',
+    },
+  },
   filterItem: {
     flex: '1 1 180px',
     minWidth: 0,
@@ -126,7 +151,6 @@ export default makeStyles()((theme) => ({
   filterColumns: {
     flex: '1.15 1 200px',
     minWidth: 0,
-    overflow: 'hidden',
     '& .MuiFormControl-root': {
       minWidth: 0,
     },
@@ -140,6 +164,13 @@ export default makeStyles()((theme) => ({
     [theme.breakpoints.down('lg')]: {
       flexBasis: 180,
     },
+    [theme.breakpoints.down('sm')]: {
+      flex: '1 1 100%',
+    },
+  },
+  filterColor: {
+    flex: '0 0 176px',
+    minWidth: 0,
     [theme.breakpoints.down('sm')]: {
       flex: '1 1 100%',
     },
