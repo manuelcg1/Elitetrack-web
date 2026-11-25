@@ -1,5 +1,6 @@
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as maplibregl from 'maplibre-gl';
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { googleProtocol } from 'maplibre-google-maps';
 import { useRef, useLayoutEffect, useEffect, useState, useMemo } from 'react';
 import { useTheme } from '@mui/material';
@@ -16,6 +17,10 @@ element.style.width = '100%';
 element.style.height = '100%';
 element.style.boxSizing = 'initial';
 element.style.backgroundColor = '#e8e0d8';
+
+// MapLibre 6 busca su worker junto al bundle; Vite no lo emite por sí solo.
+// Con ?worker&url se empaqueta como .js con hash, incluido también en el precache de la PWA.
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
 maplibregl.addProtocol('google', googleProtocol);
 

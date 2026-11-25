@@ -18,6 +18,10 @@ export default defineConfig(() => ({
   build: {
     outDir: 'build',
   },
+  // MapLibre crea su worker como módulo
+  worker: {
+    format: 'es',
+  },
   plugins: [
     svgr(),
     react(),
