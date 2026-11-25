@@ -2,8 +2,9 @@ const EARTH_RADIUS = 6371000;
 const CHART_BUCKETS = 300;
 const MIN_STOP_DURATION = 3 * 60 * 1000;
 
+// Algunos equipos informan motion con el motor encendido, por eso también cuenta la velocidad cero.
 export const isStopped = (position) =>
-  typeof position.attributes?.motion === 'boolean' ? !position.attributes.motion : !position.speed;
+  !(position.speed > 0) || position.attributes?.motion === false;
 
 const distanceBetween = (a, b) => {
   const radians = Math.PI / 180;

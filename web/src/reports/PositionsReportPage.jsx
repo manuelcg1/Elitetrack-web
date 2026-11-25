@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -57,6 +57,94 @@ import {
   formatAddress,
 } from '../common/util/formatter';
 
+// La tabla puede tener miles de filas; memo evita redibujarla al cambiar el color de la ruta.
+const PositionsTable = memo(({ items, columns, loading, selectedItem, onSelect, onClear }) => {
+  const { classes } = useReportStyles();
+  const t = useTranslation();
+  const positionAttributes = usePositionAttributes(t);
+
+  const selectedRef = useRef();
+
+  useEffect(() => {
+    if (selectedRef.current) {
+      selectedRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }, [selectedItem]);
+
+  return (
+    <Table className={classes.compactTable}>
+      <TableHead>
+        <TableRow>
+          <TableCell className={classes.columnAction} />
+          {columns.map((key) => (
+            <TableCell key={key}>{positionAttributes[key]?.name || key}</TableCell>
+          ))}
+        </TableRow>
+      </TableHead>
+      <TableBody>
+        {!loading ? (
+          items.slice(0, 4000).map((item) => (
+            <TableRow
+              key={item.id}
+              hover
+              selected={selectedItem?.id === item.id}
+              onClick={() => onSelect(item)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onSelect(item);
+                }
+              }}
+              tabIndex={0}
+              sx={{ cursor: 'pointer' }}
+            >
+              <TableCell className={classes.columnAction} padding="none">
+                {selectedItem?.id === item.id ? (
+                  <IconButton
+                    size="small"
+                    aria-label="Ocultar ubicación seleccionada"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onClear();
+                    }}
+                    ref={selectedRef}
+                  >
+                    <GpsFixedIcon fontSize="small" />
+                  </IconButton>
+                ) : (
+                  <IconButton
+                    size="small"
+                    aria-label="Mostrar ubicación en el mapa"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelect(item);
+                    }}
+                  >
+                    <LocationSearchingIcon fontSize="small" />
+                  </IconButton>
+                )}
+              </TableCell>
+              {columns.map((key) => (
+                <TableCell key={key}>
+                  <PositionValue
+                    position={item}
+                    property={item.hasOwnProperty(key) ? key : null}
+                    attribute={item.hasOwnProperty(key) ? null : key}
+                  />
+                </TableCell>
+              ))}
+            </TableRow>
+          ))
+        ) : (
+          <TableShimmer columns={columns.length + 1} startAction />
+        )}
+      </TableBody>
+    </Table>
+  );
+});
+
+PositionsTable.displayName = 'PositionsTable';
+
 const PositionsReportPage = () => {
   const navigate = useNavigate();
   const theme = useTheme();
@@ -89,18 +177,21 @@ const PositionsReportPage = () => {
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectionVersion, setSelectionVersion] = useState(0);
 
-  const selectedRef = useRef();
-
-  useEffect(() => {
-    if (selectedRef.current) {
-      selectedRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
-  }, [selectedItem]);
-
   const selectItem = useCallback((item) => {
     setSelectedItem(item);
     setSelectionVersion((current) => current + 1);
   }, []);
+
+  const clearItem = useCallback(() => setSelectedItem(null), []);
+
+  const routes = useMemo(
+    () =>
+      [...new Set(items.map((it) => it.deviceId))].map((id) => [
+        id,
+        items.filter((position) => position.deviceId === id),
+      ]),
+    [items],
+  );
 
   const onMapPointClick = useCallback(
     (positionId) => {
@@ -236,15 +327,12 @@ const PositionsReportPage = () => {
     <div className={classes.containerMap}>
       <MapView>
         <MapGeofence />
-        {[...new Set(items.map((it) => it.deviceId))].map((deviceId) => {
-          const positions = items.filter((position) => position.deviceId === deviceId);
-          return (
-            <Fragment key={deviceId}>
-              <MapRoutePath positions={positions} color={lineColor} />
-              <MapRoutePoints positions={positions} onClick={onMapPointClick} color={lineColor} />
-            </Fragment>
-          );
-        })}
+        {routes.map(([id, positions]) => (
+          <Fragment key={id}>
+            <MapRoutePath positions={positions} color={lineColor} />
+            <MapRoutePoints positions={positions} onClick={onMapPointClick} color={lineColor} />
+          </Fragment>
+        ))}
         {selectedItem && <MapPositions positions={[selectedItem]} titleField="fixTime" />}
         {selectedItem ? (
           <MapCamera
@@ -293,74 +381,14 @@ const PositionsReportPage = () => {
           <RouteColorSelect value={lineColor} onChange={setLineColor} deviceColor={deviceColor} />
         </ReportFilter>
       </div>
-      <Table className={classes.compactTable}>
-        <TableHead>
-          <TableRow>
-            <TableCell className={classes.columnAction} />
-            {columns.map((key) => (
-              <TableCell key={key}>{positionAttributes[key]?.name || key}</TableCell>
-            ))}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {!loading ? (
-            items.slice(0, 4000).map((item) => (
-              <TableRow
-                key={item.id}
-                hover
-                selected={selectedItem?.id === item.id}
-                onClick={() => selectItem(item)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    selectItem(item);
-                  }
-                }}
-                tabIndex={0}
-                sx={{ cursor: 'pointer' }}
-              >
-                <TableCell className={classes.columnAction} padding="none">
-                  {selectedItem?.id === item.id ? (
-                    <IconButton
-                      size="small"
-                      aria-label="Ocultar ubicación seleccionada"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setSelectedItem(null);
-                      }}
-                      ref={selectedRef}
-                    >
-                      <GpsFixedIcon fontSize="small" />
-                    </IconButton>
-                  ) : (
-                    <IconButton
-                      size="small"
-                      aria-label="Mostrar ubicación en el mapa"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        selectItem(item);
-                      }}
-                    >
-                      <LocationSearchingIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                </TableCell>
-                {columns.map((key) => (
-                  <TableCell key={key}>
-                    <PositionValue
-                      position={item}
-                      property={item.hasOwnProperty(key) ? key : null}
-                      attribute={item.hasOwnProperty(key) ? null : key}
-                    />
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))
-          ) : (
-            <TableShimmer columns={columns.length + 1} startAction />
-          )}
-        </TableBody>
-      </Table>
+      <PositionsTable
+        items={items}
+        columns={columns}
+        loading={loading}
+        selectedItem={selectedItem}
+        onSelect={selectItem}
+        onClear={clearItem}
+      />
     </div>
   );
 
