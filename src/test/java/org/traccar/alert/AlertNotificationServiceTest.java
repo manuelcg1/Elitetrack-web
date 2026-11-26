@@ -287,6 +287,120 @@ public class AlertNotificationServiceTest {
     }
 
     @Test
+    public void testPushTitleAndBody() {
+        Alert alert = new Alert();
+        alert.setName("Salida planta");
+        AlertEvent event = new AlertEvent();
+        event.setType(Alert.TYPE_GEOFENCE_EXIT);
+        event.setSeverity(Alert.SEVERITY_HIGH);
+        event.setEventTime(Date.from(Instant.parse("2026-11-26T15:15:00Z")));
+
+        assertEquals("⚠️ Salida planta", AlertNotificationService.buildPushTitle(alert, event));
+        assertEquals("Moto-0905ZW salió de la geocerca geo-salida\n26/11 10:15 a. m. · Severidad alta",
+                AlertNotificationService.buildPushBody(event, "Moto-0905ZW", "geo-salida"));
+
+        event.setType(Alert.TYPE_SPEED);
+        event.setSeverity(Alert.SEVERITY_CRITICAL);
+        event.setValue(92.44);
+        event.setThreshold(80);
+        assertEquals("🚨 Salida planta", AlertNotificationService.buildPushTitle(alert, event));
+        assertTrue(AlertNotificationService.buildPushBody(event, "T8A-217", null)
+                .startsWith("T8A-217 va a 92.4 km/h (límite 80 km/h)\n"));
+
+        event.setType(Alert.TYPE_POWER_CUT);
+        event.setSeverity(Alert.SEVERITY_MEDIUM);
+        assertTrue(AlertNotificationService.buildPushBody(event, "T8A-217", null)
+                .startsWith("T8A-217: Energía desconectada\n"));
+    }
+
+    @Test
+    public void testPushSendsOnlyToRecipientsWithAppAndAccess() throws Exception {
+        Storage storage = mock(Storage.class);
+        ExecutorService executor = mock(ExecutorService.class);
+        doAnswer(invocation -> {
+            invocation.getArgument(0, Runnable.class).run();
+            return null;
+        }).when(executor).execute(any(Runnable.class));
+        AlertRecipientRepository repository = mock(AlertRecipientRepository.class);
+        when(repository.getUserIds(9)).thenReturn(List.of(1L, 2L, 3L));
+        User withApp = new User();
+        withApp.setId(1);
+        withApp.set("notificationTokens", "token-a,token-b");
+        User withoutApp = new User();
+        withoutApp.setId(2);
+        User withoutAccess = new User();
+        withoutAccess.setId(3);
+        withoutAccess.set("notificationTokens", "token-c");
+        when(storage.getObjects(eq(User.class), any(Request.class)))
+                .thenReturn(List.of(withApp, withoutApp, withoutAccess));
+        AlertSecurity security = mock(AlertSecurity.class);
+        when(security.canAccessDevice(1, 10)).thenReturn(true);
+        when(security.canAccessDevice(3, 10)).thenReturn(false);
+        when(security.canReadEvent(eq(1L), any(AlertEvent.class))).thenReturn(true);
+        NotificatorManager manager = mock(NotificatorManager.class);
+        Notificator push = mock(Notificator.class);
+        when(manager.getNotificator("traccar")).thenReturn(push);
+        CacheManager cacheManager = mock(CacheManager.class);
+        Device device = new Device();
+        device.setId(10);
+        device.setName("Moto-0905ZW");
+        when(cacheManager.getObject(Device.class, 10)).thenReturn(device);
+
+        AlertNotificationService service = new AlertNotificationService(
+                storage, cacheManager, manager, executor, repository, security);
+        Alert alert = new Alert();
+        alert.setId(9);
+        alert.setName("Salida planta");
+        alert.getAttributes().put("notifications", List.of("platform", "push"));
+        AlertEvent event = new AlertEvent();
+        event.setId(50);
+        event.setDeviceId(10);
+        event.setType(Alert.TYPE_SPEED);
+        event.setSeverity(Alert.SEVERITY_CRITICAL);
+
+        service.sendAsync(alert, event);
+        service.sendAsync(alert, event);
+
+        ArgumentCaptor<NotificationMessage> captor = ArgumentCaptor.forClass(NotificationMessage.class);
+        verify(push, times(1)).send(eq(withApp), captor.capture(), eq(null), eq(null));
+        verify(push, never()).send(eq(withoutApp), any(NotificationMessage.class), any(), any());
+        verify(push, never()).send(eq(withoutAccess), any(NotificationMessage.class), any(), any());
+        assertEquals("🚨 Salida planta", captor.getValue().subject());
+        assertTrue(captor.getValue().priority());
+        verify(manager, never()).getNotificator("telegram");
+    }
+
+    @Test
+    public void testPushFallsBackToFirebaseAndToleratesDisabledChannel() throws Exception {
+        Storage storage = mock(Storage.class);
+        NotificatorManager manager = mock(NotificatorManager.class);
+        ExecutorService executor = mock(ExecutorService.class);
+        AlertNotificationService service = createService(storage, mock(CacheManager.class), manager, executor);
+        User user = new User();
+        user.setId(7);
+        user.set("notificationTokens", "token");
+        when(storage.getObjects(eq(User.class), any(Request.class))).thenReturn(List.of(user));
+        Alert alert = new Alert();
+        alert.setId(1);
+        alert.set("notifications", "push");
+        AlertEvent event = new AlertEvent();
+        event.setId(60);
+        event.setDeviceId(10);
+
+        when(manager.getNotificator("traccar")).thenThrow(new RuntimeException("disabled"));
+        when(manager.getNotificator("firebase")).thenThrow(new RuntimeException("disabled"));
+        service.sendAsync(alert, event);
+
+        Notificator firebase = mock(Notificator.class);
+        org.mockito.Mockito.reset(manager);
+        when(manager.getNotificator("traccar")).thenThrow(new RuntimeException("disabled"));
+        when(manager.getNotificator("firebase")).thenReturn(firebase);
+        event.setId(61);
+        service.sendAsync(alert, event);
+        verify(firebase).send(eq(user), any(NotificationMessage.class), eq(null), eq(null));
+    }
+
+    @Test
     public void testRecipientWithoutDevicePermissionIsSkipped() throws Exception {
         Storage storage = mock(Storage.class);
         ExecutorService executor = mock(ExecutorService.class);

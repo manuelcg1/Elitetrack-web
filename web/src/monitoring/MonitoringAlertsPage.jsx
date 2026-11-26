@@ -104,7 +104,27 @@ const operators = [
 const notificationChannels = [
   { key: 'platform', label: 'Plataforma' },
   { key: 'telegram', label: 'Telegram' },
+  { key: 'push', label: 'Push' },
 ];
+
+const joinNames = (names) =>
+  names.length > 1 ? `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}` : names[0];
+
+const PushChip = ({ devices }) => (
+  <Chip
+    size="small"
+    color={devices ? 'success' : 'warning'}
+    label={
+      devices ? `Push: app en ${devices} ${devices === 1 ? 'equipo' : 'equipos'}` : 'Push: sin app'
+    }
+  />
+);
+
+const channelHints = {
+  platform: 'Ventana en el mapa y registro en Alertas',
+  telegram: 'Mensaje al chat vinculado del usuario',
+  push: 'Notificación al celular con la app',
+};
 
 const normalizeNotificationChannels = (value) => {
   if (Array.isArray(value)) {
@@ -498,6 +518,126 @@ const MonitoringAlertsPage = () => {
   const groupMap = useMemo(() => new Map(groups.map((group) => [group.id, group])), [groups]);
   const alertMap = useMemo(() => new Map(alerts.map((alert) => [alert.id, alert])), [alerts]);
 
+  // Acceso de los destinatarios a los vehículos y geocercas de la alerta: el servidor no envía
+  // Telegram ni Push a quien no puede ver el vehículo (o la geocerca, en alertas de geocerca).
+  const [recipientAccess, setRecipientAccess] = useState({});
+  const needsRecipients =
+    item.attributes.notifications?.includes('telegram') ||
+    item.attributes.notifications?.includes('push');
+  const accessGeofenceIds = useMemo(
+    () => (isGeofenceTransition(item.type) ? item.geofenceIds : []),
+    [item.type, item.geofenceIds],
+  );
+
+  useEffect(() => {
+    if (!drawerOpen || !needsRecipients || !item.recipientIds.length) {
+      return undefined;
+    }
+    let cancelled = false;
+    const timeout = setTimeout(async () => {
+      try {
+        const response = await fetchOrThrow('/api/alerts/recipient-access', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userIds: item.recipientIds,
+            deviceIds: item.deviceIds,
+            groupIds: item.groupIds,
+            geofenceIds: accessGeofenceIds,
+          }),
+        });
+        const data = await response.json();
+        if (!cancelled) {
+          setRecipientAccess(Object.fromEntries(data.map((access) => [access.userId, access])));
+        }
+      } catch {
+        if (!cancelled) {
+          setRecipientAccess({});
+        }
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [
+    drawerOpen,
+    needsRecipients,
+    item.recipientIds,
+    item.deviceIds,
+    item.groupIds,
+    accessGeofenceIds,
+  ]);
+
+  const targetName = (kind, id) => {
+    if (kind === 'device') return deviceMap.get(id)?.name || `Vehículo ${id}`;
+    if (kind === 'group') return groupMap.get(id)?.name || `Flota ${id}`;
+    return geofences.find((geofence) => geofence.id === id)?.name || `Geocerca ${id}`;
+  };
+
+  // null = sin datos aún; { blocked } = no recibirá nada; { partial } = solo de algunos objetivos.
+  const getRecipientAccessStatus = (userId) => {
+    const access = recipientAccess[userId];
+    if (!access) return null;
+    if (access.administrator) return { admin: true };
+    const vehicleTotal = item.deviceIds.length + item.groupIds.length;
+    const missingVehicles = [
+      ...access.missingDeviceIds.map((id) => targetName('device', id)),
+      ...access.missingGroupIds.map((id) => targetName('group', id)),
+    ];
+    const missingGeofences = access.missingGeofenceIds.map((id) => targetName('geofence', id));
+    const describe = (names, total, noun) =>
+      names.length === 1 && total === 1
+        ? names[0]
+        : names.length === total
+          ? `los ${total} ${noun} de la alerta`
+          : `${names.length} de ${total} ${noun}`;
+    if (missingVehicles.length) {
+      return {
+        blocked: missingVehicles.length === vehicleTotal,
+        partial: missingVehicles.length < vehicleTotal,
+        reason: 'vehicle',
+        label: `Sin acceso a ${describe(missingVehicles, vehicleTotal, 'vehículos')}`,
+        names: missingVehicles,
+      };
+    }
+    if (missingGeofences.length) {
+      const total = accessGeofenceIds.length;
+      return {
+        blocked: missingGeofences.length === total,
+        partial: missingGeofences.length < total,
+        reason: 'geofence',
+        label: `Sin acceso a ${describe(missingGeofences, total, 'geocercas')}`,
+        names: missingGeofences,
+      };
+    }
+    return { ok: true };
+  };
+
+  const recipientReachable = (userId) => !getRecipientAccessStatus(userId)?.blocked;
+
+  const platformEnabled = item.attributes.notifications?.includes('platform');
+  const telegramEnabled = item.attributes.notifications?.includes('telegram');
+  const pushEnabled = item.attributes.notifications?.includes('push');
+  const selectedRecipients = recipientOptions.filter((recipient) =>
+    item.recipientIds.includes(recipient.userId),
+  );
+  const blockedRecipients = selectedRecipients.filter(
+    (recipient) => getRecipientAccessStatus(recipient.userId)?.blocked,
+  );
+  const partialRecipients = selectedRecipients.filter(
+    (recipient) => getRecipientAccessStatus(recipient.userId)?.partial,
+  );
+  const recipientsWithoutApp = selectedRecipients.filter(
+    (recipient) => !recipient.pushDevices && recipientReachable(recipient.userId),
+  );
+  const pushReach = selectedRecipients.filter(
+    (recipient) => recipient.pushDevices > 0 && recipientReachable(recipient.userId),
+  ).length;
+  const telegramReach = selectedRecipients.filter(
+    (recipient) => recipient.telegramLinked && recipientReachable(recipient.userId),
+  ).length;
+
   const enrichedEvents = useMemo(
     () =>
       events.map((event) => {
@@ -649,11 +789,16 @@ const MonitoringAlertsPage = () => {
     item.type &&
     item.severity &&
     (item.type !== 'speed' || Number(item.limitValue) > 0) &&
-    (!item.attributes.notifications?.includes('telegram') || item.recipientIds.length > 0) &&
+    (!needsRecipients || item.recipientIds.length > 0) &&
     (!item.attributes.notifications?.includes('telegram') ||
       item.attributes.notifications?.includes('platform') ||
       recipientOptions.some(
         (recipient) => item.recipientIds.includes(recipient.userId) && recipient.telegramLinked,
+      )) &&
+    (!item.attributes.notifications?.includes('push') ||
+      item.attributes.notifications?.includes('platform') ||
+      recipientOptions.some(
+        (recipient) => item.recipientIds.includes(recipient.userId) && recipient.pushDevices > 0,
       ));
 
   const loadData = async () => {
@@ -1177,7 +1322,7 @@ const MonitoringAlertsPage = () => {
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
                 gap: 1.5,
               }}
             >
@@ -1210,6 +1355,13 @@ const MonitoringAlertsPage = () => {
                         <Typography variant="body2" sx={{ fontWeight: 800 }}>
                           {channel.label}
                         </Typography>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: 'block', lineHeight: 1.35 }}
+                        >
+                          {channelHints[channel.key]}
+                        </Typography>
                         <Typography variant="caption" color="text.secondary">
                           {item.attributes.notifications?.includes(channel.key)
                             ? 'Canal habilitado'
@@ -1221,15 +1373,17 @@ const MonitoringAlertsPage = () => {
                 </Paper>
               ))}
             </Box>
-            {item.attributes.notifications?.includes('telegram') && (
+            {needsRecipients && (
               <Stack spacing={1.5} sx={{ mt: 2.5 }}>
                 <Box>
                   <Typography variant="subtitle2" sx={{ fontWeight: 900 }}>
-                    Destinatarios de Telegram
+                    {`Destinatarios · ${[telegramEnabled && 'Telegram', pushEnabled && 'Push']
+                      .filter(Boolean)
+                      .join(' y ')}`}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Selecciona usuarios individuales. Los usuarios sin vinculación no recibirán
-                    mensajes hasta configurar Telegram.
+                    Los mismos usuarios reciben Telegram y Push. Cada uno solo recibe por los
+                    canales que tenga vinculados y de los vehículos que tenga asignados.
                   </Typography>
                 </Box>
                 <Autocomplete
@@ -1258,36 +1412,142 @@ const MonitoringAlertsPage = () => {
                           {option.email}
                         </Typography>
                       </Box>
-                      <Chip
-                        size="small"
-                        color={option.telegramLinked ? 'success' : 'warning'}
-                        label={option.telegramLinked ? 'Vinculado' : 'No vinculado'}
-                      />
+                      <Stack spacing={0.5} alignItems="flex-end">
+                        {telegramEnabled && (
+                          <Chip
+                            size="small"
+                            color={option.telegramLinked ? 'success' : 'warning'}
+                            label={`Telegram: ${option.telegramLinked ? 'vinculado' : 'no vinculado'}`}
+                          />
+                        )}
+                        {pushEnabled && <PushChip devices={option.pushDevices} />}
+                      </Stack>
                     </li>
                   )}
                   renderInput={(params) => (
                     <TextField {...params} label="Buscar usuarios" placeholder="Nombre o correo" />
                   )}
                 />
-                {!item.recipientIds.length && (
-                  <Alert severity="error">Selecciona al menos un destinatario para Telegram.</Alert>
+                {!!selectedRecipients.length && (
+                  <Paper variant="outlined" sx={{ borderRadius: 1.5 }}>
+                    {selectedRecipients.map((recipient, index) => {
+                      const access = getRecipientAccessStatus(recipient.userId);
+                      return (
+                        <Box
+                          key={recipient.userId}
+                          sx={{
+                            px: 1.5,
+                            py: 1,
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            alignItems: 'center',
+                            gap: 1,
+                            borderTop: index ? '1px solid' : 'none',
+                            borderColor: 'divider',
+                          }}
+                        >
+                          <Box sx={{ flex: '1 1 160px', minWidth: 0 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
+                              {recipient.name}
+                            </Typography>
+                            {access?.admin && (
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                label="Administrador · ve todo"
+                              />
+                            )}
+                            {access?.ok && (
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                color="success"
+                                label={
+                                  item.deviceIds.length + item.groupIds.length
+                                    ? 'Ve los vehículos de la alerta'
+                                    : 'Recibe de los vehículos que tenga asignados'
+                                }
+                              />
+                            )}
+                            {access?.label && (
+                              <Chip
+                                size="small"
+                                color={access.blocked ? 'error' : 'warning'}
+                                label={access.label}
+                                sx={{ maxWidth: '100%' }}
+                              />
+                            )}
+                          </Box>
+                          {telegramEnabled && (
+                            <Chip
+                              size="small"
+                              color={recipient.telegramLinked ? 'success' : 'warning'}
+                              label={`Telegram: ${recipient.telegramLinked ? 'vinculado' : 'no vinculado'}`}
+                            />
+                          )}
+                          {pushEnabled && <PushChip devices={recipient.pushDevices} />}
+                        </Box>
+                      );
+                    })}
+                  </Paper>
                 )}
-                {!!item.recipientIds.length &&
+                {!item.recipientIds.length && (
+                  <Alert severity="error">Selecciona al menos un destinatario.</Alert>
+                )}
+                {!!blockedRecipients.length && (
+                  <Alert severity="error">
+                    <strong>
+                      {joinNames(blockedRecipients.map((recipient) => recipient.name))}
+                    </strong>
+                    {blockedRecipients.length > 1
+                      ? ' no tienen acceso a los vehículos o geocercas de esta alerta: no la recibirán por ningún canal.'
+                      : ' no tiene acceso a los vehículos o geocercas de esta alerta: no la recibirá por ningún canal.'}{' '}
+                    Asígnaselos en Configuración → Usuarios o quítalo de los destinatarios.
+                  </Alert>
+                )}
+                {!!partialRecipients.length && (
+                  <Alert severity="warning">
+                    <strong>
+                      {joinNames(partialRecipients.map((recipient) => recipient.name))}
+                    </strong>
+                    {' solo recibirá la alerta de los vehículos o geocercas que tenga asignados.'}
+                  </Alert>
+                )}
+                {pushEnabled &&
+                  !!item.recipientIds.length &&
+                  (pushReach === 0 ? (
+                    <Alert severity={platformEnabled ? 'warning' : 'error'}>
+                      Ningún destinatario tiene la app vinculada y acceso al vehículo; nadie
+                      recibirá el push.
+                    </Alert>
+                  ) : (
+                    !!recipientsWithoutApp.length && (
+                      <Alert severity="warning">
+                        <strong>
+                          {joinNames(recipientsWithoutApp.map((recipient) => recipient.name))}
+                        </strong>
+                        {recipientsWithoutApp.length > 1
+                          ? ' no tienen la app vinculada: no recibirán el push.'
+                          : ' no tiene la app vinculada: no recibirá el push.'}{' '}
+                        Para vincularla, el usuario inicia sesión en la app del celular.
+                      </Alert>
+                    )
+                  ))}
+                {telegramEnabled &&
+                  !!item.recipientIds.length &&
                   !recipientOptions.some(
                     (recipient) =>
                       item.recipientIds.includes(recipient.userId) && recipient.telegramLinked,
                   ) && (
-                    <Alert
-                      severity={
-                        item.attributes.notifications?.includes('platform') ? 'warning' : 'error'
-                      }
-                    >
+                    <Alert severity={platformEnabled ? 'warning' : 'error'}>
                       Ningún destinatario seleccionado tiene Telegram vinculado.
                     </Alert>
                   )}
-                <Button href="/settings/integrations/telegram" sx={{ alignSelf: 'flex-start' }}>
-                  Administrar vinculaciones Telegram
-                </Button>
+                {telegramEnabled && (
+                  <Button href="/settings/integrations/telegram" sx={{ alignSelf: 'flex-start' }}>
+                    Administrar vinculaciones Telegram
+                  </Button>
+                )}
               </Stack>
             )}
           </FormStepPanel>
@@ -1373,6 +1633,26 @@ const MonitoringAlertsPage = () => {
                       .map((channel) => channel.label)
                       .join(', ') || 'Ninguno',
                   ],
+                  ...(pushEnabled
+                    ? [
+                        [
+                          'Recibirán el push',
+                          `${pushReach} de ${selectedRecipients.length} (con app y acceso al vehículo${
+                            isGeofenceTransition(item.type) && item.geofenceIds.length
+                              ? ' y a la geocerca'
+                              : ''
+                          })`,
+                        ],
+                      ]
+                    : []),
+                  ...(telegramEnabled
+                    ? [
+                        [
+                          'Recibirán Telegram',
+                          `${telegramReach} de ${selectedRecipients.length} (con Telegram y acceso)`,
+                        ],
+                      ]
+                    : []),
                 ].map(([label, value]) => (
                   <Paper key={label} variant="outlined" sx={{ p: 1.5, borderRadius: 1.5 }}>
                     <Typography variant="caption" color="text.secondary">
@@ -2386,15 +2666,20 @@ const MonitoringAlertsPage = () => {
                                   alert.attributes.notifications.includes(channel.key),
                                 )
                                 .map((channel) => {
-                                  const telegramWithoutRecipients =
-                                    channel.key === 'telegram' && !alert.recipientIds.length;
-                                  const telegramWithUnlinkedRecipients =
-                                    channel.key === 'telegram' &&
+                                  const usesRecipients = ['telegram', 'push'].includes(channel.key);
+                                  const linked = (recipient) =>
+                                    channel.key === 'telegram'
+                                      ? recipient.telegramLinked
+                                      : recipient.pushDevices > 0;
+                                  const withoutRecipients =
+                                    usesRecipients && !alert.recipientIds.length;
+                                  const withUnlinkedRecipients =
+                                    usesRecipients &&
                                     alert.recipientIds.some(
                                       (userId) =>
                                         !recipientOptions.find(
                                           (recipient) =>
-                                            recipient.userId === userId && recipient.telegramLinked,
+                                            recipient.userId === userId && linked(recipient),
                                         ),
                                     );
 
@@ -2402,10 +2687,12 @@ const MonitoringAlertsPage = () => {
                                     <Tooltip
                                       key={channel.key}
                                       title={
-                                        telegramWithoutRecipients
-                                          ? 'Telegram sin destinatarios'
-                                          : telegramWithUnlinkedRecipients
-                                            ? 'Hay destinatarios sin vincular a Telegram'
+                                        withoutRecipients
+                                          ? `${channel.label} sin destinatarios`
+                                          : withUnlinkedRecipients
+                                            ? channel.key === 'telegram'
+                                              ? 'Hay destinatarios sin vincular a Telegram'
+                                              : 'Hay destinatarios sin la app vinculada'
                                             : `${channel.label} configurada correctamente`
                                       }
                                     >
@@ -2413,9 +2700,9 @@ const MonitoringAlertsPage = () => {
                                         size="small"
                                         label={channel.label}
                                         color={
-                                          telegramWithoutRecipients
+                                          withoutRecipients
                                             ? 'error'
-                                            : telegramWithUnlinkedRecipients
+                                            : withUnlinkedRecipients
                                               ? 'warning'
                                               : 'success'
                                         }

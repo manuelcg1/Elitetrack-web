@@ -121,6 +121,14 @@ public class AlertSecurity {
         return hasPermission(Device.class, userId, deviceId);
     }
 
+    public boolean canAccessGroup(long userId, long groupId) throws StorageException {
+        return hasPermission(Group.class, userId, groupId);
+    }
+
+    public boolean canReadGeofence(long userId, long geofenceId) throws StorageException {
+        return geofenceReadAccessService.canReadGeofence(userId, geofenceId);
+    }
+
     public boolean alertAppliesToDevice(
             Alert alert, long deviceId, long deviceGroupId, List<Long> deviceIds, List<Long> groupIds)
             throws StorageException {

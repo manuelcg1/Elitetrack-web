@@ -41,6 +41,15 @@ public class AlertNotificationService {
 
     public static final String CHANNEL_PLATFORM = "platform";
     public static final String CHANNEL_TELEGRAM = "telegram";
+    public static final String CHANNEL_PUSH = "push";
+
+    // Notificadores de Traccar que entregan push al celular, en orden de preferencia: "traccar" envía a la
+    // app Traccar Manager; "firebase" queda para una app propia con su proyecto de Firebase.
+    private static final List<String> PUSH_NOTIFICATORS = List.of("traccar", "firebase");
+    private static final String PUSH_TOKENS_ATTRIBUTE = "notificationTokens";
+    private static final DateTimeFormatter PUSH_DATE_TIME_FORMAT = DateTimeFormatter
+            .ofPattern("dd/MM hh:mm", Locale.ROOT)
+            .withZone(PERU_TIME_ZONE);
 
     private final Storage storage;
     private final CacheManager cacheManager;
@@ -88,14 +97,162 @@ public class AlertNotificationService {
     }
 
     public void sendAsync(Alert alert, AlertEvent alertEvent) {
-        if (!isChannelEnabled(alert, CHANNEL_TELEGRAM, false)) {
+        boolean telegram = isChannelEnabled(alert, CHANNEL_TELEGRAM, false);
+        boolean push = isChannelEnabled(alert, CHANNEL_PUSH, false);
+        if (!telegram && !push) {
             return;
         }
         try {
-            executorService.execute(() -> sendTelegram(alert, alertEvent));
+            executorService.execute(() -> {
+                if (telegram) {
+                    sendTelegram(alert, alertEvent);
+                }
+                if (push) {
+                    sendPush(alert, alertEvent);
+                }
+            });
         } catch (RuntimeException e) {
-            LOGGER.warn("Telegram task rejected for alert event {}", alertEvent.getId(), e);
+            LOGGER.warn("Notification task rejected for alert event {}", alertEvent.getId(), e);
         }
+    }
+
+    private void sendPush(Alert alert, AlertEvent alertEvent) {
+        int sent = 0;
+        int skippedNoApp = 0;
+        int skippedNoPermission = 0;
+        int failed = 0;
+        try {
+            List<Long> recipientIds = alertRecipientRepository.getUserIds(alert.getId());
+            if (recipientIds.isEmpty()) {
+                LOGGER.warn("Push alert {} has no recipients", alert.getId());
+                return;
+            }
+            List<User> users = getUsers(recipientIds);
+
+            Device device = cacheManager.getObject(Device.class, alertEvent.getDeviceId());
+            if (device == null && alertEvent.getDeviceId() > 0) {
+                device = storage.getObject(Device.class, new Request(
+                        new Columns.All(), new Condition.Equals("id", alertEvent.getDeviceId())));
+            }
+            Geofence geofence = alertEvent.getGeofenceId() > 0
+                    ? cacheManager.getObject(Geofence.class, alertEvent.getGeofenceId()) : null;
+            if (geofence == null && alertEvent.getGeofenceId() > 0) {
+                geofence = storage.getObject(Geofence.class, new Request(
+                        new Columns.All(), new Condition.Equals("id", alertEvent.getGeofenceId())));
+            }
+            String deviceName = device != null ? device.getName() : alertEvent.getDeviceName();
+            String body = buildPushBody(alertEvent, deviceName, geofence != null ? geofence.getName() : null);
+            NotificationMessage message = new NotificationMessage(
+                    buildPushTitle(alert, alertEvent), body, body, isPriority(alertEvent));
+
+            Notificator notificator = null;
+            for (User user : users) {
+                String deliveryKey = alertEvent.getId() + ":" + user.getId() + ":" + CHANNEL_PUSH;
+                synchronized (deliveredEvents) {
+                    if (deliveredEvents.putIfAbsent(deliveryKey, Boolean.TRUE) != null) {
+                        continue;
+                    }
+                }
+                if (!user.hasAttribute(PUSH_TOKENS_ATTRIBUTE)
+                        || user.getString(PUSH_TOKENS_ATTRIBUTE).isBlank()) {
+                    skippedNoApp++;
+                    continue;
+                }
+                try {
+                    if (!alertSecurity.canAccessDevice(user.getId(), alertEvent.getDeviceId())
+                            || !alertSecurity.canReadEvent(user.getId(), alertEvent)) {
+                        skippedNoPermission++;
+                        continue;
+                    }
+                    if (notificator == null) {
+                        notificator = getPushNotificator();
+                        if (notificator == null) {
+                            LOGGER.warn("Push alert {} not sent: enable traccar or firebase in notificator.types",
+                                    alert.getId());
+                            return;
+                        }
+                    }
+                    notificator.send(user, message, null, null);
+                    sent++;
+                } catch (Exception e) {
+                    failed++;
+                    LOGGER.warn("Push delivery failed for alert event {} recipient {}",
+                            alertEvent.getId(), user.getId(), e);
+                }
+            }
+            failed += Math.max(0, recipientIds.size() - users.size());
+            LOGGER.info("Alert {} push delivery summary: sent={}, skippedNoApp={}, "
+                            + "skippedNoPermission={}, failed={}",
+                    alert.getId(), sent, skippedNoApp, skippedNoPermission, failed);
+        } catch (Exception e) {
+            LOGGER.warn("Push delivery failed for alert event {}", alertEvent.getId(), e);
+        }
+    }
+
+    private Notificator getPushNotificator() {
+        for (String type : PUSH_NOTIFICATORS) {
+            try {
+                return notificatorManager.getNotificator(type);
+            } catch (RuntimeException e) {
+                // notificador no habilitado en notificator.types; se prueba el siguiente
+            }
+        }
+        return null;
+    }
+
+    private static boolean isPriority(AlertEvent alertEvent) {
+        return Alert.SEVERITY_HIGH.equals(alertEvent.getSeverity())
+                || Alert.SEVERITY_CRITICAL.equals(alertEvent.getSeverity());
+    }
+
+    static String buildPushTitle(Alert alert, AlertEvent alertEvent) {
+        String name = alert.getName() != null && !alert.getName().isBlank()
+                ? alert.getName() : getTypeLabel(alertEvent.getType());
+        if (Alert.SEVERITY_CRITICAL.equals(alertEvent.getSeverity())) {
+            return "🚨 " + name;
+        }
+        if (Alert.SEVERITY_HIGH.equals(alertEvent.getSeverity())) {
+            return "⚠️ " + name;
+        }
+        return name;
+    }
+
+    static String buildPushBody(AlertEvent alertEvent, String deviceName, String geofenceName) {
+        String vehicle = deviceName != null && !deviceName.isBlank() ? deviceName : "Vehículo";
+        String type = alertEvent.getType();
+        StringBuilder result = new StringBuilder();
+        if (Alert.TYPE_GEOFENCE_ENTER.equals(type) && geofenceName != null) {
+            result.append(vehicle).append(" ingresó a la geocerca ").append(geofenceName);
+        } else if (Alert.TYPE_GEOFENCE_EXIT.equals(type) && geofenceName != null) {
+            result.append(vehicle).append(" salió de la geocerca ").append(geofenceName);
+        } else if (Alert.TYPE_SPEED.equals(type) && alertEvent.getValue() > 0) {
+            result.append(String.format(Locale.US, "%s va a %.1f km/h", vehicle, alertEvent.getValue()));
+            if (alertEvent.getThreshold() > 0) {
+                result.append(String.format(Locale.US, " (límite %.0f km/h)", alertEvent.getThreshold()));
+            }
+        } else {
+            result.append(vehicle).append(": ").append(getTypeLabel(type));
+        }
+        result.append('\n');
+        if (alertEvent.getEventTime() != null) {
+            int hour = alertEvent.getEventTime().toInstant().atZone(PERU_TIME_ZONE).getHour();
+            result.append(PUSH_DATE_TIME_FORMAT.format(alertEvent.getEventTime().toInstant()))
+                    .append(hour < 12 ? " a. m." : " p. m.").append(" · ");
+        }
+        result.append("Severidad ").append(getSeverityLabel(alertEvent.getSeverity()));
+        return result.toString();
+    }
+
+    static String getSeverityLabel(String severity) {
+        if (severity == null) {
+            return "media";
+        }
+        return switch (severity) {
+            case Alert.SEVERITY_LOW -> "baja";
+            case Alert.SEVERITY_HIGH -> "alta";
+            case Alert.SEVERITY_CRITICAL -> "crítica";
+            default -> "media";
+        };
     }
 
     private void sendTelegram(Alert alert, AlertEvent alertEvent) {
