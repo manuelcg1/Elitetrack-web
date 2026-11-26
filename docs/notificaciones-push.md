@@ -103,11 +103,16 @@ El ensayo no es un servicio; se reinicia deteniendo el proceso de `debug-ensayo.
 volviéndolo a lanzar. Guarda el PID en `/tmp/elitetrack-map-test.pid`.
 
 ```bash
-cd ~/traccar-ensayo-sutran && mkdir -p logs && pkill -f "tracker-server.jar debug-ensayo.xml"; while pgrep -f "debug-ensayo.xml" >/dev/null; do sleep 1; done; nohup java -jar target/tracker-server.jar debug-ensayo.xml > logs/ensayo.out.log 2>&1 & echo $! > /tmp/elitetrack-map-test.pid; sleep 25; curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8083/; pgrep -af "debug-ensayo.xml"
+P="^java -jar target/tracker-server.jar debug-ensayo.xml"; cd ~/traccar-ensayo-sutran; mkdir -p logs; pkill -f "$P"; while pgrep -f "$P" >/dev/null; do sleep 1; done; nohup java -jar target/tracker-server.jar debug-ensayo.xml > logs/ensayo.out.log 2>&1 < /dev/null & echo $! > /tmp/elitetrack-map-test.pid; sleep 30; curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8083/; pgrep -af "$P"; cat /tmp/elitetrack-map-test.pid
 ```
 
-Debe responder `200` y mostrar un solo proceso java. Evita estas dos variantes:
+Debe responder `200`, mostrar un solo proceso java y el mismo PID guardado. Funciona igual en
+una terminal del VPS o enviado como `ssh elitetrack@64.227.27.188 '…'`. Evita estas variantes:
 
+- Un patrón sin `^java` (por ejemplo `pkill -f "tracker-server.jar debug-ensayo.xml"`): enviado
+  por `ssh`, también coincide con el `bash -c` que ejecuta el propio comando, así que `pkill`
+  corta la conexión y deja el ensayo detenido, y `pgrep` nunca termina de esperar.
+- Sin `< /dev/null`: la conexión `ssh` puede quedar abierta mientras java siga corriendo.
 - `kill "$(cat /tmp/elitetrack-map-test.pid)"; sleep 5`: si el PID guardado no es el de java, o
   java tarda más de 5 s en cerrar, el proceso nuevo falla con `Address already in use` y el
   `200` lo sigue respondiendo el viejo.
