@@ -99,8 +99,20 @@ El FMC130 solo transmite a producción. En ensayo y local se prueba con OsmAnd:
 | Ensayo | `15055` (solo 127.0.0.1) | El VPS |
 
 **En el VPS no uses `5055` ni `systemctl restart traccar` para pruebas:** son de producción.
-El ensayo no es un servicio; se reinicia matando el PID de `/tmp/elitetrack-map-test.pid`
-y volviéndolo a lanzar con `debug-ensayo.xml`.
+El ensayo no es un servicio; se reinicia deteniendo el proceso de `debug-ensayo.xml` y
+volviéndolo a lanzar. Guarda el PID en `/tmp/elitetrack-map-test.pid`.
+
+```bash
+cd ~/traccar-ensayo-sutran && mkdir -p logs && pkill -f "tracker-server.jar debug-ensayo.xml"; while pgrep -f "debug-ensayo.xml" >/dev/null; do sleep 1; done; nohup java -jar target/tracker-server.jar debug-ensayo.xml > logs/ensayo.out.log 2>&1 & echo $! > /tmp/elitetrack-map-test.pid; sleep 25; curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8083/; pgrep -af "debug-ensayo.xml"
+```
+
+Debe responder `200` y mostrar un solo proceso java. Evita estas dos variantes:
+
+- `kill "$(cat /tmp/elitetrack-map-test.pid)"; sleep 5`: si el PID guardado no es el de java, o
+  java tarda más de 5 s en cerrar, el proceso nuevo falla con `Address already in use` y el
+  `200` lo sigue respondiendo el viejo.
+- `cd … && nohup java … &`: el `&` manda al fondo toda la cadena como una subshell, y `$!`
+  guarda el PID de la subshell, no el de java.
 
 ```bash
 PUERTO=5055   # 15055 en el ensayo
