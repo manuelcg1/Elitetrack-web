@@ -16,6 +16,8 @@
 package org.traccar.api.resource;
 
 import org.traccar.api.BaseResource;
+import org.traccar.api.security.GeofenceReadAccessService;
+import org.traccar.helper.model.GeofenceMembership;
 import org.traccar.helper.model.PositionUtil;
 import org.traccar.model.Device;
 import org.traccar.model.Geofence;
@@ -59,6 +61,9 @@ public class PositionResource extends BaseResource {
     private KmlExportProvider kmlExportProvider;
 
     @Inject
+    private GeofenceReadAccessService readAccessService;
+
+    @Inject
     private CsvExportProvider csvExportProvider;
 
     @Inject
@@ -67,7 +72,8 @@ public class PositionResource extends BaseResource {
     @GET
     public Stream<Position> getJson(
             @QueryParam("deviceId") long deviceId, @QueryParam("id") List<Long> positionIds,
-            @QueryParam("geofenceId") long geofenceId, @QueryParam("from") Date from, @QueryParam("to") Date to)
+            @QueryParam("geofenceId") long geofenceId, @QueryParam("from") Date from, @QueryParam("to") Date to,
+            @QueryParam("geofences") boolean geofences)
             throws StorageException {
         if (!positionIds.isEmpty()) {
             var positions = new ArrayList<Position>();
@@ -86,8 +92,17 @@ public class PositionResource extends BaseResource {
                 Geofence geofence = geofenceId == 0 ? null : storage.getObject(Geofence.class, new Request(
                         new Columns.All(), new Condition.Equals("id", geofenceId)));
 
+                // Solo cuando se pide: reemplaza el dato guardado por el cálculo contra la geometría.
+                GeofenceMembership membership = geofences
+                        ? GeofenceMembership.forUser(readAccessService, getUserId(), null) : null;
                 return PositionUtil.getPositionsStream(storage, deviceId, from, to)
-                        .filter(position -> geofence == null || geofence.containsPosition(position));
+                        .filter(position -> geofence == null || geofence.containsPosition(position))
+                        .peek(position -> {
+                            if (membership != null) {
+                                List<Long> ids = membership.find(position);
+                                position.setGeofenceIds(ids.isEmpty() ? null : ids);
+                            }
+                        });
             } else {
                 return storage.getObjectsStream(Position.class, new Request(
                         new Columns.All(), new Condition.LatestPositions(deviceId)));

@@ -27,4 +27,36 @@ public class GeofenceReportItem extends BaseReportItem {
         this.geofenceId = geofenceId;
     }
 
+    private String geofenceName;
+
+    public String getGeofenceName() {
+        return geofenceName;
+    }
+
+    public void setGeofenceName(String geofenceName) {
+        this.geofenceName = geofenceName;
+    }
+
+    // El dispositivo ya estaba dentro cuando empezó el período.
+    private boolean openStart;
+
+    public boolean getOpenStart() {
+        return openStart;
+    }
+
+    public void setOpenStart(boolean openStart) {
+        this.openStart = openStart;
+    }
+
+    // El dispositivo seguía dentro cuando terminó el período.
+    private boolean openEnd;
+
+    public boolean getOpenEnd() {
+        return openEnd;
+    }
+
+    public void setOpenEnd(boolean openEnd) {
+        this.openEnd = openEnd;
+    }
+
 }

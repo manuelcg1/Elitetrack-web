@@ -17,6 +17,8 @@ import { useTranslation } from '../common/components/LocalizationProvider';
 import PageLayout from '../common/components/PageLayout';
 import ReportsMenu from './components/ReportsMenu';
 import PositionValue from '../common/components/PositionValue';
+import GeofenceVisitCell from './components/GeofenceVisitCell';
+import useGeofenceNames from './common/useGeofenceNames';
 import ColumnSelect from './components/ColumnSelect';
 import RouteColorSelect, { isRouteColor } from './components/RouteColorSelect';
 import usePositionAttributes from '../common/attributes/usePositionAttributes';
@@ -58,7 +60,8 @@ import {
 } from '../common/util/formatter';
 
 // La tabla puede tener miles de filas; memo evita redibujarla al cambiar el color de la ruta.
-const PositionsTable = memo(({ items, columns, loading, selectedItem, onSelect, onClear }) => {
+const PositionsTable = memo((props) => {
+  const { items, columns, loading, selectedItem, onSelect, onClear, geofenceNames } = props;
   const { classes } = useReportStyles();
   const t = useTranslation();
   const positionAttributes = usePositionAttributes(t);
@@ -83,7 +86,7 @@ const PositionsTable = memo(({ items, columns, loading, selectedItem, onSelect, 
       </TableHead>
       <TableBody>
         {!loading ? (
-          items.slice(0, 4000).map((item) => (
+          items.slice(0, 4000).map((item, index) => (
             <TableRow
               key={item.id}
               hover
@@ -126,11 +129,23 @@ const PositionsTable = memo(({ items, columns, loading, selectedItem, onSelect, 
               </TableCell>
               {columns.map((key) => (
                 <TableCell key={key}>
-                  <PositionValue
-                    position={item}
-                    property={item.hasOwnProperty(key) ? key : null}
-                    attribute={item.hasOwnProperty(key) ? null : key}
-                  />
+                  {key === 'geofenceIds' ? (
+                    <GeofenceVisitCell
+                      current={item.geofenceIds}
+                      previous={
+                        index > 0 && items[index - 1].deviceId === item.deviceId
+                          ? items[index - 1].geofenceIds
+                          : undefined
+                      }
+                      names={geofenceNames}
+                    />
+                  ) : (
+                    <PositionValue
+                      position={item}
+                      property={item.hasOwnProperty(key) ? key : null}
+                      attribute={item.hasOwnProperty(key) ? null : key}
+                    />
+                  )}
                 </TableCell>
               ))}
             </TableRow>
@@ -170,6 +185,10 @@ const PositionsReportPage = () => {
     (state) => state.devices.items[deviceId]?.attributes?.['web.reportColor'],
   );
   const [items, setItems] = useState([]);
+  // Parámetros de la última consulta y si traía las geocercas calculadas en el servidor.
+  const [loaded, setLoaded] = useState(null);
+  const withGeofences = columns.includes('geofenceIds');
+  const geofenceNames = useGeofenceNames(withGeofences);
   const geofenceId = searchParams.has('geofenceId')
     ? parseInt(searchParams.get('geofenceId'))
     : null;
@@ -203,8 +222,11 @@ const PositionsReportPage = () => {
     [items, selectItem],
   );
 
-  const onShow = useCatch(async ({ deviceIds, from, to }) => {
+  const load = useCatch(async ({ deviceIds, from, to }, geofences) => {
     const query = new URLSearchParams({ from, to });
+    if (geofences) {
+      query.append('geofences', 'true');
+    }
     if (geofenceId) {
       query.append('geofenceId', geofenceId);
     }
@@ -222,6 +244,8 @@ const PositionsReportPage = () => {
         Object.keys(position).forEach((it) => keySet.add(it));
         Object.keys(position.attributes).forEach((it) => keySet.add(it));
       });
+      // Geo-Zonas se calcula en el servidor, por eso se ofrece aunque ninguna posición la traiga guardada.
+      keySet.add('geofenceIds');
       ['id', 'deviceId', 'outdated', 'network', 'attributes'].forEach((key) => keySet.delete(key));
       Object.keys(positionAttributes).forEach((key) => {
         if (keySet.has(key)) {
@@ -233,15 +257,28 @@ const PositionsReportPage = () => {
         [...keyList, ...keySet].map((key) => [key, positionAttributes[key]?.name || key]),
       );
       setItems(data);
+      setLoaded({ params: { deviceIds, from, to }, geofences });
     } finally {
       setLoading(false);
     }
   });
 
+  const onShow = (params) => load(params, withGeofences);
+
+  // Si se activa Geo-Zonas después de consultar, se vuelve a pedir con el cálculo.
+  useEffect(() => {
+    if (withGeofences && loaded && !loaded.geofences && !loading) {
+      load(loaded.params, true);
+    }
+  }, [withGeofences, loaded]);
+
   const formatExportValue = (position, key) => {
     const value = position.hasOwnProperty(key) ? position[key] : position.attributes?.[key];
     if (key === 'address') {
       return formatAddress(position, coordinateFormat);
+    }
+    if (key === 'geofenceIds') {
+      return (value || []).map((id) => geofenceNames[id] || id).join(', ');
     }
     if (value == null) {
       return '';
@@ -388,6 +425,7 @@ const PositionsReportPage = () => {
         selectedItem={selectedItem}
         onSelect={selectItem}
         onClear={clearItem}
+        geofenceNames={geofenceNames}
       />
     </div>
   );
