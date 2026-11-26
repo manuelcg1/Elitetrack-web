@@ -44,7 +44,13 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import AddIcon from '@mui/icons-material/Add';
+import CheckIcon from '@mui/icons-material/Check';
+import DesktopWindowsOutlinedIcon from '@mui/icons-material/DesktopWindowsOutlined';
+import LockIcon from '@mui/icons-material/Lock';
+import PhoneIphoneIcon from '@mui/icons-material/PhoneIphone';
+import TelegramIcon from '@mui/icons-material/Telegram';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -70,7 +76,7 @@ import exportExcel from '../common/util/exportExcel';
 import fetchOrThrow from '../common/util/fetchOrThrow';
 import useCompactTableStyles from '../common/theme/compactTableStyles';
 
-const eliteGreen = '#00c853';
+const brandGreen = '#00c853';
 
 const alertTypes = [
   { value: 'speed', label: 'Exceso de velocidad' },
@@ -78,11 +84,11 @@ const alertTypes = [
   { value: 'geofenceExit', label: 'Salida de geocerca' },
   { value: 'batteryLow', label: 'Batería baja' },
   { value: 'powerCut', label: 'Energía desconectada' },
-  { value: 'ignitionOn', label: 'Ignicion encendida' },
-  { value: 'ignitionOff', label: 'Ignicion apagada' },
+  { value: 'ignitionOn', label: 'Ignición encendida' },
+  { value: 'ignitionOff', label: 'Ignición apagada' },
   { value: 'stoppedTooLong', label: 'Detenido demasiado tiempo' },
   { value: 'deviceMoving', label: 'Movimiento detectado' },
-  { value: 'hardAcceleration', label: 'Aceleracion brusca' },
+  { value: 'hardAcceleration', label: 'Aceleración brusca' },
   { value: 'hardBraking', label: 'Frenado brusco' },
   { value: 'hardCornering', label: 'Giro brusco' },
 ];
@@ -102,9 +108,82 @@ const operators = [
 ];
 
 const notificationChannels = [
-  { key: 'platform', label: 'Plataforma' },
-  { key: 'telegram', label: 'Telegram' },
+  { key: 'platform', label: 'Plataforma', icon: DesktopWindowsOutlinedIcon },
+  { key: 'telegram', label: 'Telegram', icon: TelegramIcon, color: '#229ED9' },
+  { key: 'push', label: 'Push', icon: PhoneIphoneIcon, color: '#7C3AED' },
 ];
+
+const joinNames = (names) =>
+  names.length > 1 ? `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}` : names[0];
+
+// Estado de un destinatario en un canal o en su acceso: misma forma y tamaño en todo el asistente.
+const StatusChip = ({ icon: Icon, color, label }) => (
+  <Chip
+    size="small"
+    color={color}
+    variant="outlined"
+    icon={Icon ? <Icon sx={{ fontSize: '14px !important' }} /> : undefined}
+    label={label}
+    sx={{ fontWeight: 700, maxWidth: '100%' }}
+  />
+);
+
+const PushChip = ({ devices }) => (
+  <StatusChip
+    icon={PhoneIphoneIcon}
+    color={devices ? 'success' : 'warning'}
+    label={devices ? `App en ${devices} ${devices === 1 ? 'equipo' : 'equipos'}` : 'Sin app'}
+  />
+);
+
+const TelegramChip = ({ linked }) => (
+  <StatusChip
+    icon={TelegramIcon}
+    color={linked ? 'success' : 'warning'}
+    label={linked ? 'Telegram' : 'Sin Telegram'}
+  />
+);
+
+const AccessChip = ({ access, hasTargets }) => {
+  if (!access) return null;
+  if (access.admin) {
+    return <StatusChip icon={CheckIcon} color="default" label="Administrador · ve todo" />;
+  }
+  if (access.label) {
+    return (
+      <StatusChip
+        icon={LockIcon}
+        color={access.blocked ? 'error' : 'warning'}
+        label={access.label}
+      />
+    );
+  }
+  return (
+    <StatusChip
+      icon={CheckIcon}
+      color="success"
+      label={hasTargets ? 'Ve los vehículos de la alerta' : 'Recibe de sus vehículos asignados'}
+    />
+  );
+};
+
+const initials = (name = '') =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || '?';
+
+const avatarColors = ['#0F766E', '#2563EB', '#9333EA', '#EA580C', '#DB2777', '#0891B2', '#4D7C0F'];
+const avatarColor = (id) => avatarColors[Math.abs(Number(id) || 0) % avatarColors.length];
+
+const channelHints = {
+  platform: 'Ventana en el mapa y registro en Alertas',
+  telegram: 'Mensaje al chat vinculado del usuario',
+  push: 'Notificación al celular con la app',
+};
 
 const normalizeNotificationChannels = (value) => {
   if (Array.isArray(value)) {
@@ -124,7 +203,7 @@ const normalizeNotificationChannels = (value) => {
   return ['platform'];
 };
 
-const steps = ['Informacion', 'Condicion', 'Destinos', 'Notificaciones', 'Resumen'];
+const steps = ['Información', 'Condición', 'Destinos', 'Notificaciones', 'Resumen'];
 const eventPollInterval = 30000;
 const eventPageSize = 200;
 const filterControlHeight = 48;
@@ -243,7 +322,7 @@ const eventLocation = (event) => {
   if (hasEventLocation(event)) {
     return `${Number(event.latitude).toFixed(5)}, ${Number(event.longitude).toFixed(5)}`;
   }
-  return 'Sin ubicacion';
+  return 'Sin ubicación';
 };
 
 const eventIcon = (type) => {
@@ -337,7 +416,7 @@ const buildEventQuery = (filters = {}, options = {}) => {
   return `/api/alert-events?${query.toString()}`;
 };
 
-const KpiCard = ({ title, value, icon, color = eliteGreen }) => (
+const KpiCard = ({ title, value, icon, color = brandGreen }) => (
   <Paper
     elevation={0}
     sx={{
@@ -350,7 +429,7 @@ const KpiCard = ({ title, value, icon, color = eliteGreen }) => (
     }}
   >
     <Stack direction="row" spacing={1.5} alignItems="center">
-      <Avatar sx={{ bgcolor: `${color}18`, color, width: 42, height: 42 }}>{icon}</Avatar>
+      <Avatar sx={{ bgcolor: alpha(color, 0.09), color, width: 42, height: 42 }}>{icon}</Avatar>
       <Box>
         <Typography variant="body2" color="text.secondary">
           {title}
@@ -387,6 +466,8 @@ const FormStepPanel = ({ title, description, children }) => (
 const MonitoringAlertsPage = () => {
   const { classes: tableClasses } = useCompactTableStyles();
   const theme = useTheme();
+  // Colores del tema (palette.js): se adaptan al modo oscuro y a un color primario propio.
+  const eliteGreen = theme.palette.primary.main;
   const compactDetail = useMediaQuery('(max-width:1199px)');
   const realtimeAlertEvents = useSelector((state) => state.alertEvents.items);
   const [alerts, setAlerts] = useState([]);
@@ -444,7 +525,7 @@ const MonitoringAlertsPage = () => {
       ...devices.map((device) => ({
         id: device.id,
         kind: 'device',
-        group: 'Vehiculos',
+        group: 'Vehículos',
         label: device.name || device.uniqueId,
       })),
     ],
@@ -498,6 +579,211 @@ const MonitoringAlertsPage = () => {
   const groupMap = useMemo(() => new Map(groups.map((group) => [group.id, group])), [groups]);
   const alertMap = useMemo(() => new Map(alerts.map((alert) => [alert.id, alert])), [alerts]);
 
+  // Acceso de los destinatarios a los vehículos y geocercas de la alerta: el servidor no envía
+  // Telegram ni Push a quien no puede ver el vehículo (o la geocerca, en alertas de geocerca).
+  const [recipientAccess, setRecipientAccess] = useState({});
+  const [recipientIssuesOpen, setRecipientIssuesOpen] = useState(false);
+  const needsRecipients =
+    item.attributes.notifications?.includes('telegram') ||
+    item.attributes.notifications?.includes('push');
+  const accessGeofenceIds = useMemo(
+    () => (isGeofenceTransition(item.type) ? item.geofenceIds : []),
+    [item.type, item.geofenceIds],
+  );
+
+  useEffect(() => {
+    if (!drawerOpen || !needsRecipients || !item.recipientIds.length) {
+      return undefined;
+    }
+    let cancelled = false;
+    const timeout = setTimeout(async () => {
+      try {
+        const response = await fetchOrThrow('/api/alerts/recipient-access', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userIds: item.recipientIds,
+            deviceIds: item.deviceIds,
+            groupIds: item.groupIds,
+            geofenceIds: accessGeofenceIds,
+          }),
+        });
+        const data = await response.json();
+        if (!cancelled) {
+          setRecipientAccess(Object.fromEntries(data.map((access) => [access.userId, access])));
+        }
+      } catch {
+        if (!cancelled) {
+          setRecipientAccess({});
+        }
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [
+    drawerOpen,
+    needsRecipients,
+    item.recipientIds,
+    item.deviceIds,
+    item.groupIds,
+    accessGeofenceIds,
+  ]);
+
+  const targetName = (kind, id) => {
+    if (kind === 'device') return deviceMap.get(id)?.name || `Vehículo ${id}`;
+    if (kind === 'group') return groupMap.get(id)?.name || `Flota ${id}`;
+    return geofences.find((geofence) => geofence.id === id)?.name || `Geocerca ${id}`;
+  };
+
+  // null = sin datos aún; { blocked } = no recibirá nada; { partial } = solo de algunos objetivos.
+  const getRecipientAccessStatus = (userId) => {
+    const access = recipientAccess[userId];
+    if (!access) return null;
+    if (access.administrator) return { admin: true };
+    const vehicleTotal = item.deviceIds.length + item.groupIds.length;
+    const missingVehicles = [
+      ...access.missingDeviceIds.map((id) => targetName('device', id)),
+      ...access.missingGroupIds.map((id) => targetName('group', id)),
+    ];
+    const missingGeofences = access.missingGeofenceIds.map((id) => targetName('geofence', id));
+    const describe = (names, total, noun) =>
+      names.length === 1 && total === 1
+        ? names[0]
+        : names.length === total
+          ? `los ${total} ${noun} de la alerta`
+          : `${names.length} de ${total} ${noun}`;
+    if (missingVehicles.length) {
+      return {
+        blocked: missingVehicles.length === vehicleTotal,
+        partial: missingVehicles.length < vehicleTotal,
+        reason: 'vehicle',
+        label: `Sin acceso a ${describe(missingVehicles, vehicleTotal, 'vehículos')}`,
+        names: missingVehicles,
+      };
+    }
+    if (missingGeofences.length) {
+      const total = accessGeofenceIds.length;
+      return {
+        blocked: missingGeofences.length === total,
+        partial: missingGeofences.length < total,
+        reason: 'geofence',
+        label: `Sin acceso a ${describe(missingGeofences, total, 'geocercas')}`,
+        names: missingGeofences,
+      };
+    }
+    return { ok: true };
+  };
+
+  const recipientReachable = (userId) => !getRecipientAccessStatus(userId)?.blocked;
+
+  const platformEnabled = item.attributes.notifications?.includes('platform');
+  const telegramEnabled = item.attributes.notifications?.includes('telegram');
+  const pushEnabled = item.attributes.notifications?.includes('push');
+  const selectedRecipients = recipientOptions.filter((recipient) =>
+    item.recipientIds.includes(recipient.userId),
+  );
+  const blockedRecipients = selectedRecipients.filter(
+    (recipient) => getRecipientAccessStatus(recipient.userId)?.blocked,
+  );
+  const partialRecipients = selectedRecipients.filter(
+    (recipient) => getRecipientAccessStatus(recipient.userId)?.partial,
+  );
+  const recipientsWithoutApp = selectedRecipients.filter(
+    (recipient) => !recipient.pushDevices && recipientReachable(recipient.userId),
+  );
+  const pushReach = selectedRecipients.filter(
+    (recipient) => recipient.pushDevices > 0 && recipientReachable(recipient.userId),
+  ).length;
+  const telegramReach = selectedRecipients.filter(
+    (recipient) => recipient.telegramLinked && recipientReachable(recipient.userId),
+  ).length;
+
+  // Todos los avisos sobre destinatarios en un solo bloque desplegable.
+  const plural = (list, one, many) => (list.length > 1 ? many : one);
+  const names = (list) => <strong>{joinNames(list.map((recipient) => recipient.name))}</strong>;
+  const recipientIssues = [
+    ...blockedRecipients.map((recipient) => ({
+      key: `blocked-${recipient.userId}`,
+      severity: 'error',
+      content: (
+        <>
+          <strong>{recipient.name}</strong>
+          {` no tiene acceso a ${joinNames(getRecipientAccessStatus(recipient.userId).names)}: no recibirá esta alerta.`}
+        </>
+      ),
+      href: `/settings/user/${recipient.userId}/connections`,
+      action: 'Asignar',
+    })),
+    ...partialRecipients.map((recipient) => ({
+      key: `partial-${recipient.userId}`,
+      severity: 'warning',
+      content: (
+        <>
+          <strong>{recipient.name}</strong>
+          {' solo la recibirá de los vehículos o geocercas que tiene asignados.'}
+        </>
+      ),
+      href: `/settings/user/${recipient.userId}/connections`,
+      action: 'Asignar',
+    })),
+  ];
+  if (pushEnabled && selectedRecipients.length) {
+    if (!pushReach) {
+      recipientIssues.push({
+        key: 'push-none',
+        severity: platformEnabled ? 'warning' : 'error',
+        content:
+          'Ningún destinatario tiene la app vinculada y acceso al vehículo: nadie recibirá el push.',
+      });
+    } else if (recipientsWithoutApp.length) {
+      recipientIssues.push({
+        key: 'push-app',
+        severity: 'warning',
+        content: (
+          <>
+            {names(recipientsWithoutApp)}
+            {plural(
+              recipientsWithoutApp,
+              ' no tiene la app vinculada: no recibirá el push.',
+              ' no tienen la app vinculada: no recibirán el push.',
+            )}
+          </>
+        ),
+      });
+    }
+  }
+  if (telegramEnabled && selectedRecipients.length) {
+    const withoutTelegram = selectedRecipients.filter(
+      (recipient) => !recipient.telegramLinked && recipientReachable(recipient.userId),
+    );
+    if (!telegramReach) {
+      recipientIssues.push({
+        key: 'telegram-none',
+        severity: platformEnabled ? 'warning' : 'error',
+        content: 'Ningún destinatario tiene Telegram vinculado y acceso al vehículo.',
+      });
+    } else if (withoutTelegram.length) {
+      recipientIssues.push({
+        key: 'telegram-link',
+        severity: 'warning',
+        content: (
+          <>
+            {names(withoutTelegram)}
+            {plural(
+              withoutTelegram,
+              ' no tiene Telegram vinculado.',
+              ' no tienen Telegram vinculado.',
+            )}
+          </>
+        ),
+      });
+    }
+  }
+  const issueErrors = recipientIssues.filter((issue) => issue.severity === 'error').length;
+  const issueWarnings = recipientIssues.length - issueErrors;
+
   const enrichedEvents = useMemo(
     () =>
       events.map((event) => {
@@ -512,7 +798,7 @@ const MonitoringAlertsPage = () => {
           ...event,
           alertName: alert?.name || event.message || `Alerta ${event.alertId || ''}`,
           alertConfig: alert,
-          deviceName: device?.name || device?.uniqueId || `Vehiculo ${event.deviceId || '-'}`,
+          deviceName: device?.name || device?.uniqueId || `Vehículo ${event.deviceId || '-'}`,
           driverName: event.driver || event.attributes?.driver || '-',
           groupId: event.groupId || group?.id || 0,
           groupName: group?.name || '-',
@@ -649,11 +935,16 @@ const MonitoringAlertsPage = () => {
     item.type &&
     item.severity &&
     (item.type !== 'speed' || Number(item.limitValue) > 0) &&
-    (!item.attributes.notifications?.includes('telegram') || item.recipientIds.length > 0) &&
+    (!needsRecipients || item.recipientIds.length > 0) &&
     (!item.attributes.notifications?.includes('telegram') ||
       item.attributes.notifications?.includes('platform') ||
       recipientOptions.some(
         (recipient) => item.recipientIds.includes(recipient.userId) && recipient.telegramLinked,
+      )) &&
+    (!item.attributes.notifications?.includes('push') ||
+      item.attributes.notifications?.includes('platform') ||
+      recipientOptions.some(
+        (recipient) => item.recipientIds.includes(recipient.userId) && recipient.pushDevices > 0,
       ));
 
   const loadData = async () => {
@@ -935,7 +1226,7 @@ const MonitoringAlertsPage = () => {
       case 0:
         return (
           <FormStepPanel
-            title="Informacion general"
+            title="Información general"
             description="Identifica la alerta y define su importancia operativa."
           >
             <Box
@@ -975,7 +1266,7 @@ const MonitoringAlertsPage = () => {
                 fullWidth
                 multiline
                 minRows={3}
-                label="Descripcion"
+                label="Descripción"
                 value={item.description}
                 onChange={(event) => setItem({ ...item, description: event.target.value })}
                 sx={{ gridColumn: '1 / -1' }}
@@ -1033,24 +1324,24 @@ const MonitoringAlertsPage = () => {
           const powerCut = item.type === 'powerCut';
           return (
             <FormStepPanel
-              title="Condicion de activacion"
+              title="Condición de activacion"
               description={
                 powerCut
-                  ? 'El evento se genera cuando el GPS reporta la desconexion de energia externa.'
-                  : 'El evento se genera por la transicion de posicion respecto a la geocerca.'
+                  ? 'El evento se genera cuando el GPS reporta la desconexión de energía externa.'
+                  : 'El evento se genera por la transición de posición respecto a la geocerca.'
               }
             >
               <Alert severity="info">
                 {powerCut
-                  ? 'La alerta se activa al recibir la alarma powerCut del dispositivo. La velocidad, el operador, el limite y la duracion no se toman en cuenta.'
-                  : 'La alerta se activa cada vez que el vehiculo cruza el limite de la geocerca seleccionada. La velocidad, el operador, el limite y la duracion no se toman en cuenta.'}
+                  ? 'La alerta se activa al recibir la alarma powerCut del dispositivo. La velocidad, el operador, el límite y la duración no se toman en cuenta.'
+                  : 'La alerta se activa cada vez que el vehículo cruza el límite de la geocerca seleccionada. La velocidad, el operador, el límite y la duración no se toman en cuenta.'}
               </Alert>
             </FormStepPanel>
           );
         }
         return (
           <FormStepPanel
-            title="Condicion de activacion"
+            title="Condición de activacion"
             description="Define el criterio que debe cumplirse para generar el evento."
           >
             <Box
@@ -1088,7 +1379,7 @@ const MonitoringAlertsPage = () => {
               <TextField
                 fullWidth
                 type="number"
-                label="Tiempo minimo opcional"
+                label="Tiempo mínimo opcional"
                 value={item.attributes.minimumDuration}
                 onChange={(event) => updateAttributes({ minimumDuration: event.target.value })}
                 InputProps={{ endAdornment: <InputAdornment position="end">seg</InputAdornment> }}
@@ -1108,16 +1399,16 @@ const MonitoringAlertsPage = () => {
         return (
           <FormStepPanel
             title="Destinos y alcance"
-            description="Selecciona los recursos a los que se aplicara esta alerta."
+            description="Selecciona los recursos a los que se aplicará esta alerta."
           >
             <Stack spacing={2.5}>
               <Box>
                 <Typography variant="subtitle2" sx={{ fontWeight: 900, mb: 1 }}>
-                  Vehiculos y flotas
+                  Vehículos y flotas
                 </Typography>
                 {!vehicleOptions.length && (
                   <Alert severity="warning" sx={{ mb: 1.5 }}>
-                    No tienes vehiculos asignados. Solicita al administrador que te asigne recursos.
+                    No tienes vehículos asignados. Solicita al administrador que te asigne recursos.
                   </Alert>
                 )}
                 <Autocomplete
@@ -1131,12 +1422,12 @@ const MonitoringAlertsPage = () => {
                   renderOption={renderOption}
                   onChange={handleVehicleChange}
                   renderInput={(params) => (
-                    <TextField {...params} label="Seleccionar vehiculos y flotas" />
+                    <TextField {...params} label="Seleccionar vehículos y flotas" />
                   )}
                 />
                 {!selectedVehicleOptions.length && (
                   <Alert severity="info" sx={{ mt: 1.5 }}>
-                    La alerta aplicara a todos los vehiculos permitidos para tu usuario
+                    La alerta aplicará a todos los vehículos permitidos para tu usuario
                   </Alert>
                 )}
               </Box>
@@ -1171,74 +1462,129 @@ const MonitoringAlertsPage = () => {
       case 3:
         return (
           <FormStepPanel
-            title="Canales de notificacion"
-            description="Elige por donde se informara a los usuarios cuando ocurra el evento."
+            title="Canales de notificación"
+            description="Elige por dónde se informará a los usuarios cuando ocurra el evento."
           >
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
                 gap: 1.5,
               }}
             >
-              {notificationChannels.map((channel) => (
-                <Paper
-                  key={channel.key}
-                  variant="outlined"
-                  sx={{ px: 1.5, py: 1, borderRadius: 1.5 }}
-                >
-                  <FormControlLabel
-                    sx={{ m: 0, width: '100%', justifyContent: 'space-between' }}
-                    labelPlacement="start"
-                    control={
-                      <Switch
-                        checked={item.attributes.notifications?.includes(channel.key)}
-                        onChange={(event) => {
-                          const channels = normalizeNotificationChannels(
-                            item.attributes.notifications,
-                          );
-                          updateAttributes({
-                            notifications: event.target.checked
-                              ? [...new Set([...channels, channel.key])]
-                              : channels.filter((value) => value !== channel.key),
-                          });
-                        }}
-                      />
-                    }
-                    label={
-                      <Box>
-                        <Typography variant="body2" sx={{ fontWeight: 800 }}>
-                          {channel.label}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {item.attributes.notifications?.includes(channel.key)
-                            ? 'Canal habilitado'
-                            : 'Canal deshabilitado'}
-                        </Typography>
-                      </Box>
-                    }
-                  />
-                </Paper>
-              ))}
+              {notificationChannels.map((channel) => {
+                const enabled = item.attributes.notifications?.includes(channel.key);
+                const color = channel.color || theme.palette.primary.main;
+                const ChannelIcon = channel.icon;
+                return (
+                  <Paper
+                    key={channel.key}
+                    variant="outlined"
+                    sx={{
+                      px: 1.5,
+                      py: 1.25,
+                      borderRadius: 2,
+                      transition: 'border-color .15s, background-color .15s',
+                      borderColor: enabled ? 'primary.main' : 'divider',
+                      bgcolor: enabled
+                        ? alpha(theme.palette.primary.main, 0.08)
+                        : 'background.paper',
+                    }}
+                  >
+                    <FormControlLabel
+                      sx={{
+                        m: 0,
+                        width: '100%',
+                        alignItems: 'flex-start',
+                        justifyContent: 'space-between',
+                        gap: 1,
+                      }}
+                      labelPlacement="start"
+                      control={
+                        <Switch
+                          checked={item.attributes.notifications?.includes(channel.key)}
+                          onChange={(event) => {
+                            const channels = normalizeNotificationChannels(
+                              item.attributes.notifications,
+                            );
+                            updateAttributes({
+                              notifications: event.target.checked
+                                ? [...new Set([...channels, channel.key])]
+                                : channels.filter((value) => value !== channel.key),
+                            });
+                          }}
+                        />
+                      }
+                      label={
+                        <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                          <Avatar
+                            variant="rounded"
+                            sx={{
+                              width: 40,
+                              height: 40,
+                              borderRadius: 1.5,
+                              bgcolor: alpha(color, 0.14),
+                              color,
+                            }}
+                          >
+                            <ChannelIcon fontSize="small" />
+                          </Avatar>
+                          <Box>
+                            <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                              {channel.label}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ display: 'block', lineHeight: 1.35 }}
+                            >
+                              {channelHints[channel.key]}
+                            </Typography>
+                          </Box>
+                        </Stack>
+                      }
+                    />
+                  </Paper>
+                );
+              })}
             </Box>
-            {item.attributes.notifications?.includes('telegram') && (
-              <Stack spacing={1.5} sx={{ mt: 2.5 }}>
+            {needsRecipients && (
+              <Stack spacing={1.5} sx={{ mt: 3 }}>
                 <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 900 }}>
-                    Destinatarios de Telegram
-                  </Typography>
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    alignItems="baseline"
+                    flexWrap="wrap"
+                    sx={{ columnGap: 2 }}
+                  >
+                    <Typography variant="subtitle2" sx={{ fontWeight: 900 }}>
+                      {`Destinatarios · ${[telegramEnabled && 'Telegram', pushEnabled && 'Push']
+                        .filter(Boolean)
+                        .join(' y ')}`}
+                    </Typography>
+                    {!!selectedRecipients.length && (
+                      <Typography variant="caption" color="text.secondary">
+                        {[
+                          pushEnabled && `Push: ${pushReach} de ${selectedRecipients.length}`,
+                          telegramEnabled &&
+                            `Telegram: ${telegramReach} de ${selectedRecipients.length}`,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </Typography>
+                    )}
+                  </Stack>
                   <Typography variant="body2" color="text.secondary">
-                    Selecciona usuarios individuales. Los usuarios sin vinculación no recibirán
-                    mensajes hasta configurar Telegram.
+                    Cada usuario solo recibe por los canales que tenga vinculados y de los vehículos
+                    que tenga asignados.
                   </Typography>
                 </Box>
                 <Autocomplete
                   multiple
                   disableCloseOnSelect
                   options={recipientOptions}
-                  value={recipientOptions.filter((recipient) =>
-                    item.recipientIds.includes(recipient.userId),
-                  )}
+                  value={selectedRecipients}
                   isOptionEqualToValue={(option, value) => option.userId === value.userId}
                   getOptionLabel={(option) => option.name || option.email}
                   onChange={(_, values) =>
@@ -1247,6 +1593,7 @@ const MonitoringAlertsPage = () => {
                       recipientIds: values.map((recipient) => recipient.userId),
                     }))
                   }
+                  renderValue={() => null}
                   renderOption={(props, option, state) => (
                     <li key={option.userId} {...props}>
                       <Checkbox checked={state.selected} sx={{ mr: 1 }} />
@@ -1258,36 +1605,164 @@ const MonitoringAlertsPage = () => {
                           {option.email}
                         </Typography>
                       </Box>
-                      <Chip
-                        size="small"
-                        color={option.telegramLinked ? 'success' : 'warning'}
-                        label={option.telegramLinked ? 'Vinculado' : 'No vinculado'}
-                      />
+                      <Stack direction="row" spacing={0.5}>
+                        {telegramEnabled && <TelegramChip linked={option.telegramLinked} />}
+                        {pushEnabled && <PushChip devices={option.pushDevices} />}
+                      </Stack>
                     </li>
                   )}
                   renderInput={(params) => (
-                    <TextField {...params} label="Buscar usuarios" placeholder="Nombre o correo" />
+                    <TextField
+                      {...params}
+                      label="Agregar destinatario"
+                      placeholder="Buscar por nombre o correo…"
+                    />
                   )}
                 />
-                {!item.recipientIds.length && (
-                  <Alert severity="error">Selecciona al menos un destinatario para Telegram.</Alert>
+                {selectedRecipients.length ? (
+                  <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
+                    {selectedRecipients.map((recipient, index) => (
+                      <Box
+                        key={recipient.userId}
+                        sx={{
+                          px: 1.5,
+                          py: 1.25,
+                          display: 'grid',
+                          gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+                          alignItems: 'center',
+                          columnGap: 1.5,
+                          borderTop: index ? '1px solid' : 'none',
+                          borderColor: 'divider',
+                        }}
+                      >
+                        <Avatar
+                          sx={{
+                            width: 34,
+                            height: 34,
+                            fontSize: 13,
+                            fontWeight: 800,
+                            bgcolor: avatarColor(recipient.userId),
+                          }}
+                        >
+                          {initials(recipient.name || recipient.email)}
+                        </Avatar>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
+                            {recipient.name}
+                          </Typography>
+                          <Stack
+                            direction="row"
+                            spacing={0.75}
+                            useFlexGap
+                            flexWrap="wrap"
+                            sx={{ mt: 0.5 }}
+                          >
+                            <AccessChip
+                              access={getRecipientAccessStatus(recipient.userId)}
+                              hasTargets={item.deviceIds.length + item.groupIds.length > 0}
+                            />
+                            {telegramEnabled && <TelegramChip linked={recipient.telegramLinked} />}
+                            {pushEnabled && <PushChip devices={recipient.pushDevices} />}
+                          </Stack>
+                        </Box>
+                        <Tooltip title="Quitar destinatario">
+                          <IconButton
+                            size="small"
+                            aria-label={`Quitar ${recipient.name}`}
+                            onClick={() =>
+                              setItem((current) => ({
+                                ...current,
+                                recipientIds: current.recipientIds.filter(
+                                  (userId) => userId !== recipient.userId,
+                                ),
+                              }))
+                            }
+                          >
+                            <CloseIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    ))}
+                  </Paper>
+                ) : (
+                  <Alert severity="error">Agrega al menos un destinatario.</Alert>
                 )}
-                {!!item.recipientIds.length &&
-                  !recipientOptions.some(
-                    (recipient) =>
-                      item.recipientIds.includes(recipient.userId) && recipient.telegramLinked,
-                  ) && (
-                    <Alert
-                      severity={
-                        item.attributes.notifications?.includes('platform') ? 'warning' : 'error'
-                      }
+                {!!recipientIssues.length && (
+                  <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
+                    <Box
+                      component="button"
+                      type="button"
+                      aria-expanded={recipientIssuesOpen}
+                      onClick={() => setRecipientIssuesOpen((open) => !open)}
+                      sx={{
+                        width: '100%',
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                        gap: 1,
+                        px: 1.5,
+                        py: 1.25,
+                        border: 0,
+                        bgcolor: 'transparent',
+                        color: 'text.primary',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        font: 'inherit',
+                      }}
                     >
-                      Ningún destinatario seleccionado tiene Telegram vinculado.
-                    </Alert>
-                  )}
-                <Button href="/settings/integrations/telegram" sx={{ alignSelf: 'flex-start' }}>
-                  Administrar vinculaciones Telegram
-                </Button>
+                      {issueErrors ? (
+                        <ErrorOutlineIcon color="error" fontSize="small" />
+                      ) : (
+                        <WarningAmberIcon color="warning" fontSize="small" />
+                      )}
+                      <Typography variant="body2" sx={{ fontWeight: 800, flex: '1 1 160px' }}>
+                        {`${recipientIssues.length} ${recipientIssues.length === 1 ? 'aviso' : 'avisos'} sobre destinatarios`}
+                      </Typography>
+                      {!!issueErrors && (
+                        <Chip
+                          size="small"
+                          color="error"
+                          variant="outlined"
+                          label={`${issueErrors} no la recibirá${issueErrors > 1 ? 'n' : ''}`}
+                        />
+                      )}
+                      {!!issueWarnings && (
+                        <Chip
+                          size="small"
+                          color="warning"
+                          variant="outlined"
+                          label={`${issueWarnings} advertencia${issueWarnings > 1 ? 's' : ''}`}
+                        />
+                      )}
+                      {recipientIssuesOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                    </Box>
+                    <Collapse in={recipientIssuesOpen}>
+                      <Stack spacing={0.75} sx={{ px: 1.5, pb: 1.5 }}>
+                        {recipientIssues.map((issue) => (
+                          <Alert
+                            key={issue.key}
+                            severity={issue.severity}
+                            sx={{ py: 0.25 }}
+                            action={
+                              issue.href ? (
+                                <Button color="inherit" size="small" href={issue.href}>
+                                  {issue.action}
+                                </Button>
+                              ) : null
+                            }
+                          >
+                            {issue.content}
+                          </Alert>
+                        ))}
+                      </Stack>
+                    </Collapse>
+                  </Paper>
+                )}
+                {telegramEnabled && (
+                  <Button href="/settings/integrations/telegram" sx={{ alignSelf: 'flex-start' }}>
+                    Administrar vinculaciones Telegram
+                  </Button>
+                )}
               </Stack>
             )}
           </FormStepPanel>
@@ -1295,17 +1770,17 @@ const MonitoringAlertsPage = () => {
       default:
         return (
           <FormStepPanel
-            title="Resumen de configuracion"
-            description="Verifica la informacion antes de guardar la alerta."
+            title="Resumen de configuración"
+            description="Verifica la información antes de guardar la alerta."
           >
             <Stack spacing={2}>
               <Box
                 sx={{
                   p: 2,
                   borderRadius: 2,
-                  bgcolor: `${eliteGreen}10`,
+                  bgcolor: alpha(eliteGreen, 0.06),
                   border: '1px solid',
-                  borderColor: `${eliteGreen}35`,
+                  borderColor: alpha(eliteGreen, 0.21),
                 }}
               >
                 <Stack
@@ -1347,15 +1822,15 @@ const MonitoringAlertsPage = () => {
               >
                 {[
                   [
-                    'Condicion',
+                    'Condición',
                     isConditionlessAlert(item.type)
                       ? item.type === 'powerCut'
-                        ? 'Corte de energia reportado por el GPS; sin condicion de velocidad'
-                        : 'Ingreso o salida detectada por posicion; sin condicion de velocidad'
+                        ? 'Corte de energía reportado por el GPS; sin condición de velocidad'
+                        : 'Ingreso o salida detectada por posición; sin condición de velocidad'
                       : `${operators.find((operator) => operator.value === item.operator)?.label || item.operator} ${item.limitValue} km/h`,
                   ],
                   [
-                    'Vehiculos / flotas',
+                    'Vehículos / flotas',
                     selectedVehicleOptions.length
                       ? `${selectedVehicleOptions.length} seleccionados`
                       : 'Todos los permitidos',
@@ -1373,6 +1848,26 @@ const MonitoringAlertsPage = () => {
                       .map((channel) => channel.label)
                       .join(', ') || 'Ninguno',
                   ],
+                  ...(pushEnabled
+                    ? [
+                        [
+                          'Recibirán el push',
+                          `${pushReach} de ${selectedRecipients.length} (con app y acceso al vehículo${
+                            isGeofenceTransition(item.type) && item.geofenceIds.length
+                              ? ' y a la geocerca'
+                              : ''
+                          })`,
+                        ],
+                      ]
+                    : []),
+                  ...(telegramEnabled
+                    ? [
+                        [
+                          'Recibirán Telegram',
+                          `${telegramReach} de ${selectedRecipients.length} (con Telegram y acceso)`,
+                        ],
+                      ]
+                    : []),
                 ].map(([label, value]) => (
                   <Paper key={label} variant="outlined" sx={{ p: 1.5, borderRadius: 1.5 }}>
                     <Typography variant="caption" color="text.secondary">
@@ -1387,7 +1882,7 @@ const MonitoringAlertsPage = () => {
               {item.description && (
                 <Box>
                   <Typography variant="caption" color="text.secondary">
-                    Descripcion
+                    Descripción
                   </Typography>
                   <Typography variant="body2">{item.description}</Typography>
                 </Box>
@@ -1512,7 +2007,7 @@ const MonitoringAlertsPage = () => {
         >
           {!includeDateRange && (
             <TextField
-              label="Buscar vehiculo, conductor o alerta"
+              label="Buscar vehículo, conductor o alerta"
               value={currentFilters.search}
               onChange={(event) =>
                 setCurrentFilters((current) => ({ ...current, search: event.target.value }))
@@ -1607,7 +2102,7 @@ const MonitoringAlertsPage = () => {
             onChange={(_, selected) =>
               setCurrentFilters((current) => ({ ...current, target: selected }))
             }
-            renderInput={(params) => <TextField {...params} label="Flota / vehiculo" />}
+            renderInput={(params) => <TextField {...params} label="Flota / vehículo" />}
           />
           {!includeDateRange && (
             <TextField
@@ -1650,13 +2145,13 @@ const MonitoringAlertsPage = () => {
         Estado: statusLabels[event.status] || event.status,
         Severidad: getSeverity(event.severity).label,
         Alerta: event.alertName || '',
-        Vehiculo: event.deviceName || '',
+        Vehículo: event.deviceName || '',
         Conductor: event.driverName || '',
         Tipo: getTypeLabel(event.type),
         Valor: Number(event.value || 0),
         Limite: Number(event.threshold || 0),
         Unidad: event.unit || '',
-        Ubicacion: eventLocation(event),
+        Ubicación: eventLocation(event),
         'Atendido por': event.acknowledgedBy || '',
         'Fecha de atencion': formatDateTime(event.acknowledgedAt),
         'Fecha de resolucion': formatDateTime(event.resolvedAt),
@@ -1704,7 +2199,7 @@ const MonitoringAlertsPage = () => {
               spacing={2}
               alignItems={{ sm: 'center' }}
             >
-              <Avatar sx={{ bgcolor: `${eliteGreen}18`, color: eliteGreen }}>
+              <Avatar sx={{ bgcolor: alpha(eliteGreen, 0.09), color: eliteGreen }}>
                 {eventIcon(event.type)}
               </Avatar>
               <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -1808,10 +2303,10 @@ const MonitoringAlertsPage = () => {
               <TableCell>Estado</TableCell>
               <TableCell>Severidad</TableCell>
               <TableCell>Alerta</TableCell>
-              <TableCell>Vehiculo</TableCell>
+              <TableCell>Vehículo</TableCell>
               <TableCell>Tipo</TableCell>
               <TableCell>Valor</TableCell>
-              <TableCell>Ubicacion</TableCell>
+              <TableCell>Ubicación</TableCell>
               <TableCell>Atendido por</TableCell>
               <TableCell>Resuelto en</TableCell>
               <TableCell align="right">Acciones</TableCell>
@@ -1877,11 +2372,13 @@ const MonitoringAlertsPage = () => {
           p: 2.5,
           borderBottom: '1px solid',
           borderColor: 'divider',
-          background: `linear-gradient(135deg, ${eliteGreen}18 0%, transparent 72%)`,
+          background: `linear-gradient(135deg, ${alpha(eliteGreen, 0.09)} 0%, transparent 72%)`,
         }}
       >
         <Stack direction="row" spacing={1.5} alignItems="flex-start">
-          <Avatar sx={{ width: 44, height: 44, bgcolor: `${eliteGreen}20`, color: eliteGreen }}>
+          <Avatar
+            sx={{ width: 44, height: 44, bgcolor: alpha(eliteGreen, 0.12), color: eliteGreen }}
+          >
             {eventIcon(event.type)}
           </Avatar>
           <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -1922,7 +2419,7 @@ const MonitoringAlertsPage = () => {
         <Stack spacing={2}>
           <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
             <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 800 }}>
-              Vehiculo
+              Vehículo
             </Typography>
             <Typography variant="h6" sx={{ fontWeight: 900, mb: 1.5 }}>
               {event.deviceName || 'Sin identificar'}
@@ -1948,12 +2445,12 @@ const MonitoringAlertsPage = () => {
 
           <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 900, mb: 1.5 }}>
-              Condicion detectada
+              Condición detectada
             </Typography>
             <Box
               sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1.25 }}
             >
-              <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: `${eliteGreen}12` }}>
+              <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: alpha(eliteGreen, 0.07) }}>
                 <Typography variant="caption" color="text.secondary">
                   Valor detectado
                 </Typography>
@@ -1982,7 +2479,7 @@ const MonitoringAlertsPage = () => {
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
               <MapIcon sx={{ color: eliteGreen }} />
               <Typography variant="subtitle2" sx={{ fontWeight: 900 }}>
-                Ubicacion
+                Ubicación
               </Typography>
             </Stack>
             <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
@@ -2137,7 +2634,7 @@ const MonitoringAlertsPage = () => {
           >
             <Tab label="Eventos en tiempo real" />
             <Tab label="Historial de eventos" />
-            <Tab label="Configuracion de alertas" />
+            <Tab label="Configuración de alertas" />
           </Tabs>
         </Paper>
 
@@ -2154,26 +2651,26 @@ const MonitoringAlertsPage = () => {
                 title="Alertas abiertas"
                 value={eventKpis.open}
                 icon={<ErrorOutlineIcon />}
-                color="#f59e0b"
+                color={theme.palette.warning.main}
               />
               <KpiCard
                 title="Criticas"
                 value={eventKpis.critical}
                 icon={<WarningAmberIcon />}
-                color="#dc2626"
+                color={theme.palette.error.main}
               />
               <KpiCard
                 title="Atendidas"
                 value={eventKpis.acknowledged}
                 icon={<CheckCircleIcon />}
-                color="#0284c7"
+                color={theme.palette.info.main}
               />
               <KpiCard title="Resueltas hoy" value={eventKpis.resolvedToday} icon={<SaveIcon />} />
               <KpiCard
                 title="Sin atender"
                 value={eventKpis.unattended}
                 icon={<NotificationsActiveIcon />}
-                color="#f59e0b"
+                color={theme.palette.warning.main}
               />
             </Box>
             {renderEventFilters(eventFilters, setEventFilters)}
@@ -2208,25 +2705,25 @@ const MonitoringAlertsPage = () => {
                 title="Alertas inactivas"
                 value={kpis.inactive}
                 icon={<PowerSettingsNewIcon />}
-                color="#64748b"
+                color={theme.palette.text.secondary}
               />
               <KpiCard
                 title="Eventos hoy"
                 value={kpis.today}
                 icon={<NotificationsActiveIcon />}
-                color="#0284c7"
+                color={theme.palette.info.main}
               />
               <KpiCard
                 title="Criticas"
                 value={kpis.critical}
                 icon={<WarningAmberIcon />}
-                color="#dc2626"
+                color={theme.palette.error.main}
               />
               <KpiCard
                 title="Sin atender"
                 value={kpis.open}
                 icon={<ErrorOutlineIcon />}
-                color="#f59e0b"
+                color={theme.palette.warning.main}
               />
             </Box>
 
@@ -2318,7 +2815,7 @@ const MonitoringAlertsPage = () => {
                   onChange={(_, selected) =>
                     setFilters((current) => ({ ...current, target: selected }))
                   }
-                  renderInput={(params) => <TextField {...params} label="Vehiculo / flota" />}
+                  renderInput={(params) => <TextField {...params} label="Vehículo / flota" />}
                 />
               </Box>
             </Paper>
@@ -2336,8 +2833,11 @@ const MonitoringAlertsPage = () => {
                     <TableRow
                       sx={{
                         '& th': {
-                          bgcolor: '#ecfdf3',
-                          color: '#009624',
+                          bgcolor: alpha(theme.palette.primary.main, 0.1),
+                          color:
+                            theme.palette.mode === 'dark'
+                              ? theme.palette.primary.main
+                              : theme.palette.primary.dark,
                           fontWeight: 900,
                           textTransform: 'uppercase',
                           letterSpacing: 0,
@@ -2349,9 +2849,9 @@ const MonitoringAlertsPage = () => {
                       <TableCell>Nombre</TableCell>
                       <TableCell>Notificación</TableCell>
                       <TableCell>Tipo</TableCell>
-                      <TableCell>Condicion</TableCell>
+                      <TableCell>Condición</TableCell>
                       <TableCell>Severidad</TableCell>
-                      <TableCell>Vehiculos / flotas</TableCell>
+                      <TableCell>Vehículos / flotas</TableCell>
                       <TableCell>Geocercas / grupos</TableCell>
                       <TableCell>Ultima actualizacion</TableCell>
                       <TableCell align="right">Acciones</TableCell>
@@ -2386,15 +2886,20 @@ const MonitoringAlertsPage = () => {
                                   alert.attributes.notifications.includes(channel.key),
                                 )
                                 .map((channel) => {
-                                  const telegramWithoutRecipients =
-                                    channel.key === 'telegram' && !alert.recipientIds.length;
-                                  const telegramWithUnlinkedRecipients =
-                                    channel.key === 'telegram' &&
+                                  const usesRecipients = ['telegram', 'push'].includes(channel.key);
+                                  const linked = (recipient) =>
+                                    channel.key === 'telegram'
+                                      ? recipient.telegramLinked
+                                      : recipient.pushDevices > 0;
+                                  const withoutRecipients =
+                                    usesRecipients && !alert.recipientIds.length;
+                                  const withUnlinkedRecipients =
+                                    usesRecipients &&
                                     alert.recipientIds.some(
                                       (userId) =>
                                         !recipientOptions.find(
                                           (recipient) =>
-                                            recipient.userId === userId && recipient.telegramLinked,
+                                            recipient.userId === userId && linked(recipient),
                                         ),
                                     );
 
@@ -2402,10 +2907,12 @@ const MonitoringAlertsPage = () => {
                                     <Tooltip
                                       key={channel.key}
                                       title={
-                                        telegramWithoutRecipients
-                                          ? 'Telegram sin destinatarios'
-                                          : telegramWithUnlinkedRecipients
-                                            ? 'Hay destinatarios sin vincular a Telegram'
+                                        withoutRecipients
+                                          ? `${channel.label} sin destinatarios`
+                                          : withUnlinkedRecipients
+                                            ? channel.key === 'telegram'
+                                              ? 'Hay destinatarios sin vincular a Telegram'
+                                              : 'Hay destinatarios sin la app vinculada'
                                             : `${channel.label} configurada correctamente`
                                       }
                                     >
@@ -2413,9 +2920,9 @@ const MonitoringAlertsPage = () => {
                                         size="small"
                                         label={channel.label}
                                         color={
-                                          telegramWithoutRecipients
+                                          withoutRecipients
                                             ? 'error'
-                                            : telegramWithUnlinkedRecipients
+                                            : withUnlinkedRecipients
                                               ? 'warning'
                                               : 'success'
                                         }
@@ -2522,7 +3029,7 @@ const MonitoringAlertsPage = () => {
                 bgcolor: 'background.paper',
               }}
             >
-              <Avatar sx={{ bgcolor: `${eliteGreen}18`, color: eliteGreen }}>
+              <Avatar sx={{ bgcolor: alpha(eliteGreen, 0.09), color: eliteGreen }}>
                 {eventIcon(item.type)}
               </Avatar>
               <Box sx={{ flex: 1 }}>
@@ -2597,7 +3104,7 @@ const MonitoringAlertsPage = () => {
                 disabled={activeStep === 0 || saving}
                 onClick={() => setActiveStep((step) => step - 1)}
               >
-                Atras
+                Atrás
               </Button>
               {activeStep < steps.length - 1 ? (
                 <Button

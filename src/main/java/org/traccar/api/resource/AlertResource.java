@@ -57,7 +57,19 @@ public class AlertResource extends BaseResource {
     }
 
     public record Recipient(
-            long userId, String name, String email, boolean telegramLinked, String maskedChatId) {
+            long userId, String name, String email, boolean telegramLinked, String maskedChatId,
+            int pushDevices) {
+    }
+
+    /** Vehículos y geocercas de una alerta (aún sin guardar) para revisar el acceso de los destinatarios. */
+    public record RecipientAccessRequest(
+            List<Long> userIds, List<Long> deviceIds, List<Long> groupIds, List<Long> geofenceIds) {
+    }
+
+    /** Lo que el destinatario no puede ver; listas vacías = recibirá la alerta de todos los objetivos. */
+    public record RecipientAccess(
+            long userId, boolean administrator, List<Long> missingDeviceIds, List<Long> missingGroupIds,
+            List<Long> missingGeofenceIds) {
     }
 
     private static final List<String> TYPES = List.of(
@@ -239,6 +251,81 @@ public class AlertResource extends BaseResource {
                 .toList();
     }
 
+    @Path("recipient-access")
+    @POST
+    public List<RecipientAccess> getRecipientAccess(RecipientAccessRequest request) throws StorageException {
+        checkAlertsAccess();
+        if (request == null || request.userIds() == null) {
+            throw new BadRequestException("Recipient user ids are required");
+        }
+        List<Long> deviceIds = distinctIds(request.deviceIds());
+        List<Long> groupIds = distinctIds(request.groupIds());
+        List<Long> geofenceIds = distinctIds(request.geofenceIds());
+        // Solo se revisan objetos que el usuario actual puede ver, para no filtrar información ajena.
+        long currentUserId = getUserId();
+        deviceIds = filterAccessible(deviceIds, id -> alertSecurity.canAccessDevice(currentUserId, id));
+        groupIds = filterAccessible(groupIds, id -> alertSecurity.canAccessGroup(currentUserId, id));
+        geofenceIds = filterAccessible(geofenceIds, id -> alertSecurity.canReadGeofence(currentUserId, id));
+
+        List<RecipientAccess> result = new java.util.ArrayList<>();
+        for (long userId : distinctIds(request.userIds())) {
+            if (!alertSecurity.isAdmin(currentUserId) && !canManageUser(userId)) {
+                continue;
+            }
+            if (alertSecurity.isAdmin(userId)) {
+                result.add(new RecipientAccess(userId, true, List.of(), List.of(), List.of()));
+                continue;
+            }
+            List<Long> missingDevices = new java.util.ArrayList<>();
+            for (long deviceId : deviceIds) {
+                if (!alertSecurity.canAccessDevice(userId, deviceId)) {
+                    missingDevices.add(deviceId);
+                }
+            }
+            List<Long> missingGroups = new java.util.ArrayList<>();
+            for (long groupId : groupIds) {
+                if (!alertSecurity.canAccessGroup(userId, groupId)) {
+                    missingGroups.add(groupId);
+                }
+            }
+            List<Long> missingGeofences = new java.util.ArrayList<>();
+            for (long geofenceId : geofenceIds) {
+                boolean readable;
+                try {
+                    readable = alertSecurity.canReadGeofence(userId, geofenceId);
+                } catch (SecurityException e) {
+                    readable = false;
+                }
+                if (!readable) {
+                    missingGeofences.add(geofenceId);
+                }
+            }
+            result.add(new RecipientAccess(userId, false, missingDevices, missingGroups, missingGeofences));
+        }
+        return result;
+    }
+
+    private interface AccessCheck {
+        boolean test(long id) throws StorageException;
+    }
+
+    private static List<Long> filterAccessible(List<Long> ids, AccessCheck check) throws StorageException {
+        List<Long> result = new java.util.ArrayList<>();
+        for (long id : ids) {
+            if (check.test(id)) {
+                result.add(id);
+            }
+        }
+        return result;
+    }
+
+    private static List<Long> distinctIds(List<Long> ids) {
+        if (ids == null) {
+            return List.of();
+        }
+        return ids.stream().filter(Objects::nonNull).filter(id -> id > 0).distinct().toList();
+    }
+
     @Path("{id}/recipients")
     @PUT
     public List<Recipient> replaceRecipients(@PathParam("id") long id, RecipientUpdate update)
@@ -313,7 +400,16 @@ public class AlertResource extends BaseResource {
         String maskedChatId = chatId != null && !chatId.isBlank()
                 ? "••••••" + chatId.substring(Math.max(0, chatId.length() - 4)) : null;
         return new Recipient(user.getId(), user.getName(), user.getEmail(),
-                chatId != null && !chatId.isBlank(), maskedChatId);
+                chatId != null && !chatId.isBlank(), maskedChatId, countPushDevices(user));
+    }
+
+    /** Equipos con la app vinculada: tokens guardados por la app al iniciar sesión. */
+    static int countPushDevices(User user) {
+        String tokens = user.getString("notificationTokens");
+        if (tokens == null || tokens.isBlank()) {
+            return 0;
+        }
+        return (int) java.util.Arrays.stream(tokens.split("[, ]")).filter(token -> !token.isBlank()).count();
     }
 
     private static boolean notExpired(User user) {
