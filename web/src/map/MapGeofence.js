@@ -10,14 +10,17 @@ import { useAttributePreference } from '../common/util/preferences';
  *
  * Solo muestra geocercas donde attributes.visible === true (estrictamente).
  * Geocercas sin el atributo definido o con visible !== true NO se muestran.
+ *
+ * Con `items` dibuja exactamente esas geocercas, sin depender de la visibilidad del mapa
+ * principal; `labels` muestra u oculta los nombres.
  */
-const MapGeofence = () => {
+const MapGeofence = ({ items, labels = true }) => {
   const id = useId();
   const theme = useTheme();
   const mapGeofences = useAttributePreference('mapGeofences', true);
   const geofences = useSelector((state) => state.geofences.items);
   const visibleIds = useSelector((state) => state.geofences.visibleIds);
-  const enabled = mapGeofences || visibleIds.length > 0;
+  const enabled = Boolean(items) || mapGeofences || visibleIds.length > 0;
 
   // ── Inicializar capas del mapa ────────────────────────────────────────────
   useEffect(() => {
@@ -61,6 +64,7 @@ const MapGeofence = () => {
         'text-size': 13,
         'text-anchor': 'center',
         'text-allow-overlap': false,
+        visibility: labels ? 'visible' : 'none',
       },
       paint: {
         'text-color': '#20252b',
@@ -81,14 +85,19 @@ const MapGeofence = () => {
   // ── Actualizar features visibles ─────────────────────────────────────────
   useEffect(() => {
     if (enabled) {
+      const shown = items || Object.values(geofences).filter((it) => visibleIds.includes(it.id));
       map.getSource(id)?.setData({
         type: 'FeatureCollection',
-        features: Object.values(geofences)
-          .filter((geofence) => visibleIds.includes(geofence.id))
-          .map((geofence) => geofenceToFeature(theme, geofence)),
+        features: shown.map((geofence) => geofenceToFeature(theme, geofence)),
       });
     }
-  }, [enabled, geofences, visibleIds, theme, id]);
+  }, [enabled, items, geofences, visibleIds, theme, id]);
+
+  useEffect(() => {
+    if (map.getLayer(`${id}-title`)) {
+      map.setLayoutProperty(`${id}-title`, 'visibility', labels ? 'visible' : 'none');
+    }
+  }, [enabled, labels, id]);
 
   return null;
 };

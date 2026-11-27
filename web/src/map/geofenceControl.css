@@ -1,0 +1,37 @@
+.maplibregl-ctrl-group button.maplibre-ctrl-geofences {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #333333;
+  pointer-events: auto;
+}
+
+.maplibregl-ctrl-group button.maplibre-ctrl-geofences[aria-expanded='true'] {
+  color: #00b248;
+  background-color: rgba(0, 200, 83, 0.14);
+}
+
+.maplibre-ctrl-geofences-badge {
+  position: absolute;
+  top: -7px;
+  right: -9px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: #00b248;
+  color: #ffffff;
+  font: 700 10.5px/18px Roboto, Arial, sans-serif;
+  text-align: center;
+  box-shadow: 0 0 0 2px #ffffff;
+  pointer-events: none;
+}
+
+.maplibre-ctrl-geofences-badge[hidden] {
+  display: none;
+}
+
+.maplibregl-ctrl-group:has(.maplibre-ctrl-geofences) {
+  overflow: visible;
+}

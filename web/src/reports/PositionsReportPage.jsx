@@ -19,11 +19,14 @@ import ReportsMenu from './components/ReportsMenu';
 import PositionValue from '../common/components/PositionValue';
 import GeofenceVisitCell from './components/GeofenceVisitCell';
 import useGeofenceNames from './common/useGeofenceNames';
+import useReadableGeofences from './common/useReadableGeofences';
+import GeofenceVisibilityPanel from './components/GeofenceVisibilityPanel';
 import ColumnSelect from './components/ColumnSelect';
 import RouteColorSelect, { isRouteColor } from './components/RouteColorSelect';
 import usePositionAttributes from '../common/attributes/usePositionAttributes';
 import { useCatch } from '../reactHelper';
-import MapView from '../map/core/MapView';
+import * as maplibregl from 'maplibre-gl';
+import MapView, { map } from '../map/core/MapView';
 import MapRoutePath from '../map/MapRoutePath';
 import MapRoutePoints from '../map/MapRoutePoints';
 import MapPositions from '../map/MapPositions';
@@ -31,6 +34,8 @@ import useReportStyles from './common/useReportStyles';
 import TableShimmer from '../common/components/TableShimmer';
 import MapCamera from '../map/MapCamera';
 import MapGeofence from '../map/MapGeofence';
+import MapGeofenceControl from '../map/MapGeofenceControl';
+import { geofenceToFeature } from '../map/core/mapUtil';
 import scheduleReport from './common/scheduleReport';
 import MapScale from '../map/MapScale';
 import fetchOrThrow from '../common/util/fetchOrThrow';
@@ -187,8 +192,17 @@ const PositionsReportPage = () => {
   const [items, setItems] = useState([]);
   // Parámetros de la última consulta y si traía las geocercas calculadas en el servidor.
   const [loaded, setLoaded] = useState(null);
-  const withGeofences = columns.includes('geofenceIds');
-  const geofenceNames = useGeofenceNames(withGeofences);
+  // Geocercas del mapa: del recorrido (calculadas en el servidor), elegidas o ninguna.
+  const [geofenceMode, setGeofenceMode] = usePersistedState('reportPositionsGeofenceMode', 'route');
+  const [chosenGeofences, setChosenGeofences] = usePersistedState('reportPositionsGeofenceIds', []);
+  const [geofenceLabels, setGeofenceLabels] = usePersistedState(
+    'reportPositionsGeofenceLabels',
+    true,
+  );
+  const [geofenceAnchor, setGeofenceAnchor] = useState(null);
+  const readableGeofences = useReadableGeofences();
+  const withGeofences = columns.includes('geofenceIds') || geofenceMode === 'route';
+  const geofenceNames = useGeofenceNames(readableGeofences);
   const geofenceId = searchParams.has('geofenceId')
     ? parseInt(searchParams.get('geofenceId'))
     : null;
@@ -211,6 +225,68 @@ const PositionsReportPage = () => {
       ]),
     [items],
   );
+
+  const routeGeofenceIds = useMemo(
+    () => new Set(items.flatMap((position) => position.geofenceIds || [])),
+    [items],
+  );
+
+  const visibleGeofenceIds = useMemo(() => {
+    if (geofenceMode === 'route') return routeGeofenceIds;
+    if (geofenceMode === 'custom') return new Set(chosenGeofences);
+    return new Set();
+  }, [geofenceMode, routeGeofenceIds, chosenGeofences]);
+
+  const visibleGeofences = useMemo(
+    () => readableGeofences.geofences.filter((geofence) => visibleGeofenceIds.has(geofence.id)),
+    [readableGeofences.geofences, visibleGeofenceIds],
+  );
+
+  const onChosenGeofences = useCallback(
+    (ids) => {
+      setChosenGeofences(ids);
+      setGeofenceMode('custom');
+    },
+    [setChosenGeofences, setGeofenceMode],
+  );
+
+  const onGeofenceMode = useCallback(
+    (value) => {
+      // Al pasar a "Elegidas" se parte de lo que ya se veía si no había nada elegido.
+      if (value === 'custom' && !chosenGeofences.length) {
+        setChosenGeofences([...visibleGeofenceIds]);
+      }
+      setGeofenceMode(value);
+    },
+    [chosenGeofences, visibleGeofenceIds, setChosenGeofences, setGeofenceMode],
+  );
+
+  const fitBounds = (coordinates) => {
+    if (coordinates.length) {
+      const bounds = coordinates.reduce(
+        (result, item) => result.extend(item),
+        new maplibregl.LngLatBounds(coordinates[0], coordinates[0]),
+      );
+      const canvas = map.getCanvas();
+      map.fitBounds(bounds, {
+        padding: Math.min(canvas.clientWidth, canvas.clientHeight) * 0.12,
+        maxZoom: 17,
+      });
+    }
+  };
+
+  const onGeofenceZoom = useCallback(
+    (geofence) => {
+      const { geometry } = geofenceToFeature(theme, geofence);
+      const flatten = (value) => (typeof value[0] === 'number' ? [value] : value.flatMap(flatten));
+      fitBounds(flatten(geometry.coordinates));
+    },
+    [theme],
+  );
+
+  const onFitRoute = useCallback(() => {
+    fitBounds(items.map((item) => [item.longitude, item.latitude]));
+  }, [items]);
 
   const onMapPointClick = useCallback(
     (positionId) => {
@@ -363,7 +439,13 @@ const PositionsReportPage = () => {
   const mapPanel = items.length ? (
     <div className={classes.containerMap}>
       <MapView>
-        <MapGeofence />
+        <MapGeofence items={visibleGeofences} labels={geofenceLabels} />
+        <MapGeofenceControl
+          count={visibleGeofenceIds.size}
+          open={Boolean(geofenceAnchor)}
+          label={t('reportGeofencesPanel')}
+          onClick={(element) => setGeofenceAnchor((current) => (current ? null : element))}
+        />
         {routes.map(([id, positions]) => (
           <Fragment key={id}>
             <MapRoutePath positions={positions} color={lineColor} />
@@ -382,6 +464,23 @@ const PositionsReportPage = () => {
         )}
       </MapView>
       <MapScale />
+      <GeofenceVisibilityPanel
+        open={Boolean(geofenceAnchor)}
+        anchorEl={geofenceAnchor}
+        onClose={() => setGeofenceAnchor(null)}
+        loaded={readableGeofences.loaded}
+        folders={readableGeofences.folders}
+        geofences={readableGeofences.geofences}
+        routeIds={routeGeofenceIds}
+        mode={geofenceMode}
+        onMode={onGeofenceMode}
+        visibleIds={visibleGeofenceIds}
+        onChosen={onChosenGeofences}
+        labels={geofenceLabels}
+        onLabels={setGeofenceLabels}
+        onZoom={onGeofenceZoom}
+        onFitRoute={onFitRoute}
+      />
     </div>
   ) : null;
 
